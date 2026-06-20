@@ -10,7 +10,6 @@ import authService from '../services/authService';
 export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rolSimulado, setRolSimulado] = useState('Cajero'); // Emulación de roles para backend
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
   
@@ -23,20 +22,22 @@ export const Login = () => {
     setCargando(true);
 
     try {
-      // Iniciar sesión invocando el servicio API conectado
-      const respuesta = await authService.iniciarSesion(email, password, rolSimulado);
+      // Iniciar sesión invocando el servicio API conectado real
+      const respuesta = await authService.iniciarSesion(email, password);
 
+      // Guardar sesión real en Zustand
       iniciarSesionStore(respuesta.usuario, respuesta.token, respuesta.rol);
 
-      // Redirigir al módulo según el rol asignado
-      if (rolSimulado === 'Repartidor') {
+      // Redirigir al módulo según el rol real devuelto por la base de datos
+      if (respuesta.rol === 'Repartidor') {
         navigate('/delivery');
       } else {
         navigate('/escritorio');
       }
 
     } catch (ex) {
-      setError('Credenciales inválidas o error de conexión al servidor.');
+      const errorMsg = ex.response?.data?.detail || 'Credenciales incorrectas o error de conexión al servidor.';
+      setError(errorMsg);
     } finally {
       setCargando(false);
     }
@@ -98,20 +99,6 @@ export const Login = () => {
             </div>
           </div>
 
-          {/* Selector de Rol Simulado (Requisito temporal de emulacion de backend) */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Rol Operador (Simulación)</label>
-            <select
-              value={rolSimulado}
-              onChange={(e) => setRolSimulado(e.target.value)}
-              className="w-full py-2 px-3 border border-gray-300 rounded focus:ring-2 focus:ring-premium-primary focus:border-premium-primary outline-none text-sm bg-white"
-            >
-              <option value="Administrador">Administrador</option>
-              <option value="Cajero">Cajero</option>
-              <option value="Repartidor">Repartidor (Delivery)</option>
-            </select>
-          </div>
-
           {/* Botón de envío */}
           <button
             type="submit"
@@ -128,3 +115,4 @@ export const Login = () => {
 };
 
 export default Login;
+

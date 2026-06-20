@@ -6,15 +6,47 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
 - **Formato:** JSON (UTF-8).
 - **Envoltura Global de Éxito:** `{"ok": true, "data": ...}`
 - **Cabeceras de Control:**
-  - `X-User-Rol`: Cabecera temporal requerida para emular la verificación de roles (`Administrador`, `Cajero`, `Repartidor`).
+  - `Authorization`: Cabecera obligatoria de autenticación real para endpoints protegidos en el formato `Bearer <TOKEN_JWT_FIRMADO>`.
 - **Códigos de Estado HTTP:**
   - `200 OK`: Operación exitosa con retorno de datos.
   - `201 Created`: Recurso creado exitosamente.
   - `400 Bad Request`: Error de validación o parámetros incorrectos.
-  - `401 Unauthorized`: Autenticación faltante o inválida.
+  - `401 Unauthorized`: Autenticación faltante o inválida (firma JWT incorrecta, token expirado).
   - `403 Forbidden`: Permisos insuficientes (roles no autorizados).
   - `404 Not Found`: Recurso no encontrado.
   - `500 Internal Server Error`: Error inesperado en el servidor.
+
+---
+
+## 1.5 Módulo de Autenticación (JWT)
+
+### Iniciar Sesión (Login)
+* **Ruta:** `POST /auth/login`
+* **Permisos:** Público
+* **Cuerpo de Petición (JSON):**
+  ```json
+  {
+    "email": "cajero1@tienda.local",
+    "password": "contrasenaSegura123"
+  }
+  ```
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "usuario": {
+        "id": "a933f2bd-1fb7-4e78-becc-82f5d918b958",
+        "email": "cajero1@tienda.local",
+        "nombre_completo": "Juan Pérez",
+        "rol": "Cajero"
+      },
+      "rol": "Cajero"
+    }
+  }
+  ```
+
 
 ---
 

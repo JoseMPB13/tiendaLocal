@@ -2,28 +2,15 @@ import clienteApi from './api';
 
 export const authService = {
   /**
-   * Conecta con el endpoint del backend para validar credenciales.
-   * Simulamos la llamada HTTP y mapeamos para persistir el rol correspondiente.
+   * Conecta con el endpoint real del backend para validar credenciales de operador.
+   * Retorna el token JWT y los datos del usuario mapeados.
    */
-  iniciarSesion: async (email, password, rolSimulado) => {
-    // En una API real llamaríamos:
-    // const respuesta = await clienteApi.post('/auth/login', { email, password });
-    // return respuesta.data;
-    
-    // Simulación de delay y respuesta exitosa mapeada al backend modular:
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    return {
-      usuario: {
-        id: "a933f2bd-1fb7-4e78-becc-82f5d918b958",
-        email: email,
-        nombre_completo: email.split('@')[0].toUpperCase(),
-        rol: rolSimulado
-      },
-      token: "token-jwt-simulado-tienda-local-123456",
-      rol: rolSimulado
-    };
+  iniciarSesion: async (email, password) => {
+    const respuesta = await clienteApi.post('/auth/login', { email, password });
+    // El backend responde bajo el formato global: {"ok": true, "data": {"token": "...", "usuario": {...}, "rol": "..."}}
+    return respuesta.data.data;
   }
 };
+
 
 export default authService;

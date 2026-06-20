@@ -13,18 +13,15 @@ const clienteApi = axios.create({
 
 /**
  * INTERCEPTOR DE PETICIONES (REQUEST)
- * Adjunta dinámicamente el token Bearer y la cabecera 'X-User-Rol' requerida 
- * por el backend como pasarela de autenticación a partir de Zustand.
+ * Adjunta dinámicamente el token Bearer JWT requerido para la autenticación
+ * a partir de la sesión activa en el authStore de Zustand.
  */
 clienteApi.interceptors.request.use(
   (config) => {
-    const { token, rol } = useAuthStore.getState();
+    const { token } = useAuthStore.getState();
     
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
-    }
-    if (rol) {
-      config.headers['X-User-Rol'] = rol;
     }
     
     return config;
@@ -33,5 +30,6 @@ clienteApi.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+
 
 export default clienteApi;
