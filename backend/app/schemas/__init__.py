@@ -6,7 +6,9 @@ from .modelos import (
     DetalleVentaCrear, DetalleVentaRespuesta,
     VentaCrear, VentaRespuesta,
     RepartidorCrear, RepartidorRespuesta,
-    EnvioCrear, EnvioRespuesta, EnvioActualizar
+    EnvioCrear, EnvioRespuesta, EnvioActualizar,
+    DashboardMetricas, MovimientoKardex
 )
+
 
 

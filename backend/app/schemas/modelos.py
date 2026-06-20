@@ -227,3 +227,27 @@ class EnvioRespuesta(EnvioBase):
         from_attributes = True
 
 
+# -----------------------------------------------------------------------------
+# ESQUEMAS PARA EL MÓDULO DE REPORTES Y DASHBOARD
+# -----------------------------------------------------------------------------
+
+class DashboardMetricas(BaseModel):
+    total_ventas: float = Field(..., description="Suma total vendida")
+    cantidad_transacciones: int = Field(..., description="Cantidad total de ventas registradas")
+    deudas_activas_calle: float = Field(..., description="Suma total de saldos deudores de clientes")
+    efectividad_delivery_porcentaje: float = Field(..., description="Porcentaje de entregas completadas con éxito")
+
+class MovimientoKardex(BaseModel):
+    id: UUID
+    producto_id: UUID
+    nombre_producto: str
+    cantidad_cambio: int
+    tipo_movimiento: str
+    referencia_id: Optional[UUID]
+    fecha_movimiento: datetime
+
+    class Config:
+        from_attributes = True
+
+
+

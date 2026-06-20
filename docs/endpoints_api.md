@@ -393,5 +393,60 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
   }
   ```
 
+---
+
+## 8. Módulo de Reportes & Cierre de Caja
+
+### Obtener Métricas de Dashboard
+* **Ruta:** `GET /reportes/dashboard`
+* **Permisos:** Solo `Administrador`
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "total_ventas": 125430.50,
+      "cantidad_transacciones": 1540,
+      "deudas_activas_calle": 8450.00,
+      "efectividad_delivery_porcentaje": 94.20
+    }
+  }
+  ```
+
+### Consultar Kárdex de Inventario
+* **Ruta:** `GET /reportes/kardex`
+* **Parámetros de Consulta (Query):**
+  - `producto_id` (UUID, Opcional)
+  - `fecha_inicio` (Fecha YYYY-MM-DD, Opcional)
+  - `fecha_fin` (Fecha YYYY-MM-DD, Opcional)
+  - `tipo_movimiento` (String: Venta, Compra, Ajuste, Opcional)
+* **Permisos:** Solo `Administrador`
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": [
+      {
+        "id": "4ac8e19b-a010-449e-8c31-c4f4f3ff5d82",
+        "producto_id": "c86a60db-bcf5-48fa-bb4e-7b7ab9344445",
+        "nombre_producto": "Coca Cola 3L",
+        "cantidad_cambio": -2,
+        "tipo_movimiento": "Venta",
+        "referencia_id": "7ac2e19b-a010-449e-8c31-c4f4f3ff5d82",
+        "fecha_movimiento": "2026-06-20T13:50:00Z"
+      }
+    ]
+  }
+  ```
+
+### Descargar Cierre de Caja Diario (PDF)
+* **Ruta:** `GET /reportes/cierre-pdf`
+* **Parámetros de Consulta (Query):**
+  - `fecha` (Fecha YYYY-MM-DD, Obligatorio)
+* **Permisos:** Solo `Administrador`
+* **Respuesta (200 OK):**
+  - Retorna un flujo binario directo de tipo `application/pdf` con la cabecera `Content-Disposition: attachment; filename=cierre_caja_YYYY-MM-DD.pdf` para descarga automática.
+
+
 
 
