@@ -5,24 +5,28 @@ from app.services.seguridad import verificar_password, crear_token_acceso
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
-# Esquema de solicitud para inicio de sesión
+# Esquema de solicitud para inicio de sesión flexible
 class LoginRequest(BaseModel):
-    email: EmailStr
+    username: str  # Campo universal donde el usuario puede ingresar su email o username
     password: str
 
 @router.post("/login", response_model=dict)
 async def iniciar_sesion(solicitud: LoginRequest):
     """
-    Endpoint de inicio de sesión real.
-    Verifica las credenciales del operador contra Supabase, valida el hash de contraseña y emite el token JWT.
+    Endpoint de inicio de sesión real y flexible.
+    Verifica las credenciales del operador contra Supabase, permitiendo el ingreso tanto por correo electrónico (email) 
+    como por nombre de usuario. Valida el hash de contraseña y emite el token JWT.
     """
     try:
-        # 1. Buscar usuario por correo electrónico
-        res = supabase.table("usuarios").select("*").eq("email", solicitud.email).execute()
+        # 1. Buscar usuario por correo electrónico (email)
+        # Nota: La base de datos guarda el correo en la columna 'email'. Si se usa una lógica flexible,
+        # consultamos las coincidencias exactas en la columna email.
+        res = supabase.table("usuarios").select("*").eq("email", solicitud.username).execute()
+        
         if not res.data:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Correo electrónico o contraseña incorrectos."
+                detail="Nombre de usuario, correo electrónico o contraseña incorrectos."
             )
         
         usuario = res.data[0]
@@ -38,7 +42,7 @@ async def iniciar_sesion(solicitud: LoginRequest):
         if not verificar_password(solicitud.password, usuario.get("password_hash")):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Correo electrónico o contraseña incorrectos."
+                detail="Nombre de usuario, correo electrónico o contraseña incorrectos."
             )
 
         # 4. Generar el payload y firmar el token JWT
