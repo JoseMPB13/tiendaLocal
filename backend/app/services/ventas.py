@@ -33,17 +33,17 @@ class VentaService:
         for item in venta.detalles:
             total_calculado += item.cantidad * item.precio_unitario
 
-        # BIFURCACIÓN DE LÓGICA
+        # BIFURCACIÓN DE LÓGICA DE REGISTRO
+        # Preparar listado estructurado de ítems para el JSON del SP/RPC
+        items_json = [
+            {
+                "producto_id": str(i.producto_id),
+                "cantidad": i.cantidad,
+                "precio_unitario": i.precio_unitario
+            } for i in venta.detalles
+        ]
+
         if venta.tipo_pago == "Credito":
-            # Llamar al procedimiento almacenado "registrar_venta_credito"
-            items_json = [
-                {
-                    "producto_id": str(i.producto_id),
-                    "cantidad": i.cantidad,
-                    "precio_unitario": i.precio_unitario
-                } for i in venta.detalles
-            ]
-            
             try:
                 # La función rpc de supabase ejecuta el SP
                 sp_result = supabase.rpc("registrar_venta_credito", {
@@ -84,43 +84,28 @@ class VentaService:
 
         else:
             # Ventas al contado (Efectivo, Tarjeta, Transferencia)
-            # 1. Insertar cabecera de la venta
-            nueva_venta = {
-                "cliente_id": str(venta.cliente_id),
-                "usuario_id": str(venta.usuario_id),
-                "codigo_factura": venta.codigo_factura,
-                "total": total_calculado,
-                "tipo_pago": venta.tipo_pago,
-                "estado_venta": "Completada"
-            }
-            
-            cabecera = supabase.table("ventas").insert(nueva_venta).execute()
-            if not cabecera.data:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="No se pudo registrar la cabecera de la venta."
-                )
-            
-            venta_id = cabecera.data[0]["id"]
-
+            # Invocamos el nuevo RPC registrar_venta_contado de forma atómica
             try:
-                # 2. Insertar detalles uno a uno (Desencadena el trigger de stock individualmente)
-                for item in venta.detalles:
-                    subtotal = item.cantidad * item.precio_unitario
-                    nuevo_detalle = {
-                        "venta_id": venta_id,
-                        "producto_id": str(item.producto_id),
-                        "cantidad": item.cantidad,
-                        "precio_unitario": item.precio_unitario,
-                        "subtotal": subtotal
-                    }
-                    supabase.table("detalles_ventas").insert(nuevo_detalle).execute()
+                sp_result = supabase.rpc("registrar_venta_contado", {
+                    "p_cliente_id": str(venta.cliente_id),
+                    "p_usuario_id": str(venta.usuario_id),
+                    "p_codigo_factura": venta.codigo_factura,
+                    "p_total": total_calculado,
+                    "p_tipo_pago": venta.tipo_pago,
+                    "p_items": items_json
+                }).execute()
                 
-                return cabecera.data[0]
-
+                if not sp_result.data:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="La base de datos no retornó el identificador de la venta al contado."
+                    )
+                
+                # Obtener la cabecera de la venta al contado para retornar
+                venta_creada = supabase.table("ventas").select("*").eq("id", sp_result.data).execute()
+                return venta_creada.data[0]
+                
             except Exception as ex:
-                # Si falla por trigger de stock insuficiente, realizar anulación (baja lógica de venta)
-                supabase.table("ventas").update({"estado_venta": "Cancelada"}).eq("id", venta_id).execute()
                 error_msg = str(ex)
                 if "Stock insuficiente" in error_msg:
                     raise HTTPException(
@@ -129,7 +114,7 @@ class VentaService:
                     )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Error al registrar detalles de venta: {error_msg}"
+                    detail=f"Error transaccional al procesar venta al contado: {error_msg}"
                 )
 
     @staticmethod

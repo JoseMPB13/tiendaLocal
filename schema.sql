@@ -45,6 +45,43 @@ create index if not exists idx_productos_codigo_barras on productos(codigo_barra
 create index if not exists idx_productos_nombre on productos(nombre);
 
 -- -----------------------------------------------------------------------------
+-- SECUENCIA Y TRIGGER PARA AUTOGENERACIÓN DE CÓDIGO DE BARRAS (KIO-XXXXX)
+-- -----------------------------------------------------------------------------
+-- Crear secuencia de códigos de barras
+create sequence if not exists seq_codigo_barras_producto;
+
+-- Inicializar la secuencia basándose en el máximo correlativo actual para evitar colisiones
+do $$
+declare
+    v_max_id integer := 0;
+begin
+    select coalesce(max(nullif(regexp_replace(codigo_barras, '^KIO-', ''), '')::integer), 0)
+    into v_max_id
+    from productos
+    where codigo_barras like 'KIO-%';
+    
+    perform setval('seq_codigo_barras_producto', coalesce(nullif(v_max_id, 0), 1), false);
+end $$;
+
+-- Función del trigger para autogeneración del código de barras
+create or replace function fn_autogenerar_codigo_barras_prod()
+returns trigger as $$
+begin
+    if new.codigo_barras is null or new.codigo_barras = '' then
+        new.codigo_barras := 'KIO-' || lpad(nextval('seq_codigo_barras_producto')::text, 5, '0');
+    end if;
+    return new;
+end;
+$$ language plpgsql;
+
+-- Trigger BEFORE INSERT en productos
+create or replace trigger trg_productos_before_insert
+before insert on productos
+for each row
+execute function fn_autogenerar_codigo_barras_prod();
+
+
+-- -----------------------------------------------------------------------------
 -- 3. TABLA: usuarios
 -- -----------------------------------------------------------------------------
 create table if not exists usuarios (

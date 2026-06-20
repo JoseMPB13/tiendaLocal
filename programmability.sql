@@ -124,6 +124,49 @@ end;
 $$ language plpgsql;
 
 -- -----------------------------------------------------------------------------
+-- 3.5 PROCEDIMIENTO ALMACENADO: registrar_venta_contado
+--     Registra la cabecera y el detalle de una venta al contado de forma atómica.
+-- -----------------------------------------------------------------------------
+create or replace function registrar_venta_contado(
+    p_cliente_id uuid,
+    p_usuario_id uuid,
+    p_codigo_factura varchar(50),
+    p_total numeric(12, 2),
+    p_tipo_pago varchar(30),
+    p_items jsonb -- Formato: [{"producto_id": "...", "cantidad": 2, "precio_unitario": 10.00}]
+)
+returns uuid as $$
+declare
+    v_venta_id uuid;
+    v_item jsonb;
+    v_subtotal numeric(12, 2);
+begin
+    -- 1. Insertar cabecera de la venta al contado
+    insert into ventas (cliente_id, usuario_id, codigo_factura, total, tipo_pago, estado_venta)
+    values (p_cliente_id, p_usuario_id, p_codigo_factura, p_total, p_tipo_pago, 'Completada')
+    returning id into v_venta_id;
+
+    -- 2. Iterar sobre los productos e insertarlos en el detalle
+    -- Esto disparará automáticamente el trigger trg_detalles_ventas_before_insert que verifica stock con FOR UPDATE
+    for v_item in select * from jsonb_array_elements(p_items) loop
+        v_subtotal := (v_item->>'cantidad')::integer * (v_item->>'precio_unitario')::numeric(12, 2);
+        
+        insert into detalles_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal)
+        values (
+            v_venta_id, 
+            (v_item->>'producto_id')::uuid, 
+            (v_item->>'cantidad')::integer, 
+            (v_item->>'precio_unitario')::numeric(12, 2),
+            v_subtotal
+        );
+    end loop;
+
+    return v_venta_id;
+end;
+$$ language plpgsql;
+
+
+-- -----------------------------------------------------------------------------
 -- 4. TRIGGER DE AUDITORÍA AUTOMÁTICA (Bitácora)
 -- -----------------------------------------------------------------------------
 create or replace function fn_auditar_cambios()

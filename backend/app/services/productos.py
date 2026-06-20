@@ -6,36 +6,10 @@ from app.schemas.modelos import ProductoCrear, ProductoActualizar
 
 class ProductoService:
     @staticmethod
-    def _autogenerar_codigo_barras() -> str:
-        """
-        Genera un código de barras secuencial único con el formato KIO-XXXXX.
-        Consulando el último código de barras existente que comience con KIO-.
-        """
-        resultado = (
-            supabase.table("productos")
-            .select("codigo_barras")
-            .like("codigo_barras", "KIO-%")
-            .order("codigo_barras", desc=True)
-            .limit(1)
-            .execute()
-        )
-        
-        if not resultado.data:
-            return "KIO-00001"
-            
-        ultimo_codigo = resultado.data[0]["codigo_barras"]
-        try:
-            # Extraer el número correlativo tras el guion
-            numero_secuencia = int(ultimo_codigo.split("-")[1])
-            nuevo_numero = numero_secuencia + 1
-            return f"KIO-{nuevo_numero:05d}"
-        except Exception:
-            return "KIO-00001"
-
-    @staticmethod
     def crear_producto(producto: ProductoCrear) -> dict:
         """
-        Crea un nuevo producto en el catálogo. Genera el código de barras si no se ingresa.
+        Crea un nuevo producto en el catálogo.
+        Si no se provee un código de barras, se autogenera nativamente en base de datos.
         """
         # Validar existencia de categoría asociada
         cat_check = supabase.table("categorias").select("id").eq("id", str(producto.categoria_id)).execute()
@@ -45,16 +19,13 @@ class ProductoService:
                 detail="La categoría especificada no existe."
             )
 
-        codigo = producto.codigo_barras
-        if not codigo:
-            codigo = ProductoService._autogenerar_codigo_barras()
-        else:
-            # Si el usuario ingresa un código manualmente, validar que sea único
-            codigo_check = supabase.table("productos").select("id").eq("codigo_barras", codigo).execute()
+        # Si el usuario ingresa un código manualmente, validar que sea único
+        if producto.codigo_barras:
+            codigo_check = supabase.table("productos").select("id").eq("codigo_barras", producto.codigo_barras).execute()
             if codigo_check.data:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"El código de barras '{codigo}' ya se encuentra asignado a otro producto."
+                    detail=f"El código de barras '{producto.codigo_barras}' ya se encuentra asignado a otro producto."
                 )
 
         # Validar consistencia de precios
@@ -66,7 +37,6 @@ class ProductoService:
 
         nuevo_prod = {
             "categoria_id": str(producto.categoria_id),
-            "codigo_barras": codigo,
             "nombre": producto.nombre,
             "descripcion": producto.descripcion,
             "precio_compra": producto.precio_compra,
@@ -76,6 +46,10 @@ class ProductoService:
             "estado": "Activo"
         }
 
+        # Solo enviar el código de barras si fue especificado explícitamente, de lo contrario lo autogenera el trigger BEFORE INSERT
+        if producto.codigo_barras:
+            nuevo_prod["codigo_barras"] = producto.codigo_barras
+
         resultado = supabase.table("productos").insert(nuevo_prod).execute()
         if not resultado.data:
             raise HTTPException(
@@ -83,6 +57,7 @@ class ProductoService:
                 detail="No se pudo registrar el producto en la base de datos."
             )
         return resultado.data[0]
+
 
     @staticmethod
     def obtener_todos(incluir_inactivos: bool = False) -> List[dict]:
