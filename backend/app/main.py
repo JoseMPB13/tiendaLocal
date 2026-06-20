@@ -4,11 +4,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import prueba, usuarios, categorias, productos, clientes, ventas, delivery, reportes
 from app.database import supabase
 
+# Cargar la configuración de modo depuración
+debug_mode = os.getenv("DEBUG", "true").lower() == "true"
+
 app = FastAPI(
     title="TiendaLocal API",
     description="Backend API en FastAPI para el sistema de ventas e inventario TiendaLocal.",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/docs" if debug_mode else None,
+    redoc_url="/redoc" if debug_mode else None,
+    openapi_url="/openapi.json" if debug_mode else None
 )
+
 
 # Configuración de Orígenes Permitidos para CORS dinámico desde variable de entorno
 origenes_permitidos_env = os.getenv("ORIGENES_PERMITIDOS", "")

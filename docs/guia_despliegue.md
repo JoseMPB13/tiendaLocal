@@ -76,3 +76,20 @@ chmod +x scratch/auditar_salud.sh
 ```
 
 El script imprimirá en pantalla si el estado de la API es **saludable** y retornará un código de salida `0` si la verificación fue exitosa.
+
+---
+
+## 5. Seguridad y Preparación Local
+
+Para salvaguardar la integridad de las credenciales de conexión del sistema y evitar la filtración accidental de llaves secretas al control de versiones de GitHub:
+
+1. **Ignorados de Git (`.gitignore`):**
+   * Tanto la carpeta de `/backend` como la de `/frontend` cuentan con sus respectivos archivos `.gitignore` configurados de forma dedicada.
+   * Se excluyen del seguimiento todos los archivos `.env`, directorios de dependencias de Node (`node_modules/`), carpetas de entornos virtuales de Python (`.venv/`), binarios compilados de compilación (`dist/`, `build/`) y cachés generadas en caliente (`__pycache__/`, `*.pyc`).
+
+2. **Uso de Plantillas (`.env.example`):**
+   * Al clonar este repositorio desde cero, los archivos `.env` no estarán incluidos debido a las políticas de seguridad de Git.
+   * En su lugar, el desarrollador deberá duplicar y renombrar los archivos plantilla provistos:
+     * **En el Backend:** Copiar [backend/.env.example](file:///C:/Users/josem/Desktop/tienda/backend/.env.example) a `/backend/.env` e introducir las claves reales de la base de datos Supabase.
+     * **En el Frontend:** Copiar [frontend/.env.example](file:///C:/Users/josem/Desktop/tienda/frontend/.env.example) a `/frontend/.env` y definir la URL de la API de FastAPI a consumir.
+
