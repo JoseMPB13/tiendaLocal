@@ -35,3 +35,12 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - Para acelerar la atención de cajeros, el input del buscador en `PuntoVenta.jsx` escucha continuamente.
 - Si el texto ingresado coincide exactamente con la clave `codigo_barras` de un producto del catálogo, añade automáticamente el producto al carrito con cantidad inicial 1 y limpia el input de inmediato de forma automatizada, permitiendo emular el comportamiento de una pistola lectora física sin interrumpir el flujo.
 
+## 7. Cliente HTTP y Comunicación con API (`api.js`)
+- Configurado centralizadamente mediante **Axios** para conectar el cliente React con la API de FastAPI.
+- **Intercepción de Peticiones:** Añade de forma transparente el token Bearer (`Authorization`) y el rol activo del operador (`X-User-Rol`) a partir de la información del `authStore` antes de despacharse al backend, garantizando la seguridad en la pasarela.
+
+## 8. Flujo de Confirmación de Pago y Captura de Errores
+- **Modal de Pago Dinámico:** Al finalizar la compra, se abre un modal de confirmación. En efectivo, requiere ingresar la cantidad recibida y calcula en caliente el vuelto. En ventas a crédito, despliega el estado actual de la deuda y el nuevo saldo proyectado del cliente para aprobación antes de la transacción.
+- **Captura de Excepciones Transaccionales:** Utiliza `react-hot-toast` para desplegar alertas en español si el backend FastAPI o Supabase rechazan la transacción arrojando errores controlados por triggers (como `Stock insuficiente` o `Límite de crédito excedido`).
+
+

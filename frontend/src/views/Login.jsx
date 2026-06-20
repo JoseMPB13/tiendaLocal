@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import { Lock, Mail, AlertTriangle } from 'lucide-react';
+import authService from '../services/authService';
 
 /**
  * Pantalla de inicio de sesión minimalista y responsiva conectada al backend y Zustand.
@@ -22,18 +23,10 @@ export const Login = () => {
     setCargando(true);
 
     try {
-      // Hacemos el inicio de sesión
-      // En una integración real se llamaría al endpoint POST /login.
-      // Aquí simulamos el éxito y registramos los datos en Zustand y localStorage.
-      const datosUsuarioSimulados = {
-        email: email,
-        nombre_completo: email.split('@')[0].toUpperCase(),
-        rol: rolSimulado
-      };
-      
-      const tokenSimulado = "token-jwt-simulado-tienda-local-123456";
+      // Iniciar sesión invocando el servicio API conectado
+      const respuesta = await authService.iniciarSesion(email, password, rolSimulado);
 
-      iniciarSesionStore(datosUsuarioSimulados, tokenSimulado, rolSimulado);
+      iniciarSesionStore(respuesta.usuario, respuesta.token, respuesta.rol);
 
       // Redirigir al módulo según el rol asignado
       if (rolSimulado === 'Repartidor') {
@@ -43,7 +36,7 @@ export const Login = () => {
       }
 
     } catch (ex) {
-      setError('Credenciales inválidas. Por favor verifique los datos.');
+      setError('Credenciales inválidas o error de conexión al servidor.');
     } finally {
       setCargando(false);
     }
