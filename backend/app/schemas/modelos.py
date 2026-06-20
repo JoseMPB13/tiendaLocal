@@ -129,3 +129,101 @@ class ClienteRespuesta(ClienteBase):
     class Config:
         from_attributes = True
 
+
+# -----------------------------------------------------------------------------
+# ESQUEMAS PARA EL MÓDULO DE VENTAS Y DETALLES
+# -----------------------------------------------------------------------------
+
+class DetalleVentaBase(BaseModel):
+    producto_id: UUID
+    cantidad: int = Field(..., gt=0)
+    precio_unitario: float = Field(..., ge=0)
+
+class DetalleVentaCrear(DetalleVentaBase):
+    pass
+
+class DetalleVentaRespuesta(DetalleVentaBase):
+    id: UUID
+    venta_id: UUID
+    subtotal: float
+
+    class Config:
+        from_attributes = True
+
+class VentaBase(BaseModel):
+    cliente_id: UUID
+    usuario_id: UUID
+    codigo_factura: str = Field(..., max_length=50)
+    tipo_pago: str = Field(..., description="Efectivo, Tarjeta, Credito, Transferencia")
+
+class VentaCrear(VentaBase):
+    detalles: list[DetalleVentaCrear] = Field(..., min_items=1)
+
+class VentaRespuesta(VentaBase):
+    id: UUID
+    total: float
+    estado_venta: str
+    fecha_venta: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# -----------------------------------------------------------------------------
+# ESQUEMAS PARA EL MÓDULO DE REPARTIDORES
+# -----------------------------------------------------------------------------
+
+class RepartidorBase(BaseModel):
+    usuario_id: UUID
+    vehiculo: Optional[str] = None
+    placa: Optional[str] = Field(None, max_length=20)
+
+class RepartidorCrear(RepartidorBase):
+    pass
+
+class RepartidorActualizar(BaseModel):
+    vehiculo: Optional[str] = None
+    placa: Optional[str] = None
+    estado_repartidor: Optional[str] = Field(None, description="Disponible, En Ruta, Inactivo")
+
+class RepartidorRespuesta(RepartidorBase):
+    id: UUID
+    estado_repartidor: str
+    fecha_creacion: datetime
+    fecha_actualizacion: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# -----------------------------------------------------------------------------
+# ESQUEMAS PARA EL MÓDULO DE ENVÍOS (DELIVERY)
+# -----------------------------------------------------------------------------
+
+class EnvioBase(BaseModel):
+    venta_id: UUID
+    repartidor_id: Optional[UUID] = None
+    direccion_despacho: str
+    costo_envio: float = Field(0.00, ge=0)
+
+class EnvioCrear(EnvioBase):
+    pass
+
+class EnvioActualizar(BaseModel):
+    repartidor_id: Optional[UUID] = None
+    direccion_despacho: Optional[str] = None
+    costo_envio: Optional[float] = Field(None, ge=0)
+    estado_envio: Optional[str] = Field(None, description="Pendiente, En Camino, Entregado, Cancelado")
+
+class EnvioRespuesta(EnvioBase):
+    id: UUID
+    estado_envio: str
+    fecha_despacho: Optional[datetime] = None
+    fecha_entrega: Optional[datetime] = None
+    fecha_creacion: datetime
+    fecha_actualizacion: datetime
+
+    class Config:
+        from_attributes = True
+
+

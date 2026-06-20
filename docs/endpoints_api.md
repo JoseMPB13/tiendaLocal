@@ -262,4 +262,136 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
   }
   ```
 
+---
+
+## 6. Módulo de Ventas
+
+### Registrar Venta (Contado / Crédito)
+* **Ruta:** `POST /ventas/`
+* **Permisos:** `Administrador`, `Cajero`
+* **Cuerpo de Petición (JSON):**
+  ```json
+  {
+    "cliente_id": "b1bcf4d1-c24a-464a-9351-4096bead19e1",
+    "usuario_id": "a933f2bd-1fb7-4e78-becc-82f5d918b958",
+    "codigo_factura": "F001-000001",
+    "tipo_pago": "Credito",
+    "detalles": [
+      {
+        "producto_id": "c86a60db-bcf5-48fa-bb4e-7b7ab9344445",
+        "cantidad": 2,
+        "precio_unitario": 3.50
+      }
+    ]
+  }
+  ```
+* **Respuesta (201 Created):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "id": "7ac2e19b-a010-449e-8c31-c4f4f3ff5d82",
+      "cliente_id": "b1bcf4d1-c24a-464a-9351-4096bead19e1",
+      "usuario_id": "a933f2bd-1fb7-4e78-becc-82f5d918b958",
+      "codigo_factura": "F001-000001",
+      "total": 7.00,
+      "tipo_pago": "Credito",
+      "estado_venta": "Completada",
+      "fecha_venta": "2026-06-20T13:50:00Z"
+    }
+  }
+  ```
+
+---
+
+## 7. Módulo de Delivery & Reparto
+
+### Registrar Repartidor
+* **Ruta:** `POST /delivery/repartidores`
+* **Permisos:** `Administrador`, `Cajero`
+* **Cuerpo de Petición (JSON):**
+  ```json
+  {
+    "usuario_id": "fa808796-78e2-4752-9b2f-34d3d2c88f28",
+    "vehiculo": "Motocicleta Honda Cargo",
+    "placa": "M-78965"
+  }
+  ```
+* **Respuesta (201 Created):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "id": "e44d5c9c-5f80-4df2-abcc-189f6bead678",
+      "usuario_id": "fa808796-78e2-4752-9b2f-34d3d2c88f28",
+      "vehiculo": "Motocicleta Honda Cargo",
+      "placa": "M-78965",
+      "estado_repartidor": "Disponible",
+      "fecha_creacion": "2026-06-20T13:50:00Z",
+      "fecha_actualizacion": "2026-06-20T13:50:00Z"
+    }
+  }
+  ```
+
+### Registrar Envío (Delivery)
+* **Ruta:** `POST /delivery/envios`
+* **Permisos:** `Administrador`, `Cajero`
+* **Cuerpo de Petición (JSON):**
+  ```json
+  {
+    "venta_id": "7ac2e19b-a010-449e-8c31-c4f4f3ff5d82",
+    "repartidor_id": "e44d5c9c-5f80-4df2-abcc-189f6bead678",
+    "direccion_despacho": "Calle Los Laureles 456",
+    "costo_envio": 5.00
+  }
+  ```
+* **Respuesta (201 Created):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "id": "2b9bc88a-d14f-4d6a-bb91-4c6bead98712",
+      "venta_id": "7ac2e19b-a010-449e-8c31-c4f4f3ff5d82",
+      "repartidor_id": "e44d5c9c-5f80-4df2-abcc-189f6bead678",
+      "direccion_despacho": "Calle Los Laureles 456",
+      "costo_envio": 5.00,
+      "estado_envio": "Pendiente",
+      "fecha_despacho": null,
+      "fecha_entrega": null,
+      "fecha_creacion": "2026-06-20T13:50:00Z",
+      "fecha_actualizacion": "2026-06-20T13:50:00Z"
+    }
+  }
+  ```
+
+### Actualizar Envío (Flujo Logístico)
+* **Ruta:** `PUT /delivery/envios/{envio_id}`
+* **Permisos:** `Administrador`, `Cajero`, `Repartidor`
+* **Cuerpo de Petición (JSON):**
+  ```json
+  {
+    "estado_envio": "Entregado"
+  }
+  ```
+  *(Nota: Si el estado actual del envío en la BD es 'Entregado', cualquier intento posterior de modificación lanzará un error HTTP 400)*
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "id": "2b9bc88a-d14f-4d6a-bb91-4c6bead98712",
+      "venta_id": "7ac2e19b-a010-449e-8c31-c4f4f3ff5d82",
+      "repartidor_id": "e44d5c9c-5f80-4df2-abcc-189f6bead678",
+      "direccion_despacho": "Calle Los Laureles 456",
+      "costo_envio": 5.00,
+      "estado_envio": "Entregado",
+      "fecha_despacho": "2026-06-20T13:52:00Z",
+      "fecha_entrega": "2026-06-20T14:05:00Z",
+      "fecha_creacion": "2026-06-20T13:50:00Z",
+      "fecha_actualizacion": "2026-06-20T14:05:00Z"
+    }
+  }
+  ```
+
+
 

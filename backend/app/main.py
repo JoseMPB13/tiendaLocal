@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import prueba, usuarios, categorias, productos, clientes
+from app.routers import prueba, usuarios, categorias, productos, clientes, ventas, delivery
 
 app = FastAPI(
     title="TiendaLocal API",
@@ -28,6 +28,8 @@ app.include_router(usuarios.router)
 app.include_router(categorias.router)
 app.include_router(productos.router)
 app.include_router(clientes.router)
+app.include_router(ventas.router)
+app.include_router(delivery.router)
 
 @app.get("/")
 async def root():
@@ -42,5 +44,6 @@ async def root():
             "descripcion": "Pasarela segura de conexión entre el frontend y la base de datos de Supabase."
         }
     }
+
 
 
