@@ -6,6 +6,7 @@ import LayoutDelivery from './components/LayoutDelivery';
 import { PaginaPrueba } from './components/PaginaPrueba';
 import Login from './views/Login';
 import PuntoVenta from './views/PuntoVenta';
+import DeliveryReparto from './views/DeliveryReparto';
 
 export const RutasApp = () => {
   return (
@@ -29,7 +30,7 @@ export const RutasApp = () => {
         {/* RUTAS PROTEGIDAS PARA REPARTIDORES / DELIVERY (VISTA CELULAR) */}
         <Route element={<RutaProtegida rolesPermitidos={['Repartidor']} />}>
           <Route element={<LayoutDelivery />}>
-            <Route path="/delivery" element={<PaginaPrueba modulo="Mis Rutas Activas" />} />
+            <Route path="/delivery" element={<DeliveryReparto />} />
             <Route path="/delivery/historial" element={<PaginaPrueba modulo="Historial de Repartos" />} />
           </Route>
         </Route>
@@ -43,5 +44,3 @@ export const RutasApp = () => {
 
 export default RutasApp;
 
-
-export default RutasApp;
