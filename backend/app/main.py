@@ -1,6 +1,8 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import prueba, usuarios, categorias, productos, clientes, ventas, delivery, reportes
+from app.database import supabase
 
 app = FastAPI(
     title="TiendaLocal API",
@@ -8,11 +10,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configuración de Orígenes Permitidos para CORS
-origins = [
-    "http://localhost:5173", # Puerto por defecto de desarrollo para React + Vite
-    "http://127.0.0.1:5173",
-]
+# Configuración de Orígenes Permitidos para CORS dinámico desde variable de entorno
+origenes_permitidos_env = os.getenv("ORIGENES_PERMITIDOS", "")
+if origenes_permitidos_env:
+    origins = [o.strip() for o in origenes_permitidos_env.split(",") if o.strip()]
+else:
+    origins = [
+        "http://localhost:5173", # Puerto por defecto de desarrollo para React + Vite
+        "http://127.0.0.1:5173",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,6 +51,20 @@ async def root():
             "descripcion": "Pasarela segura de conexión entre el frontend y la base de datos de Supabase."
         }
     }
+
+@app.get("/health")
+async def health_check():
+    """
+    Endpoint de verificación de salud (health check).
+    Realiza una consulta rápida a la base de datos Supabase para asegurar la conectividad.
+    """
+    try:
+        # Hacemos una consulta super ligera a la tabla categorias (limitada a 1 registro)
+        res = supabase.table("categorias").select("id").limit(1).execute()
+        return {"ok": True, "estado": "saludable", "detalles": "Conexión a base de datos establecida correctamente."}
+    except Exception as ex:
+        return {"ok": False, "estado": "no saludable", "detalles": str(ex)}
+
 
 
 
