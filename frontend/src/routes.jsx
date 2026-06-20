@@ -9,6 +9,10 @@ import PuntoVenta from './views/PuntoVenta';
 import DeliveryReparto from './views/DeliveryReparto';
 import DashboardAdmin from './views/DashboardAdmin';
 import KardexInventario from './views/KardexInventario';
+import GestionCategorias from './views/GestionCategorias';
+import GestionProductos from './views/GestionProductos';
+import GestionClientes from './views/GestionClientes';
+import GestionUsuarios from './views/GestionUsuarios';
 
 export const RutasApp = () => {
   return (
@@ -22,10 +26,17 @@ export const RutasApp = () => {
           <Route element={<LayoutEscritorio />}>
             <Route path="/escritorio" element={<DashboardAdmin />} />
             <Route path="/punto-venta" element={<PuntoVenta />} />
-            <Route path="/productos" element={<PaginaPrueba modulo="Catalogo de Productos" />} />
-            <Route path="/categorias" element={<PaginaPrueba modulo="Categorias de Inventario" />} />
-            <Route path="/clientes" element={<PaginaPrueba modulo="Clientes y Creditos" />} />
+            <Route path="/productos" element={<GestionProductos />} />
+            <Route path="/categorias" element={<GestionCategorias />} />
+            <Route path="/clientes" element={<GestionClientes />} />
             <Route path="/envios" element={<KardexInventario />} />
+          </Route>
+        </Route>
+
+        {/* RUTA DE ADMINISTRADOR EXCLUSIVA PARA USUARIOS */}
+        <Route element={<RutaProtegida rolesPermitidos={['Administrador']} />}>
+          <Route element={<LayoutEscritorio />}>
+            <Route path="/usuarios" element={<GestionUsuarios />} />
           </Route>
         </Route>
 
@@ -45,5 +56,6 @@ export const RutasApp = () => {
 };
 
 export default RutasApp;
+
 
 

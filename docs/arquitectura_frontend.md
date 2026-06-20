@@ -53,6 +53,13 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **Auditoría de Historial de Stock:** El kárdex presenta una interfaz tabular donde se consultan los movimientos filtrados por producto, rango de fechas y tipo de variación (compras, ventas, mermas por ajuste).
 - **Cierre de Caja Diario en PDF:** El botón de cierre diario abre una nueva pestaña del navegador apuntando directamente a la ruta de streaming del backend (`/reportes/cierre-pdf`), la cual sirve el archivo binario dinámico permitiendo visualizarlo en el lector nativo de PDF e imprimirlo con facilidad.
 
+## 11. Gestión de Catálogos y CRUDs Administrativos (`GestionCategorias.jsx`, `GestionProductos.jsx`, `GestionClientes.jsx`, `GestionUsuarios.jsx`)
+- **Modales Flotantes:** Los formularios de creación y edición se presentan mediante modales interactivos superpuestos en la misma pantalla. Esto permite registrar y actualizar registros de forma rápida y fluida sin redireccionamientos ni pérdida de contexto.
+- **Paginación Clásica (`PaginadorTablas.jsx`):** Diseñado con botones de "Anterior", "Siguiente" y acceso a páginas numeradas en la parte inferior de las tablas de datos para garantizar la legibilidad y un control estructurado de los conjuntos de datos.
+- **Confirmación de Baja Lógica (`ModalDesactivar.jsx`):** Todas las acciones de inactivación muestran un modal flotante personalizado con advertencias claras de las implicaciones (ej: bloqueo de acceso para usuarios, desaparición en POS para productos, o exclusión de selectores para clientes). La desactivación se envía mediante una petición de actualización para cambiar el campo `estado` a `'Inactivo'` (Baja Lógica), asegurando la conservación de los datos para auditoría histórica.
+- **Gestión de Usuarios y Seguridad:** El módulo `GestionUsuarios.jsx` está protegido estrictamente por rol permitiendo acceso únicamente a usuarios con rol `Administrador`. Incluye un botón interactivo (ojo) para ocultar/mostrar la contraseña y validaciones de longitud mínima de 6 caracteres en el cliente.
+
+
 
 
 
