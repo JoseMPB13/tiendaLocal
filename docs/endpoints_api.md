@@ -138,3 +138,128 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
   }
   ```
 
+---
+
+## 4. Módulo de Productos
+
+### Crear Producto
+* **Ruta:** `POST /productos/`
+* **Permisos:** Solo `Administrador`
+* **Cuerpo de Petición (JSON):**
+  ```json
+  {
+    "categoria_id": "e2298e82-e02c-473d-9d7a-1ee824c9c1b8",
+    "codigo_barras": null,
+    "nombre": "Coca Cola 3L",
+    "descripcion": "Gaseosa familiar descartable",
+    "precio_compra": 2.50,
+    "precio_venta": 3.50,
+    "stock_actual": 20,
+    "stock_minimo": 5
+  }
+  ```
+  *(Nota: Si `codigo_barras` se envía nulo o vacío, el backend autogenera un código secuencial con formato `KIO-XXXXX`)*
+* **Respuesta (201 Created):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "id": "c86a60db-bcf5-48fa-bb4e-7b7ab9344445",
+      "categoria_id": "e2298e82-e02c-473d-9d7a-1ee824c9c1b8",
+      "codigo_barras": "KIO-00001",
+      "nombre": "Coca Cola 3L",
+      "descripcion": "Gaseosa familiar descartable",
+      "precio_compra": 2.50,
+      "precio_venta": 3.50,
+      "stock_actual": 20,
+      "stock_minimo": 5,
+      "estado": "Activo",
+      "fecha_creacion": "2026-06-20T13:35:00Z",
+      "fecha_actualizacion": "2026-06-20T13:35:00Z"
+    }
+  }
+  ```
+
+### Listar Productos
+* **Ruta:** `GET /productos/`
+* **Parámetros de Consulta (Query):**
+  - `incluir_inactivos` (booleano, por defecto `false`).
+* **Permisos:** Todos (`Administrador`, `Cajero`, `Repartidor`)
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": [
+      {
+        "id": "c86a60db-bcf5-48fa-bb4e-7b7ab9344445",
+        "categoria_id": "e2298e82-e02c-473d-9d7a-1ee824c9c1b8",
+        "codigo_barras": "KIO-00001",
+        "nombre": "Coca Cola 3L",
+        "descripcion": "Gaseosa familiar descartable",
+        "precio_compra": 2.50,
+        "precio_venta": 3.50,
+        "stock_actual": 20,
+        "stock_minimo": 5,
+        "estado": "Activo",
+        "fecha_creacion": "2026-06-20T13:35:00Z",
+        "fecha_actualizacion": "2026-06-20T13:35:00Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+## 5. Módulo de Clientes
+
+### Crear Cliente
+* **Ruta:** `POST /clientes/`
+* **Permisos:** `Administrador`, `Cajero`
+* **Cuerpo de Petición (JSON):**
+  ```json
+  {
+    "dni_ruc": "10458796541",
+    "nombre": "Distribuidora H&S",
+    "telefono": "987654321",
+    "direccion": "Av. Las Flores 123",
+    "saldo_deudor": 0.00,
+    "limite_credito": 1500.00
+  }
+  ```
+  *(Nota: Se valida que `limite_credito` sea mayor o igual al `saldo_deudor`)*
+* **Respuesta (201 Created):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "id": "b1bcf4d1-c24a-464a-9351-4096bead19e1",
+      "dni_ruc": "10458796541",
+      "nombre": "Distribuidora H&S",
+      "telefono": "987654321",
+      "direccion": "Av. Las Flores 123",
+      "saldo_deudor": 0.00,
+      "limite_credito": 1500.00,
+      "estado": "Activo",
+      "fecha_creacion": "2026-06-20T13:36:00Z",
+      "fecha_actualizacion": "2026-06-20T13:36:00Z"
+    }
+  }
+  ```
+
+### Actualizar Cliente (Validación de Crédito)
+* **Ruta:** `PUT /clientes/{cliente_id}`
+* **Permisos:** `Administrador`, `Cajero`
+* **Cuerpo de Petición (JSON):**
+  ```json
+  {
+    "limite_credito": 500.00
+  }
+  ```
+* **Respuesta (400 Bad Request en caso de error):**
+  ```json
+  {
+    "detail": "El límite de crédito (500.0) no puede ser menor al saldo deudor actual (800.0)."
+  }
+  ```
+
+
