@@ -7,6 +7,8 @@ import { PaginaPrueba } from './components/PaginaPrueba';
 import Login from './views/Login';
 import PuntoVenta from './views/PuntoVenta';
 import DeliveryReparto from './views/DeliveryReparto';
+import DashboardAdmin from './views/DashboardAdmin';
+import KardexInventario from './views/KardexInventario';
 
 export const RutasApp = () => {
   return (
@@ -18,12 +20,12 @@ export const RutasApp = () => {
         {/* RUTAS PROTEGIDAS PARA ADMINISTRACIÓN Y CAJA */}
         <Route element={<RutaProtegida rolesPermitidos={['Administrador', 'Cajero']} />}>
           <Route element={<LayoutEscritorio />}>
-            <Route path="/escritorio" element={<PaginaPrueba modulo="Dashboard / Metricas" />} />
+            <Route path="/escritorio" element={<DashboardAdmin />} />
             <Route path="/punto-venta" element={<PuntoVenta />} />
             <Route path="/productos" element={<PaginaPrueba modulo="Catalogo de Productos" />} />
             <Route path="/categorias" element={<PaginaPrueba modulo="Categorias de Inventario" />} />
             <Route path="/clientes" element={<PaginaPrueba modulo="Clientes y Creditos" />} />
-            <Route path="/envios" element={<PaginaPrueba modulo="Monitoreo de Envios" />} />
+            <Route path="/envios" element={<KardexInventario />} />
           </Route>
         </Route>
 
@@ -43,4 +45,5 @@ export const RutasApp = () => {
 };
 
 export default RutasApp;
+
 

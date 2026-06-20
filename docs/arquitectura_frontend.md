@@ -48,5 +48,11 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **Acciones Seguras (Gesto Swipe):** Para impedir marcas de entrega o tránsito accidentales durante el trayecto, se integra el componente `DeslizadorInteractivo.jsx`, requiriendo un arrastre continuo del control deslizante hasta el 92% para consolidar la actualización de estado.
 - **Enlaces Geográficos Dinámicos:** Cuenta con redirección nativa al mapa del dispositivo móvil mediante protocolo `geo:0,0?q=` con fallback integrado a Google Maps vía web, permitiendo abrir la ruta de destino de forma fluida.
 
+## 10. Dashboard de Administración y Auditorías (`DashboardAdmin.jsx`, `KardexInventario.jsx`)
+- **Visualización de Estadísticas Interactivas:** Utiliza **Recharts** para graficar de forma dinámica la distribución y participación de ventas del negocio por categoría de producto mediante gráficos de barras y pastel.
+- **Auditoría de Historial de Stock:** El kárdex presenta una interfaz tabular donde se consultan los movimientos filtrados por producto, rango de fechas y tipo de variación (compras, ventas, mermas por ajuste).
+- **Cierre de Caja Diario en PDF:** El botón de cierre diario abre una nueva pestaña del navegador apuntando directamente a la ruta de streaming del backend (`/reportes/cierre-pdf`), la cual sirve el archivo binario dinámico permitiendo visualizarlo en el lector nativo de PDF e imprimirlo con facilidad.
+
+
 
 
