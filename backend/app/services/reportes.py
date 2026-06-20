@@ -1,9 +1,11 @@
 import io
 from typing import List, Optional
 from datetime import datetime, date
+from uuid import UUID
 from fastapi import HTTPException, status
 from app.database import supabase
 from app.schemas.modelos import DashboardMetricas, MovimientoKardex
+
 
 # Librerías de ReportLab para la exportación de PDF
 from reportlab.lib.pagesizes import letter
