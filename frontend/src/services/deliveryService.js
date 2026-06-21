@@ -18,6 +18,11 @@ export const deliveryService = {
     return respuesta.data;
   },
 
+  crearEnvio: async (datosEnvio) => {
+    const respuesta = await clienteApi.post('/delivery/envios', datosEnvio);
+    return respuesta.data;
+  },
+
   /**
    * Obtiene el listado de repartidores registrados.
    */

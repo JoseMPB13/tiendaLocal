@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import toast from 'react-hot-toast';
 
 /**
  * Store centralizado para la gestión del carrito de compras en el Punto de Venta (POS).
@@ -20,7 +21,7 @@ export const useCartStore = create((set, get) => ({
 
     if (existe) {
       if (existe.cantidad + 1 > producto.stock_actual) {
-        alert(`No hay stock suficiente. Stock disponible: ${producto.stock_actual}`);
+        toast.error(`No hay stock suficiente. Stock disponible: ${producto.stock_actual}`);
         return;
       }
       set({
@@ -32,7 +33,7 @@ export const useCartStore = create((set, get) => ({
       });
     } else {
       if (producto.stock_actual < 1) {
-        alert("Este producto no cuenta con existencias en stock.");
+        toast.error("Este producto no cuenta con existencias en stock.");
         return;
       }
       set({
@@ -47,7 +48,7 @@ export const useCartStore = create((set, get) => ({
   actualizarCantidad: (productoId, cantidad, stockActual) => {
     const { carrito } = get();
     if (cantidad > stockActual) {
-      alert(`Cantidad excede el stock disponible (${stockActual}).`);
+      toast.error(`Cantidad excede el stock disponible (${stockActual}).`);
       return;
     }
     if (cantidad <= 0) {

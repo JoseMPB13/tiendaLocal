@@ -35,11 +35,30 @@ class ReporteService:
         
         porcentaje_efectividad = (entregados / total_envios * 100) if total_envios > 0 else 0.00
 
+        # 4. Distribución de ventas por categoría
+        vta_ids_res = supabase.table("ventas").select("id").eq("estado_venta", "Completada").execute()
+        venta_ids = [v["id"] for v in vta_ids_res.data] if vta_ids_res.data else []
+        
+        ventas_por_categoria = []
+        if venta_ids:
+            detalles_query = supabase.table("detalles_ventas").select("subtotal, productos(categorias(nombre))").in_("venta_id", venta_ids).execute()
+            ventas_categorias = {}
+            for item in (detalles_query.data or []):
+                if item.get("productos") and item["productos"].get("categorias"):
+                    cat_nombre = item["productos"]["categorias"]["nombre"]
+                    ventas_categorias[cat_nombre] = ventas_categorias.get(cat_nombre, 0.00) + float(item["subtotal"])
+            
+            ventas_por_categoria = [
+                {"name": name, "valor": float(monto)}
+                for name, monto in ventas_categorias.items()
+            ]
+
         return {
             "total_ventas": float(total_ventas),
             "cantidad_transacciones": int(cantidad_transacciones),
             "deudas_activas_calle": float(deudas_activas),
-            "efectividad_delivery_porcentaje": float(porcentaje_efectividad)
+            "efectividad_delivery_porcentaje": float(porcentaje_efectividad),
+            "ventas_por_categoria": ventas_por_categoria
         }
 
     @staticmethod
@@ -88,7 +107,7 @@ class ReporteService:
         rango_fin = f"{fecha_cierre.isoformat()}T23:59:59"
 
         # Consulta de ventas del día
-        ventas_dia = supabase.table("ventas").select("total, tipo_pago, estado_venta").gte("fecha_venta", rango_inicio).lte("fecha_venta", rango_fin).execute()
+        ventas_dia = supabase.table("ventas").select("id, total, tipo_pago, estado_venta").gte("fecha_venta", rango_inicio).lte("fecha_venta", rango_fin).execute()
         ventas = ventas_dia.data or []
 
         # Totales por método de pago
@@ -100,14 +119,14 @@ class ReporteService:
         total_general = sum(v["total"] for v in ventas_completadas)
 
         # Rendimiento de categorías (requiere listar los detalles de las ventas del día)
-        detalles_query = supabase.table("detalles_ventas").select("subtotal, productos(categorias(nombre))").execute()
-        # En Supabase es más ágil consultar todo y filtrar en memoria por simplicidad
-        # Pero simulamos un resumen de categorías representativo
         ventas_categorias = {}
-        for item in (detalles_query.data or []):
-            if item.get("productos") and item["productos"].get("categorias"):
-                cat_nombre = item["productos"]["categorias"]["nombre"]
-                ventas_categorias[cat_nombre] = ventas_categorias.get(cat_nombre, 0.00) + float(item["subtotal"])
+        venta_ids = [v["id"] for v in ventas_completadas]
+        if venta_ids:
+            detalles_query = supabase.table("detalles_ventas").select("subtotal, productos(categorias(nombre))").in_("venta_id", venta_ids).execute()
+            for item in (detalles_query.data or []):
+                if item.get("productos") and item["productos"].get("categorias"):
+                    cat_nombre = item["productos"]["categorias"]["nombre"]
+                    ventas_categorias[cat_nombre] = ventas_categorias.get(cat_nombre, 0.00) + float(item["subtotal"])
 
         # Registro de mermas (ajustes negativos del día en el historial de stock)
         mermas_query = supabase.table("historial_stock").select("cantidad_cambio, productos(nombre)").eq("tipo_movimiento", "Ajuste").gte("fecha_movimiento", rango_inicio).lte("fecha_movimiento", rango_fin).execute()
@@ -161,11 +180,11 @@ class ReporteService:
         story.append(Paragraph("1. Resumen de Ingresos por Tipo de Pago", style_seccion))
         datos_tabla_ingresos = [
             ["Método de Pago", "Monto Total"],
-            ["Efectivo", f"${total_efectivo:,.2f}"],
-            ["Tarjeta", f"${total_tarjeta:,.2f}"],
-            ["Crédito (Cuentas por Cobrar)", f"${total_credito:,.2f}"],
-            ["Transferencia Bancaria", f"${total_transferencia:,.2f}"],
-            ["TOTAL RECAUDADO", f"${total_general:,.2f}"]
+            ["Efectivo", f"Bs. {total_efectivo:,.2f}"],
+            ["Tarjeta", f"Bs. {total_tarjeta:,.2f}"],
+            ["Crédito (Cuentas por Cobrar)", f"Bs. {total_credito:,.2f}"],
+            ["Transferencia Bancaria", f"Bs. {total_transferencia:,.2f}"],
+            ["TOTAL RECAUDADO", f"Bs. {total_general:,.2f}"]
         ]
         
         t_ingresos = Table(datos_tabla_ingresos, colWidths=[250, 150])
@@ -187,9 +206,9 @@ class ReporteService:
         # Sección 2: Rendimiento de Categorías
         story.append(Paragraph("2. Resumen de Ventas por Categoría", style_seccion))
         if ventas_categorias:
-            datos_tabla_cat = [["Categoría", "Ventas Totales ($)"]]
+            datos_tabla_cat = [["Categoría", "Ventas Totales (Bs.)"]]
             for cat, monto in ventas_categorias.items():
-                datos_tabla_cat.append([cat, f"${monto:,.2f}"])
+                datos_tabla_cat.append([cat, f"Bs. {monto:,.2f}"])
             
             t_cat = Table(datos_tabla_cat, colWidths=[250, 150])
             t_cat.setStyle(TableStyle([

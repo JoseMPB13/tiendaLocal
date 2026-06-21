@@ -22,6 +22,7 @@ async def iniciar_sesion(solicitud: LoginRequest):
         # Nota: La base de datos guarda el correo en la columna 'email'. Si se usa una lógica flexible,
         # consultamos las coincidencias exactas en la columna email.
         res = supabase.table("usuarios").select("*").eq("email", solicitud.username).execute()
+
         
         if not res.data:
             raise HTTPException(

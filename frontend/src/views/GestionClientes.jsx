@@ -1,9 +1,17 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Vista: GestionClientes.jsx
+ * Módulo de gestión de clientes con control de crédito y saldo deudor.
+ * Diseño premium con tabla, badges de estado y formulario modal.
+ */
+
+import { useState, useEffect } from 'react';
 import clienteService from '../services/clienteService';
 import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
 import toast, { Toaster } from 'react-hot-toast';
-import { Plus, Edit3, Trash2, X } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Users } from 'lucide-react';
+
+const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
 
 export const GestionClientes = () => {
   const [clientes, setClientes] = useState([]);
@@ -11,13 +19,13 @@ export const GestionClientes = () => {
 
   // Paginación
   const [pagina, setPagina] = useState(1);
-  const itemsPorPagina = 5;
+  const itemsPorPagina = 7;
 
   // Modal Formulario
   const [mostrarForm, setMostrarForm] = useState(false);
   const [clienteEdit, setClienteEdit] = useState(null);
 
-  // Campos Formulario
+  // Campos del Formulario
   const [dniRuc, setDniRuc] = useState('');
   const [nombre, setNombre] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -26,7 +34,7 @@ export const GestionClientes = () => {
   const [limiteCredito, setLimiteCredito] = useState('');
   const [procesandoForm, setProcesandoForm] = useState(false);
 
-  // Modal Desactivación (Baja lógica)
+  // Modal Desactivación
   const [mostrarEliminar, setMostrarEliminar] = useState(false);
   const [clienteEliminarId, setClienteEliminarId] = useState(null);
   const [procesandoEliminar, setProcesandoEliminar] = useState(false);
@@ -39,14 +47,20 @@ export const GestionClientes = () => {
         setClientes(res.data);
       }
     } catch (ex) {
-      toast.error("Error al cargar los clientes.");
+      console.error(ex);
+      toast.error('Error al cargar los clientes.');
     } finally {
       setCargando(false);
     }
   };
 
   useEffect(() => {
-    cargarClientes();
+    // Evita actualizaciones síncronas de estado en el render inicial de React
+    const inicializar = async () => {
+      await Promise.resolve();
+      cargarClientes();
+    };
+    inicializar();
   }, []);
 
   const abrirCrear = () => {
@@ -88,20 +102,20 @@ export const GestionClientes = () => {
       if (clienteEdit) {
         const res = await clienteService.actualizar(clienteEdit.id, payload);
         if (res.ok) {
-          toast.success("Cliente actualizado correctamente.");
+          toast.success('Cliente actualizado correctamente.');
           setMostrarForm(false);
           cargarClientes();
         }
       } else {
         const res = await clienteService.crear(payload);
         if (res.ok) {
-          toast.success("Cliente registrado con éxito.");
+          toast.success('Cliente registrado con éxito.');
           setMostrarForm(false);
           cargarClientes();
         }
       }
     } catch (ex) {
-      const errorMsg = ex.response?.data?.detail || "Error al procesar el cliente.";
+      const errorMsg = ex.response?.data?.detail || 'Error al procesar el cliente.';
       toast.error(errorMsg);
     } finally {
       setProcesandoForm(false);
@@ -118,12 +132,13 @@ export const GestionClientes = () => {
     try {
       const res = await clienteService.eliminar(clienteEliminarId);
       if (res.ok) {
-        toast.success("Cliente desactivado (baja lógica).");
+        toast.success('Cliente desactivado (baja lógica).');
         setMostrarEliminar(false);
         cargarClientes();
       }
     } catch (ex) {
-      toast.error("No se pudo desactivar el cliente.");
+      console.error(ex);
+      toast.error('No se pudo desactivar el cliente.');
     } finally {
       setProcesandoEliminar(false);
     }
@@ -133,44 +148,56 @@ export const GestionClientes = () => {
   const clientesPaginados = clientes.slice(indexInicio, indexInicio + itemsPorPagina);
 
   return (
-    <div className="space-y-6">
-      <Toaster position="top-right" />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: { fontFamily: 'Inter, sans-serif', fontSize: '0.8125rem', fontWeight: 500, borderRadius: '12px' },
+        }}
+      />
 
-      {/* CABECERA ACCIÓN */}
-      <div className="bg-white rounded-lg p-5 shadow border border-gray-200 flex items-center justify-between">
-        <div>
-          <h3 className="font-bold text-gray-800 text-sm">Gestión de Clientes</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Control de cuentas de crédito de clientes fiados.</p>
+      {/* ── CABECERA ── */}
+      <div className="page-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '40px', height: '40px',
+            background: 'linear-gradient(135deg, #ec4899, #db2777)',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Users size={20} style={{ color: 'white' }} />
+          </div>
+          <div>
+            <h3 className="page-title">Gestión de Clientes</h3>
+            <p className="page-subtitle">Control de cuentas de crédito y saldos deudores</p>
+          </div>
         </div>
-        <button
-          onClick={abrirCrear}
-          className="flex items-center py-2 px-4 bg-premium-primary hover:bg-blue-700 text-white rounded text-xs font-semibold transition-colors"
-        >
-          <Plus size={14} className="mr-1" />
+        <button onClick={abrirCrear} className="btn-primary">
+          <Plus size={15} />
           Registrar Cliente
         </button>
       </div>
 
-      {/* TABLA DE CLIENTES */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+      {/* ── TABLA ── */}
+      <div className="table-wrapper">
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ minWidth: '750px' }}>
             <thead>
-              <tr className="bg-premium-dark text-white font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-3.5 px-4">DNI / RUC</th>
-                <th className="py-3.5 px-4">Nombre</th>
-                <th className="py-3.5 px-4">Teléfono</th>
-                <th className="py-3.5 px-4 text-right">Saldo Deudor</th>
-                <th className="py-3.5 px-4 text-right">Límite Crédito</th>
-                <th className="py-3.5 px-4">Estado</th>
-                <th className="py-3.5 px-4 text-center">Acciones</th>
+              <tr>
+                <th>DNI / RUC</th>
+                <th>Nombre / Razón Social</th>
+                <th>Teléfono</th>
+                <th style={{ textAlign: 'right' }}>Saldo Deudor</th>
+                <th style={{ textAlign: 'right' }}>Límite Crédito</th>
+                <th>Estado</th>
+                <th style={{ textAlign: 'center' }}>Acciones</th>
               </tr>
             </thead>
 
             {cargando ? (
               <tbody>
                 <tr>
-                  <td colSpan="7" className="text-center py-8 text-gray-500 font-semibold">
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#9ca3af', fontWeight: 500 }}>
                     Cargando catálogo de clientes...
                   </td>
                 </tr>
@@ -178,44 +205,42 @@ export const GestionClientes = () => {
             ) : clientes.length === 0 ? (
               <tbody>
                 <tr>
-                  <td colSpan="7" className="text-center py-8 text-gray-400">
-                    No se registran clientes.
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                    No se registran clientes en el sistema.
                   </td>
                 </tr>
               </tbody>
             ) : (
-              <tbody className="divide-y divide-gray-200 text-gray-700">
+              <tbody>
                 {clientesPaginados.map((cli) => (
-                  <tr key={cli.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="py-3 px-4 font-mono">{cli.dni_ruc || 'Sin documento'}</td>
-                    <td className="py-3 px-4 font-bold text-gray-900">{cli.nombre}</td>
-                    <td className="py-3 px-4 text-gray-500">{cli.telefono || 'Sin teléfono'}</td>
-                    <td className="py-3 px-4 text-right text-red-600 font-semibold">${cli.saldo_deudor.toFixed(2)}</td>
-                    <td className="py-3 px-4 text-right text-premium-primary font-semibold">${cli.limite_credito.toFixed(2)}</td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] uppercase ${
-                        cli.estado === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}>
+                  <tr key={cli.id}>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#6b7280' }}>
+                      {cli.dni_ruc || '—'}
+                    </td>
+                    <td className="bold">{cli.nombre}</td>
+                    <td style={{ color: '#6b7280' }}>{cli.telefono || '—'}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: cli.saldo_deudor > 0 ? '#dc2626' : '#374151' }}>
+                      Bs. {cli.saldo_deudor.toFixed(2)}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: '#6d28d9' }}>
+                      Bs. {cli.limite_credito.toFixed(2)}
+                    </td>
+                    <td>
+                      <span className={`badge ${cli.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
                         {cli.estado}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-center flex items-center justify-center space-x-2">
-                      <button
-                        onClick={() => abrirEditar(cli)}
-                        className="p-1 hover:bg-gray-100 rounded text-premium-primary"
-                        title="Editar"
-                      >
-                        <Edit3 size={16} />
-                      </button>
-                      {cli.estado === 'Activo' && cli.dni_ruc !== '00000000' && (
-                        <button
-                          onClick={() => abrirDesactivar(cli.id)}
-                          className="p-1 hover:bg-gray-100 rounded text-premium-danger"
-                          title="Desactivar"
-                        >
-                          <Trash2 size={16} />
+                    <td style={{ textAlign: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        <button onClick={() => abrirEditar(cli)} className="btn-icon" title="Editar cliente">
+                          <Edit3 size={15} />
                         </button>
-                      )}
+                        {cli.estado === 'Activo' && cli.dni_ruc !== '00000000' && (
+                          <button onClick={() => abrirDesactivar(cli.id)} className="btn-icon danger" title="Desactivar cliente">
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -232,105 +257,97 @@ export const GestionClientes = () => {
         />
       </div>
 
-      {/* MODAL FORMULARIO DE CLIENTES */}
+      {/* ── MODAL FORMULARIO ── */}
       {mostrarForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6 border border-gray-200">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <h3 className="font-bold text-gray-800 text-sm">
-                {clienteEdit ? 'Editar Cliente' : 'Registrar Nuevo Cliente'}
-              </h3>
-              <button onClick={() => setMostrarForm(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={20} />
+        <div className="modal-backdrop">
+          <div className="modal-container animate-fade-in-up" style={{ maxWidth: '480px' }}>
+            <div style={{ height: '4px', background: 'linear-gradient(90deg, #ec4899, #db2777)' }} />
+
+            <div className="modal-header">
+              <span className="modal-title">
+                {clienteEdit ? '✏️ Editar Cliente' : '👤 Registrar Nuevo Cliente'}
+              </span>
+              <button
+                onClick={() => setMostrarForm(false)}
+                style={{
+                  background: '#f3f4f6', border: 'none', borderRadius: '8px',
+                  width: '28px', height: '28px', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', cursor: 'pointer', color: '#6b7280',
+                }}
+              >
+                <X size={14} />
               </button>
             </div>
 
-            <form onSubmit={handleGuardar} className="my-4 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Nombre Completo / Razón Social</label>
-                <input
-                  type="text"
-                  required
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  placeholder="Ej: Carlos Mendoza"
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">DNI / RUC (Opcional)</label>
+            <form onSubmit={handleGuardar}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={fieldStyle}>
+                  <label className="form-label">Nombre Completo / Razón Social *</label>
                   <input
-                    type="text"
-                    value={dniRuc}
-                    onChange={(e) => setDniRuc(e.target.value)}
-                    placeholder="Documento único"
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
+                    type="text" required value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    placeholder="Ej: Carlos Mendoza"
+                    className="form-input"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Teléfono (Opcional)</label>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div style={fieldStyle}>
+                    <label className="form-label">DNI / RUC (Opcional)</label>
+                    <input
+                      type="text" value={dniRuc}
+                      onChange={(e) => setDniRuc(e.target.value)}
+                      placeholder="Documento único"
+                      className="form-input"
+                    />
+                  </div>
+                  <div style={fieldStyle}>
+                    <label className="form-label">Teléfono (Opcional)</label>
+                    <input
+                      type="text" value={telefono}
+                      onChange={(e) => setTelefono(e.target.value)}
+                      placeholder="999-999-999"
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+
+                <div style={fieldStyle}>
+                  <label className="form-label">Dirección (Opcional)</label>
                   <input
-                    type="text"
-                    value={telefono}
-                    onChange={(e) => setTelefono(e.target.value)}
-                    placeholder="999-999-999"
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
+                    type="text" value={direccion}
+                    onChange={(e) => setDireccion(e.target.value)}
+                    placeholder="Av. Los Tulipanes 789"
+                    className="form-input"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Dirección (Opcional)</label>
-                <input
-                  type="text"
-                  value={direccion}
-                  onChange={(e) => setDireccion(e.target.value)}
-                  placeholder="Av. Los Tulipanes 789"
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Saldo Deudor Inicial ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={saldoDeudor}
-                    onChange={(e) => setSaldoDeudor(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Límite de Crédito ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={limiteCredito}
-                    onChange={(e) => setLimiteCredito(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div style={fieldStyle}>
+                    <label className="form-label">Saldo Deudor Inicial (Bs.) *</label>
+                    <input
+                      type="number" step="0.01" required value={saldoDeudor}
+                      onChange={(e) => setSaldoDeudor(e.target.value)}
+                      className="form-input"
+                    />
+                  </div>
+                  <div style={fieldStyle}>
+                    <label className="form-label">Límite de Crédito (Bs.) *</label>
+                    <input
+                      type="number" step="0.01" required value={limiteCredito}
+                      onChange={(e) => setLimiteCredito(e.target.value)}
+                      className="form-input"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex gap-3 justify-end pt-3">
-                <button
-                  type="button"
-                  onClick={() => setMostrarForm(false)}
-                  className="py-1.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs font-semibold"
-                >
+              <div className="modal-footer">
+                <button type="button" onClick={() => setMostrarForm(false)} className="btn-secondary">
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  disabled={procesandoForm}
-                  className="py-1.5 px-4 bg-premium-primary hover:bg-blue-700 text-white rounded text-xs font-semibold disabled:opacity-50"
-                >
-                  {procesandoForm ? 'Guardando...' : 'Guardar Cliente'}
+                <button type="submit" disabled={procesandoForm} className="btn-primary">
+                  {procesandoForm ? 'Guardando...' : clienteEdit ? 'Actualizar Cliente' : 'Guardar Cliente'}
                 </button>
               </div>
             </form>
@@ -338,7 +355,6 @@ export const GestionClientes = () => {
         </div>
       )}
 
-      {/* MODAL CONFIRMACIÓN ELIMINAR */}
       <ModalDesactivar
         mostrar={mostrarEliminar}
         titulo="Inactivar Cliente"

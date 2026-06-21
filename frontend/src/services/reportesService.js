@@ -23,6 +23,16 @@ export const reportesService = {
   obtenerUrlCierrePdf: (fecha) => {
     const baseURL = clienteApi.defaults.baseURL;
     return `${baseURL}/reportes/cierre-pdf?fecha=${fecha}`;
+  },
+
+  /**
+   * Obtiene el PDF de cierre diario como un Blob de forma autenticada.
+   */
+  obtenerCierrePdfBlob: async (fecha) => {
+    const respuesta = await clienteApi.get(`/reportes/cierre-pdf?fecha=${fecha}`, {
+      responseType: 'blob'
+    });
+    return respuesta.data;
   }
 };
 

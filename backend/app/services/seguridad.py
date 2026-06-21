@@ -2,10 +2,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 import jwt
-from passlib.context import CryptContext
-
-# Configuración del motor de hashing bcrypt para contraseñas seguras
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt
 
 # Configuración de JWT
 SECRET_KEY = os.getenv("JWT_SECRET", "clave-secreta-desarrollo-tiendalocal-987654321")
@@ -14,15 +11,23 @@ ACCESS_TOKEN_EXPIRE_HOURS = 12
 
 def obtener_password_hash(password: str) -> str:
     """
-    Recibe una contraseña en texto plano y genera su hash seguro con bcrypt.
+    Recibe una contraseña en texto plano y genera su hash seguro de manera nativa con bcrypt.
     """
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt(rounds=12)
+    password_bytes = password.encode('utf-8')
+    return bcrypt.hashpw(password_bytes, salt).decode('utf-8')
 
 def verificar_password(plain_password: str, hashed_password: str) -> bool:
     """
-    Verifica si una contraseña en texto plano coincide con el hash almacenado.
+    Verifica si una contraseña en texto plano coincide con el hash almacenado de manera nativa con bcrypt.
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        password_bytes = plain_password.encode('utf-8')
+        hash_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(password_bytes, hash_bytes)
+    except Exception:
+        return False
+
 
 def crear_token_acceso(datos: dict, expiracion_delta: Optional[timedelta] = None) -> str:
     """

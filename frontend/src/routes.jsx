@@ -13,6 +13,7 @@ import GestionCategorias from './views/GestionCategorias';
 import GestionProductos from './views/GestionProductos';
 import GestionClientes from './views/GestionClientes';
 import GestionUsuarios from './views/GestionUsuarios';
+import GestionEnvios from './views/GestionEnvios';
 
 export const RutasApp = () => {
   return (
@@ -29,7 +30,8 @@ export const RutasApp = () => {
             <Route path="/productos" element={<GestionProductos />} />
             <Route path="/categorias" element={<GestionCategorias />} />
             <Route path="/clientes" element={<GestionClientes />} />
-            <Route path="/envios" element={<KardexInventario />} />
+            <Route path="/envios" element={<GestionEnvios />} />
+            <Route path="/kardex" element={<KardexInventario />} />
           </Route>
         </Route>
 

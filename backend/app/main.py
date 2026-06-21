@@ -8,8 +8,8 @@ from app.database import supabase
 debug_mode = os.getenv("DEBUG", "true").lower() == "true"
 
 app = FastAPI(
-    title="TiendaLocal API",
-    description="Backend API en FastAPI para el sistema de ventas e inventario TiendaLocal.",
+    title="Tienda Margarita API",
+    description="Backend API en FastAPI para el sistema de ventas e inventario Tienda Margarita.",
     version="1.0.0",
     docs_url="/docs" if debug_mode else None,
     redoc_url="/redoc" if debug_mode else None,
@@ -55,7 +55,7 @@ async def root():
     return {
         "ok": True,
         "data": {
-            "aplicacion": "TiendaLocal API",
+            "aplicacion": "Tienda Margarita API",
             "estado": "En línea",
             "descripcion": "Pasarela segura de conexión entre el frontend y la base de datos de Supabase."
         }

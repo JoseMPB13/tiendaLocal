@@ -1,44 +1,102 @@
-import React from 'react';
+/**
+ * Componente: ModalDesactivar.jsx
+ * Modal premium de confirmación para bajas lógicas.
+ * Incluye backdrop con blur, animación de entrada y diseño actualizado.
+ */
+
 import { AlertTriangle, X } from 'lucide-react';
 
-/**
- * Modal personalizado para confirmación de bajas lógicas (Desactivaciones) en Tailwind CSS.
- */
 export const ModalDesactivar = ({ mostrar, titulo, mensaje, alConfirmar, alCancelar, procesando = false }) => {
   if (!mostrar) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full p-6 border border-gray-200 animate-fade-in">
-        <div className="flex items-start">
-          <div className="p-2 bg-red-100 text-premium-danger rounded-full flex-shrink-0">
-            <AlertTriangle size={24} />
+    <div className="modal-backdrop">
+      <div
+        className="modal-container animate-fade-in-up"
+        style={{ maxWidth: '420px' }}
+      >
+        {/* Franja superior de color peligro */}
+        <div style={{
+          height: '4px',
+          background: 'linear-gradient(90deg, #dc2626, #ef4444, #dc2626)',
+          borderRadius: '20px 20px 0 0',
+        }} />
+
+        {/* Cabecera */}
+        <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+          <div style={{
+            width: '44px', height: '44px', flexShrink: 0,
+            background: '#fee2e2',
+            borderRadius: '12px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <AlertTriangle size={22} style={{ color: '#dc2626' }} />
           </div>
-          <div className="ml-4 flex-1">
-            <div className="flex items-center justify-between">
-              <h4 className="font-bold text-gray-800 text-sm uppercase tracking-wide">{titulo}</h4>
-              <button onClick={alCancelar} className="text-gray-400 hover:text-gray-600">
-                <X size={18} />
+          <div style={{ flex: 1, paddingTop: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h4 style={{
+                fontFamily: 'Outfit, sans-serif',
+                fontSize: '0.9375rem',
+                fontWeight: 700,
+                color: '#1e1b4b',
+                margin: 0,
+              }}>
+                {titulo}
+              </h4>
+              <button
+                onClick={alCancelar}
+                style={{
+                  background: '#f3f4f6',
+                  border: 'none',
+                  borderRadius: '8px',
+                  width: '28px', height: '28px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#6b7280',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#dc2626'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#6b7280'; }}
+              >
+                <X size={14} />
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-2 leading-relaxed">{mensaje}</p>
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end space-x-3">
+        {/* Mensaje */}
+        <div style={{ padding: '12px 24px 20px 82px' }}>
+          <p style={{
+            fontSize: '0.8125rem',
+            color: '#6b7280',
+            lineHeight: 1.6,
+            margin: 0,
+          }}>
+            {mensaje}
+          </p>
+        </div>
+
+        {/* Acciones */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: '10px',
+          padding: '14px 24px 20px',
+          borderTop: '1px solid #f3f4f6',
+        }}>
           <button
             onClick={alCancelar}
             disabled={procesando}
-            className="py-1.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs font-semibold"
+            className="btn-secondary"
           >
             Cancelar
           </button>
           <button
             onClick={alConfirmar}
             disabled={procesando}
-            className="py-1.5 px-4 bg-premium-danger hover:bg-red-700 text-white rounded text-xs font-semibold disabled:opacity-50"
+            className="btn-danger"
           >
-            {procesando ? 'Desactivando...' : 'Confirmar Desactivación'}
+            {procesando ? 'Procesando...' : 'Confirmar Desactivación'}
           </button>
         </div>
       </div>

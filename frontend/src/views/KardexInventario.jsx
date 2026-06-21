@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import reportesService from '../services/reportesService';
 import toast, { Toaster } from 'react-hot-toast';
+import PaginadorTablas from '../components/PaginadorTablas';
 import { 
-  Search, Calendar, Filter, ArrowUpRight, ArrowDownRight, RefreshCw 
+  Search, Calendar, Filter, ArrowUpRight, ArrowDownRight, RefreshCw,
+  Database, AlertTriangle 
 } from 'lucide-react';
 
 export const KardexInventario = () => {
@@ -14,6 +16,10 @@ export const KardexInventario = () => {
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [tipoMovimiento, setTipoMovimiento] = useState('');
+
+  // Paginación
+  const [pagina, setPagina] = useState(1);
+  const itemsPorPagina = 8;
 
   const cargarKardex = async () => {
     try {
@@ -27,14 +33,7 @@ export const KardexInventario = () => {
 
       const res = await reportesService.obtenerKardex(params);
       if (res.ok) {
-        // Filtrado local en el cliente para el autocompletado/nombre de producto
-        let datosFiltrados = res.data;
-        if (productoFiltro.trim()) {
-          datosFiltrados = datosFiltrados.filter(item => 
-            item.nombre_producto.toLowerCase().includes(productoFiltro.toLowerCase())
-          );
-        }
-        setKardex(datosFiltrados);
+        setKardex(res.data);
       }
     } catch (ex) {
       toast.error("Error al cargar el kárdex transaccional.");
@@ -52,152 +51,240 @@ export const KardexInventario = () => {
     setFechaInicio('');
     setFechaFin('');
     setTipoMovimiento('');
+    setPagina(1);
     toast.success("Filtros restablecidos");
   };
+
+  // Filtrado reactivo en memoria para el buscador de productos
+  const kardexFiltrado = kardex.filter(item => 
+    item.nombre_producto.toLowerCase().includes(productoFiltro.toLowerCase())
+  );
+
+  // Métricas dinámicas basadas en los resultados del kárdex
+  const totalMovimientos = kardexFiltrado.length;
+  const totalEntradas = kardexFiltrado
+    .filter(item => item.cantidad_cambio > 0)
+    .reduce((acc, item) => acc + item.cantidad_cambio, 0);
+  const totalSalidas = kardexFiltrado
+    .filter(item => item.cantidad_cambio < 0)
+    .reduce((acc, item) => acc + Math.abs(item.cantidad_cambio), 0);
+  const totalAjustes = kardexFiltrado
+    .filter(item => item.tipo_movimiento === 'Ajuste')
+    .length;
+
+  // Segmentación para paginación local
+  const indexInicio = (pagina - 1) * itemsPorPagina;
+  const kardexPaginado = kardexFiltrado.slice(indexInicio, indexInicio + itemsPorPagina);
 
   return (
     <div className="space-y-6">
       <Toaster position="top-right" />
 
-      {/* CABECERA FILTRABLE: BÚSQUEDA Y CALENDARIOS */}
-      <div className="bg-white rounded-lg p-5 shadow border border-gray-200 space-y-4">
-        <div>
-          <h3 className="font-bold text-gray-800 text-sm">Auditoría de Kárdex & Stock</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Bitácora en tiempo real de variaciones y mermas en el inventario.</p>
+      {/* TARJETAS DE MÉTRICAS RÁPIDAS DEL INVENTARIO */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex items-center">
+          <div className="p-2.5 bg-zinc-50 text-zinc-900 rounded-xl border border-zinc-100">
+            <Database size={20} />
+          </div>
+          <div className="ml-4">
+            <p className="text-xs font-medium text-zinc-500">Movimientos</p>
+            <h4 className="text-2xl font-bold text-zinc-950 mt-0.5">{totalMovimientos}</h4>
+          </div>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-          {/* Autocompletado/Buscador de producto */}
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center text-gray-400">
-              <Search size={14} />
-            </span>
-            <input
-              type="text"
-              value={productoFiltro}
-              onChange={(e) => setProductoFiltro(e.target.value)}
-              placeholder="Buscar por producto..."
-              className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-            />
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex items-center">
+          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
+            <ArrowUpRight size={20} />
           </div>
-
-          {/* Fecha Inicio */}
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center text-gray-400">
-              <Calendar size={14} />
-            </span>
-            <input
-              type="date"
-              value={fechaInicio}
-              onChange={(e) => setFechaInicio(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-            />
+          <div className="ml-4">
+            <p className="text-xs font-medium text-zinc-500">Ingresos Stock</p>
+            <h4 className="text-2xl font-bold text-zinc-950 mt-0.5">+{totalEntradas}</h4>
           </div>
-
-          {/* Fecha Fin */}
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center text-gray-400">
-              <Calendar size={14} />
-            </span>
-            <input
-              type="date"
-              value={fechaFin}
-              onChange={(e) => setFechaFin(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-            />
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex items-center">
+          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl border border-rose-100">
+            <ArrowDownRight size={20} />
           </div>
-
-          {/* Selector de Tipo Movimiento */}
-          <div className="relative">
-            <select
-              value={tipoMovimiento}
-              onChange={(e) => setTipoMovimiento(e.target.value)}
-              className="w-full border border-gray-300 rounded text-xs py-1.5 px-2 bg-white"
-            >
-              <option value="">Todos los movimientos</option>
-              <option value="Venta">Ventas</option>
-              <option value="Compra">Compras</option>
-              <option value="Ajuste">Ajustes / Mermas</option>
-              <option value="Cancelacion Venta">Cancelación Venta</option>
-            </select>
+          <div className="ml-4">
+            <p className="text-xs font-medium text-zinc-500">Salidas Stock</p>
+            <h4 className="text-2xl font-bold text-zinc-950 mt-0.5">-{totalSalidas}</h4>
           </div>
-
-          {/* Botones de acción de filtros */}
-          <div className="flex gap-2">
-            <button
-              onClick={cargarKardex}
-              className="flex-1 flex items-center justify-center bg-premium-primary hover:bg-blue-700 text-white rounded text-xs font-semibold py-1.5 transition-colors"
-            >
-              <RefreshCw size={14} className="mr-1" />
-              Aplicar
-            </button>
-            <button
-              onClick={handleLimpiarFiltros}
-              className="flex-1 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs font-semibold py-1.5 border transition-colors"
-            >
-              Limpiar
-            </button>
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex items-center">
+          <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl border border-amber-100">
+            <AlertTriangle size={20} />
+          </div>
+          <div className="ml-4">
+            <p className="text-xs font-medium text-zinc-500">Ajustes / Mermas</p>
+            <h4 className="text-2xl font-bold text-zinc-950 mt-0.5">{totalAjustes}</h4>
           </div>
         </div>
       </div>
 
+      {/* PANEL DE FILTROS */}
+      <div className="bg-white rounded-2xl p-6 border border-zinc-200 shadow-sm space-y-4">
+        <div>
+          <h3 className="font-bold text-zinc-900 text-lg">Buscador & Filtros de Auditoría</h3>
+          <p className="text-sm text-zinc-500 mt-0.5">Monitoreo transaccional de fluctuaciones en inventario y justificación de stock.</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Buscar por producto */}
+          <div className="flex flex-col space-y-1.5">
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Buscar Producto</label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400">
+                <Search size={16} />
+              </span>
+              <input
+                type="text"
+                value={productoFiltro}
+                onChange={(e) => {
+                  setProductoFiltro(e.target.value);
+                  setPagina(1);
+                }}
+                placeholder="Ej: Coca Cola..."
+                className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none transition-all bg-white font-medium text-zinc-800"
+              />
+            </div>
+          </div>
+
+          {/* Fecha Inicio */}
+          <div className="flex flex-col space-y-1.5">
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Fecha Inicio</label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400">
+                <Calendar size={16} />
+              </span>
+              <input
+                type="date"
+                value={fechaInicio}
+                onChange={(e) => {
+                  setFechaInicio(e.target.value);
+                  setPagina(1);
+                }}
+                className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none transition-all bg-white font-medium text-zinc-800"
+              />
+            </div>
+          </div>
+
+          {/* Fecha Fin */}
+          <div className="flex flex-col space-y-1.5">
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Fecha Fin</label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400">
+                <Calendar size={16} />
+              </span>
+              <input
+                type="date"
+                value={fechaFin}
+                onChange={(e) => {
+                  setFechaFin(e.target.value);
+                  setPagina(1);
+                }}
+                className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none transition-all bg-white font-medium text-zinc-800"
+              />
+            </div>
+          </div>
+
+          {/* Tipo de movimiento */}
+          <div className="flex flex-col space-y-1.5">
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Tipo Movimiento</label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400">
+                <Filter size={16} />
+              </span>
+              <select
+                value={tipoMovimiento}
+                onChange={(e) => {
+                  setTipoMovimiento(e.target.value);
+                  setPagina(1);
+                }}
+                className="w-full pl-9 pr-8 border border-zinc-200 rounded-xl text-sm py-2 bg-white focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none transition-all appearance-none cursor-pointer font-medium text-zinc-700"
+              >
+                <option value="">Todos los movimientos</option>
+                <option value="Venta">Ventas</option>
+                <option value="Compra">Compras</option>
+                <option value="Ajuste">Ajustes / Mermas</option>
+                <option value="Cancelacion Venta">Cancelación Venta</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-3 pt-2 border-t border-zinc-100">
+          <button
+            onClick={handleLimpiarFiltros}
+            className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+          >
+            Limpiar Filtros
+          </button>
+          <button
+            onClick={cargarKardex}
+            className="flex items-center justify-center px-4 py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl text-sm font-semibold transition-all shadow-sm cursor-pointer"
+          >
+            <RefreshCw size={14} className="mr-1.5" />
+            Actualizar
+          </button>
+        </div>
+      </div>
+
       {/* TABLA DE AUDITORÍA DEL KÁRDEX */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="w-full text-left border-collapse text-sm">
             <thead>
-              <tr className="bg-premium-dark text-white font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-3.5 px-4">Fecha Movimiento</th>
-                <th className="py-3.5 px-4">Producto</th>
-                <th className="py-3.5 px-4">Tipo Movimiento</th>
-                <th className="py-3.5 px-4 text-right">Variación Stock</th>
+              <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium">
+                <th className="py-3.5 px-6 font-semibold">Fecha Movimiento</th>
+                <th className="py-3.5 px-6 font-semibold">Producto</th>
+                <th className="py-3.5 px-6 font-semibold">Tipo Movimiento</th>
+                <th className="py-3.5 px-6 font-semibold text-right">Variación Stock</th>
               </tr>
             </thead>
             
             {cargando ? (
               <tbody>
                 <tr>
-                  <td colSpan="4" className="text-center py-8 text-gray-500 font-semibold">
+                  <td colSpan="4" className="text-center py-12 text-zinc-500 font-medium">
                     Cargando movimientos de inventario desde la base de datos...
                   </td>
                 </tr>
               </tbody>
-            ) : kardex.length === 0 ? (
+            ) : kardexFiltrado.length === 0 ? (
               <tbody>
                 <tr>
-                  <td colSpan="4" className="text-center py-8 text-gray-400">
+                  <td colSpan="4" className="text-center py-12 text-zinc-400">
                     No se encontraron registros de kárdex con los filtros aplicados.
                   </td>
                 </tr>
               </tbody>
             ) : (
-              <tbody className="divide-y divide-gray-200 text-gray-700">
-                {kardex.map((item) => {
+              <tbody className="divide-y divide-zinc-100 text-zinc-700">
+                {kardexPaginado.map((item) => {
                   const esEntrada = item.cantidad_cambio > 0;
                   const esAjuste = item.tipo_movimiento === "Ajuste";
                   
                   return (
-                    <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-3 px-4 font-mono">
+                    <tr key={item.id} className="hover:bg-zinc-50/50 transition-colors">
+                      <td className="py-4 px-6 font-mono text-zinc-600 font-medium text-xs">
                         {new Date(item.fecha_movimiento).toLocaleString('es-ES')}
                       </td>
-                      <td className="py-3 px-4 font-bold text-gray-900">
+                      <td className="py-4 px-6 font-bold text-zinc-900">
                         {item.nombre_producto}
                       </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] uppercase ${
-                          item.tipo_movimiento === 'Venta' ? 'bg-blue-100 text-blue-700' :
-                          item.tipo_movimiento === 'Compra' ? 'bg-green-100 text-green-700' :
-                          esAjuste ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                      <td className="py-4 px-6">
+                        <span className={`px-2.5 py-1 rounded-full font-medium text-xs uppercase ${
+                          item.tipo_movimiento === 'Venta' ? 'bg-sky-50 text-sky-700 border border-sky-200/50' :
+                          item.tipo_movimiento === 'Compra' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50' :
+                          esAjuste ? 'bg-rose-50 text-rose-700 border border-rose-200/50' : 'bg-zinc-100 text-zinc-700 border border-zinc-200/50'
                         }`}>
                           {item.tipo_movimiento}
                         </span>
                       </td>
-                      <td className={`py-3 px-4 font-bold text-right text-sm ${
-                        esEntrada ? 'text-green-600' : 'text-red-600'
+                      <td className={`py-4 px-6 font-semibold text-right text-base ${
+                        esEntrada ? 'text-emerald-600' : 'text-rose-600'
                       }`}>
                         <span className="inline-flex items-center">
-                          {esEntrada ? <ArrowUpRight size={14} className="mr-0.5" /> : <ArrowDownRight size={14} className="mr-0.5" />}
+                          {esEntrada ? <ArrowUpRight size={16} className="mr-0.5" /> : <ArrowDownRight size={16} className="mr-0.5" />}
                           {esEntrada ? `+${item.cantidad_cambio}` : item.cantidad_cambio}
                         </span>
                       </td>
@@ -208,6 +295,13 @@ export const KardexInventario = () => {
             )}
           </table>
         </div>
+
+        <PaginadorTablas
+          totalItems={kardexFiltrado.length}
+          itemsPorPagina={itemsPorPagina}
+          paginaActual={pagina}
+          alCambiarPagina={setPagina}
+        />
       </div>
 
     </div>

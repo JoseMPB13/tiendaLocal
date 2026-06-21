@@ -1,31 +1,478 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-/* Estilos globales y reseteo base de la aplicacion */
+/* =====================================================
+   TIENDA MARGARITA — Sistema de Diseño Premium v2.0
+   Paleta: Violeta/Índigo oscuro con acentos cálidos
+   Autor: Antigravity IDE — Comentarios en español
+   ===================================================== */
+
+/* --- Google Fonts --- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800;900&display=swap');
+
+/* --- Variables de Diseño Global --- */
+:root {
+  /* Paleta principal — violeta profundo */
+  --color-primary:        #6d28d9;  /* Violeta principal */
+  --color-primary-dark:   #5b21b6;  /* Hover / activo */
+  --color-primary-light:  #ede9fe;  /* Fondo sutil */
+  --color-primary-glow:   #7c3aed33; /* Sombra con glow */
+
+  /* Superficie y fondos */
+  --color-bg:             #f5f3ff;  /* Fondo general tenue violeta */
+  --color-surface:        #ffffff;  /* Tarjetas y modales */
+  --color-surface-alt:    #faf9ff;  /* Filas alternas / hover */
+  --color-border:         #ede9fe;  /* Borde suave */
+  --color-border-strong:  #ddd6fe;  /* Borde más definido */
+
+  /* Sidebar — oscuro profundo */
+  --color-sidebar-bg:     #1e1b4b;  /* Azul indigo muy oscuro */
+  --color-sidebar-hover:  #2e2a6a;
+  --color-sidebar-active: #312e81;
+  --color-sidebar-text:   #c4b5fd;  /* Violeta claro para íconos */
+  --color-sidebar-muted:  #6b7280;
+
+  /* Texto */
+  --color-text-primary:   #1e1b4b;  /* Título principal */
+  --color-text-secondary: #4b5563;  /* Subtítulo */
+  --color-text-muted:     #9ca3af;  /* Placeholder / hint */
+
+  /* Semánticos */
+  --color-success:        #059669;
+  --color-success-bg:     #d1fae5;
+  --color-danger:         #dc2626;
+  --color-danger-bg:      #fee2e2;
+  --color-warning:        #d97706;
+  --color-warning-bg:     #fef3c7;
+  --color-info:           #2563eb;
+  --color-info-bg:        #dbeafe;
+
+  /* Sombras */
+  --shadow-sm:   0 1px 3px rgba(109,40,217,.06), 0 1px 2px rgba(109,40,217,.04);
+  --shadow-md:   0 4px 12px rgba(109,40,217,.10), 0 2px 4px rgba(109,40,217,.06);
+  --shadow-lg:   0 10px 28px rgba(109,40,217,.14), 0 4px 8px rgba(109,40,217,.08);
+  --shadow-glow: 0 0 0 3px var(--color-primary-glow);
+
+  /* Bordes */
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  14px;
+  --radius-xl:  20px;
+  --radius-2xl: 28px;
+
+  /* Transiciones */
+  --transition-fast:   all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow:   all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Reset y Base Global --- */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: #F7FAFC; /* Fondo claro premium */
-  color: #2D3748;
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
 }
 
-/* Scrollbar personalizado estético */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+h1, h2, h3, h4, h5, h6, .font-display {
+  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
-::-webkit-scrollbar-track {
-  background: #EDF2F7;
-}
-
+/* --- Scrollbar minimalista --- */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: #CBD5E0;
-  border-radius: 3px;
+  background: var(--color-border-strong);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover { background: #c4b5fd; }
+
+/* =====================================================
+   ANIMACIONES GLOBALES
+   ===================================================== */
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #A0AEC0;
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .7; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.animate-fade-in     { animation: fadeIn 0.3s ease forwards; }
+.animate-fade-in-up  { animation: fadeInUp 0.35s ease forwards; }
+.animate-slide-in    { animation: slideInRight 0.3s ease forwards; }
+
+/* =====================================================
+   COMPONENTES DE DISEÑO — REUTILIZABLES
+   ===================================================== */
+
+/* -- Tarjeta Premium -- */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-normal);
+}
+.card:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+/* -- Botón Primario -- */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: var(--color-primary);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(109,40,217,.35);
+  white-space: nowrap;
+}
+.btn-primary:hover {
+  background: var(--color-primary-dark);
+  box-shadow: 0 4px 14px rgba(109,40,217,.45);
+  transform: translateY(-1px);
+}
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* -- Botón Secundario -- */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: white;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.btn-secondary:hover {
+  background: var(--color-primary-light);
+  border-color: #c4b5fd;
+  color: var(--color-primary);
+}
+.btn-secondary:disabled { opacity: .55; cursor: not-allowed; }
+
+/* -- Botón Peligro -- */
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: var(--color-danger);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(220,38,38,.25);
+}
+.btn-danger:hover {
+  background: #b91c1c;
+  box-shadow: 0 4px 14px rgba(220,38,38,.35);
+  transform: translateY(-1px);
+}
+.btn-danger:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+
+/* -- Botón Ícono -- */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.btn-icon:hover { background: var(--color-primary-light); color: var(--color-primary); border-color: var(--color-border-strong); }
+.btn-icon.danger:hover { background: var(--color-danger-bg); color: var(--color-danger); border-color: #fca5a5; }
+
+/* -- Input / Select / Textarea Premium -- */
+.form-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  font-family: 'Inter', sans-serif;
+  color: var(--color-text-primary);
+  background: white;
+  outline: none;
+  transition: var(--transition-fast);
+}
+.form-input:hover { border-color: #c4b5fd; }
+.form-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-glow);
+}
+.form-input::placeholder { color: var(--color-text-muted); }
+
+.form-input-icon {
+  padding-left: 38px;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 5px;
+}
+
+/* -- Badge / Pill de estado -- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.badge-success { background: var(--color-success-bg); color: var(--color-success); }
+.badge-danger  { background: var(--color-danger-bg);  color: var(--color-danger);  }
+.badge-warning { background: var(--color-warning-bg); color: var(--color-warning); }
+.badge-info    { background: var(--color-info-bg);    color: var(--color-info);    }
+.badge-purple  { background: #ede9fe; color: var(--color-primary); }
+.badge-gray    { background: #f3f4f6; color: #6b7280; }
+
+/* -- Tabla de Datos -- */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table thead tr {
+  background: linear-gradient(135deg, var(--color-sidebar-bg), #312e81);
+  color: white;
+}
+.data-table thead th {
+  padding: 12px 16px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.data-table tbody tr {
+  border-bottom: 1px solid var(--color-border);
+  transition: var(--transition-fast);
+}
+.data-table tbody tr:hover { background: var(--color-surface-alt); }
+.data-table tbody td { padding: 12px 16px; font-size: 0.8rem; color: var(--color-text-secondary); }
+.data-table tbody td.bold { font-weight: 700; color: var(--color-text-primary); }
+
+/* -- Modal Backdrop -- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 27, 75, 0.6);
+  backdrop-filter: blur(4px);
+  padding: 16px;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-container {
+  background: white;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--color-border);
+  width: 100%;
+  animation: fadeInUp 0.3s ease;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.modal-body {
+  padding: 20px 24px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* -- Sección de Cabecera de Vista -- */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  background: white;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.page-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.page-subtitle {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* -- Card de Estadística -- */
+.stat-card {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-normal);
+  gap: 16px;
+}
+.stat-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-border-strong);
+  transform: translateY(-2px);
+}
+
+.stat-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-value {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.375rem;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+/* -- Tabla contenedor -- */
+.table-wrapper {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* =====================================================
+   TOASTER — Notificaciones
+   ===================================================== */
+[data-hot-toast] {
+  font-family: 'Inter', sans-serif !important;
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+}
+
+/* =====================================================
+   GRADIENTES DE UTILIDAD
+   ===================================================== */
+.gradient-purple {
+  background: linear-gradient(135deg, #6d28d9, #4338ca);
+}
+.gradient-green {
+  background: linear-gradient(135deg, #059669, #047857);
+}
+.gradient-red {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+}
+.gradient-amber {
+  background: linear-gradient(135deg, #d97706, #b45309);
+}
+.gradient-blue {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
 }

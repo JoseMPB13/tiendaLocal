@@ -1,10 +1,19 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Vista: GestionProductos.jsx
+ * Módulo de gestión completa del catálogo de productos de Tienda Margarita.
+ * Incluye tabla paginada, formulario modal premium y baja lógica con confirmación.
+ */
+
+import { useState, useEffect } from 'react';
 import productoService from '../services/productoService';
 import categoriaService from '../services/categoriaService';
 import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
 import toast, { Toaster } from 'react-hot-toast';
-import { Plus, Edit3, Trash2, X } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Package } from 'lucide-react';
+
+/* ── Estilos de modal compartidos ── */
+const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
 
 export const GestionProductos = () => {
   const [productos, setProductos] = useState([]);
@@ -13,13 +22,13 @@ export const GestionProductos = () => {
 
   // Paginación
   const [pagina, setPagina] = useState(1);
-  const itemsPorPagina = 5;
+  const itemsPorPagina = 7;
 
   // Modal Formulario
   const [mostrarForm, setMostrarForm] = useState(false);
   const [productoEdit, setProductoEdit] = useState(null);
-  
-  // Campos Formulario
+
+  // Campos del Formulario
   const [categoriaId, setCategoriaId] = useState('');
   const [codigoBarras, setCodigoBarras] = useState('');
   const [nombre, setNombre] = useState('');
@@ -30,7 +39,7 @@ export const GestionProductos = () => {
   const [stockMinimo, setStockMinimo] = useState('');
   const [procesandoForm, setProcesandoForm] = useState(false);
 
-  // Modal Desactivación (Baja lógica)
+  // Modal Desactivación
   const [mostrarEliminar, setMostrarEliminar] = useState(false);
   const [productoEliminarId, setProductoEliminarId] = useState(null);
   const [procesandoEliminar, setProcesandoEliminar] = useState(false);
@@ -40,19 +49,25 @@ export const GestionProductos = () => {
       setCargando(true);
       const [resProds, resCats] = await Promise.all([
         productoService.obtenerTodos(true),
-        categoriaService.obtenerTodas(false) // Traer solo activas para select
+        categoriaService.obtenerTodas(false)
       ]);
       if (resProds.ok) setProductos(resProds.data);
       if (resCats.ok) setCategorias(resCats.data);
     } catch (ex) {
-      toast.error("Error al cargar los productos.");
+      console.error(ex);
+      toast.error('Error al cargar los productos.');
     } finally {
       setCargando(false);
     }
   };
 
   useEffect(() => {
-    cargarDatos();
+    // Evita actualizaciones síncronas de estado en el render inicial de React
+    const inicializar = async () => {
+      await Promise.resolve();
+      cargarDatos();
+    };
+    inicializar();
   }, []);
 
   const abrirCrear = () => {
@@ -100,20 +115,20 @@ export const GestionProductos = () => {
       if (productoEdit) {
         const res = await productoService.actualizar(productoEdit.id, payload);
         if (res.ok) {
-          toast.success("Producto actualizado correctamente.");
+          toast.success('Producto actualizado correctamente.');
           setMostrarForm(false);
           cargarDatos();
         }
       } else {
         const res = await productoService.crear(payload);
         if (res.ok) {
-          toast.success("Producto registrado exitosamente.");
+          toast.success('Producto registrado exitosamente.');
           setMostrarForm(false);
           cargarDatos();
         }
       }
     } catch (ex) {
-      const errorMsg = ex.response?.data?.detail || "Error al guardar el producto.";
+      const errorMsg = ex.response?.data?.detail || 'Error al guardar el producto.';
       toast.error(errorMsg);
     } finally {
       setProcesandoForm(false);
@@ -130,12 +145,13 @@ export const GestionProductos = () => {
     try {
       const res = await productoService.eliminar(productoEliminarId);
       if (res.ok) {
-        toast.success("Producto inactivado correctamente (baja lógica).");
+        toast.success('Producto inactivado correctamente (baja lógica).');
         setMostrarEliminar(false);
         cargarDatos();
       }
     } catch (ex) {
-      toast.error("No se pudo inactivar el producto.");
+      console.error(ex);
+      toast.error('No se pudo inactivar el producto.');
     } finally {
       setProcesandoEliminar(false);
     }
@@ -145,43 +161,55 @@ export const GestionProductos = () => {
   const productosPaginados = productos.slice(indexInicio, indexInicio + itemsPorPagina);
 
   return (
-    <div className="space-y-6">
-      <Toaster position="top-right" />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: { fontFamily: 'Inter, sans-serif', fontSize: '0.8125rem', fontWeight: 500, borderRadius: '12px' },
+        }}
+      />
 
-      {/* CABECERA ACCIÓN */}
-      <div className="bg-white rounded-lg p-5 shadow border border-gray-200 flex items-center justify-between">
-        <div>
-          <h3 className="font-bold text-gray-800 text-sm">Catálogo de Productos</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Gestión de stock, código de barras y precios de venta.</p>
+      {/* ── CABECERA ── */}
+      <div className="page-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '40px', height: '40px',
+            background: 'linear-gradient(135deg, #6d28d9, #4338ca)',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Package size={20} style={{ color: 'white' }} />
+          </div>
+          <div>
+            <h3 className="page-title">Catálogo de Productos</h3>
+            <p className="page-subtitle">Gestión de stock, código de barras y precios de venta</p>
+          </div>
         </div>
-        <button
-          onClick={abrirCrear}
-          className="flex items-center py-2 px-4 bg-premium-primary hover:bg-blue-700 text-white rounded text-xs font-semibold transition-colors"
-        >
-          <Plus size={14} className="mr-1" />
+        <button onClick={abrirCrear} className="btn-primary">
+          <Plus size={15} />
           Registrar Producto
         </button>
       </div>
 
-      {/* TABLA DE PRODUCTOS */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+      {/* ── TABLA ── */}
+      <div className="table-wrapper">
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ minWidth: '700px' }}>
             <thead>
-              <tr className="bg-premium-dark text-white font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-3.5 px-4">Código Barras</th>
-                <th className="py-3.5 px-4">Nombre</th>
-                <th className="py-3.5 px-4 text-right">Precio Venta</th>
-                <th className="py-3.5 px-4 text-right">Stock</th>
-                <th className="py-3.5 px-4">Estado</th>
-                <th className="py-3.5 px-4 text-center">Acciones</th>
+              <tr>
+                <th>Código Barras</th>
+                <th>Nombre del Producto</th>
+                <th style={{ textAlign: 'right' }}>Precio Venta</th>
+                <th style={{ textAlign: 'right' }}>Stock</th>
+                <th>Estado</th>
+                <th style={{ textAlign: 'center' }}>Acciones</th>
               </tr>
             </thead>
 
             {cargando ? (
               <tbody>
                 <tr>
-                  <td colSpan="6" className="text-center py-8 text-gray-500 font-semibold">
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#9ca3af', fontWeight: 500 }}>
                     Cargando catálogo de productos...
                   </td>
                 </tr>
@@ -189,43 +217,49 @@ export const GestionProductos = () => {
             ) : productos.length === 0 ? (
               <tbody>
                 <tr>
-                  <td colSpan="6" className="text-center py-8 text-gray-400">
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
                     No se registran productos en el catálogo.
                   </td>
                 </tr>
               </tbody>
             ) : (
-              <tbody className="divide-y divide-gray-200 text-gray-700">
+              <tbody>
                 {productosPaginados.map((prod) => (
-                  <tr key={prod.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="py-3 px-4 font-mono">{prod.codigo_barras || 'Sin código'}</td>
-                    <td className="py-3 px-4 font-bold text-gray-900">{prod.nombre}</td>
-                    <td className="py-3 px-4 text-right font-semibold">${prod.precio_venta.toFixed(2)}</td>
-                    <td className="py-3 px-4 text-right font-semibold">{prod.stock_actual} uds</td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] uppercase ${
-                        prod.estado === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}>
+                  <tr key={prod.id}>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#6b7280' }}>
+                      {prod.codigo_barras || '—'}
+                    </td>
+                    <td className="bold">{prod.nombre}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#1e1b4b' }}>
+                      Bs. {prod.precio_venta.toFixed(2)}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: prod.stock_actual <= prod.stock_minimo ? '#dc2626' : '#374151' }}>
+                      {prod.stock_actual} uds
+                    </td>
+                    <td>
+                      <span className={`badge ${prod.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
                         {prod.estado}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-center flex items-center justify-center space-x-2">
-                      <button
-                        onClick={() => abrirEditar(prod)}
-                        className="p-1 hover:bg-gray-100 rounded text-premium-primary"
-                        title="Editar"
-                      >
-                        <Edit3 size={16} />
-                      </button>
-                      {prod.estado === 'Activo' && (
+                    <td style={{ textAlign: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                         <button
-                          onClick={() => abrirDesactivar(prod.id)}
-                          className="p-1 hover:bg-gray-100 rounded text-premium-danger"
-                          title="Desactivar"
+                          onClick={() => abrirEditar(prod)}
+                          className="btn-icon"
+                          title="Editar producto"
                         >
-                          <Trash2 size={16} />
+                          <Edit3 size={15} />
                         </button>
-                      )}
+                        {prod.estado === 'Activo' && (
+                          <button
+                            onClick={() => abrirDesactivar(prod.id)}
+                            className="btn-icon danger"
+                            title="Desactivar producto"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -242,133 +276,131 @@ export const GestionProductos = () => {
         />
       </div>
 
-      {/* MODAL FORMULARIO DE PRODUCTOS */}
+      {/* ── MODAL FORMULARIO ── */}
       {mostrarForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full p-6 border border-gray-200 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <h3 className="font-bold text-gray-800 text-sm">
-                {productoEdit ? 'Editar Producto' : 'Registrar Nuevo Producto'}
-              </h3>
-              <button onClick={() => setMostrarForm(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={20} />
+        <div className="modal-backdrop">
+          <div className="modal-container animate-fade-in-up" style={{ maxWidth: '520px' }}>
+            {/* Franja superior */}
+            <div style={{ height: '4px', background: 'linear-gradient(90deg, #6d28d9, #8b5cf6)' }} />
+
+            <div className="modal-header">
+              <span className="modal-title">
+                {productoEdit ? '✏️ Editar Producto' : '📦 Registrar Nuevo Producto'}
+              </span>
+              <button
+                onClick={() => setMostrarForm(false)}
+                style={{
+                  background: '#f3f4f6', border: 'none', borderRadius: '8px',
+                  width: '28px', height: '28px', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', cursor: 'pointer', color: '#6b7280',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#e5e7eb'; e.currentTarget.style.color = '#374151'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#6b7280'; }}
+              >
+                <X size={14} />
               </button>
             </div>
 
-            <form onSubmit={handleGuardar} className="my-4 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Nombre Producto</label>
-                  <input
-                    type="text"
-                    required
-                    value={nombre}
-                    onChange={(e) => setNombre(e.target.value)}
-                    placeholder="Ej: Fanta Naranja 3L"
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-                  />
+            <form onSubmit={handleGuardar}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* Nombre + Categoría */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div style={fieldStyle}>
+                    <label className="form-label">Nombre Producto *</label>
+                    <input
+                      type="text" required value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}
+                      placeholder="Ej: Fanta Naranja 3L"
+                      className="form-input"
+                    />
+                  </div>
+                  <div style={fieldStyle}>
+                    <label className="form-label">Categoría *</label>
+                    <select
+                      value={categoriaId}
+                      onChange={(e) => setCategoriaId(e.target.value)}
+                      className="form-input"
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {categorias.map(c => (
+                        <option key={c.id} value={c.id}>{c.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Categoría</label>
-                  <select
-                    value={categoriaId}
-                    onChange={(e) => setCategoriaId(e.target.value)}
-                    className="w-full border border-gray-300 rounded text-sm py-2 px-2 bg-white"
-                  >
-                    {categorias.map(c => (
-                      <option key={c.id} value={c.id}>{c.nombre}</option>
-                    ))}
-                  </select>
+
+                {/* Código Barras + Descripción */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div style={fieldStyle}>
+                    <label className="form-label">Código Barras (Opcional)</label>
+                    <input
+                      type="text" value={codigoBarras}
+                      onChange={(e) => setCodigoBarras(e.target.value)}
+                      placeholder="Dejar vacío para autogenerar"
+                      className="form-input"
+                    />
+                  </div>
+                  <div style={fieldStyle}>
+                    <label className="form-label">Descripción</label>
+                    <input
+                      type="text" value={descripcion}
+                      onChange={(e) => setDescripcion(e.target.value)}
+                      placeholder="Detalles opcionales..."
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+
+                {/* Precios */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div style={fieldStyle}>
+                    <label className="form-label">Precio Compra (Bs.) *</label>
+                    <input
+                      type="number" step="0.01" required value={precioCompra}
+                      onChange={(e) => setPrecioCompra(e.target.value)}
+                      placeholder="0.00"
+                      className="form-input"
+                    />
+                  </div>
+                  <div style={fieldStyle}>
+                    <label className="form-label">Precio Venta (Bs.) *</label>
+                    <input
+                      type="number" step="0.01" required value={precioVenta}
+                      onChange={(e) => setPrecioVenta(e.target.value)}
+                      placeholder="0.00"
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+
+                {/* Stock */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div style={fieldStyle}>
+                    <label className="form-label">Stock Inicial *</label>
+                    <input
+                      type="number" required value={stockActual}
+                      onChange={(e) => setStockActual(e.target.value)}
+                      className="form-input"
+                    />
+                  </div>
+                  <div style={fieldStyle}>
+                    <label className="form-label">Stock Mínimo Alerta *</label>
+                    <input
+                      type="number" required value={stockMinimo}
+                      onChange={(e) => setStockMinimo(e.target.value)}
+                      className="form-input"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Código Barras (Opcional)</label>
-                  <input
-                    type="text"
-                    value={codigoBarras}
-                    onChange={(e) => setCodigoBarras(e.target.value)}
-                    placeholder="Dejar vacío para autogenerar"
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Descripción</label>
-                  <input
-                    type="text"
-                    value={descripcion}
-                    onChange={(e) => setDescripcion(e.target.value)}
-                    placeholder="Detalles opcionales..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Precio Compra ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={precioCompra}
-                    onChange={(e) => setPrecioCompra(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Precio Venta ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={precioVenta}
-                    onChange={(e) => setPrecioVenta(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Stock Inicial</label>
-                  <input
-                    type="number"
-                    required
-                    value={stockActual}
-                    onChange={(e) => setStockActual(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Stock Mínimo Alerta</label>
-                  <input
-                    type="number"
-                    required
-                    value={stockMinimo}
-                    onChange={(e) => setStockMinimo(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-premium-primary focus:border-premium-primary outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 justify-end pt-3">
-                <button
-                  type="button"
-                  onClick={() => setMostrarForm(false)}
-                  className="py-1.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs font-semibold"
-                >
+              <div className="modal-footer">
+                <button type="button" onClick={() => setMostrarForm(false)} className="btn-secondary">
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  disabled={procesandoForm}
-                  className="py-1.5 px-4 bg-premium-primary hover:bg-blue-700 text-white rounded text-xs font-semibold disabled:opacity-50"
-                >
-                  {procesandoForm ? 'Guardando...' : 'Guardar Producto'}
+                <button type="submit" disabled={procesandoForm} className="btn-primary">
+                  {procesandoForm ? 'Guardando...' : productoEdit ? 'Actualizar Producto' : 'Guardar Producto'}
                 </button>
               </div>
             </form>
@@ -376,7 +408,7 @@ export const GestionProductos = () => {
         </div>
       )}
 
-      {/* MODAL CONFIRMACIÓN ELIMINAR */}
+      {/* ── MODAL CONFIRMACIÓN ELIMINAR ── */}
       <ModalDesactivar
         mostrar={mostrarEliminar}
         titulo="Inactivar Producto"

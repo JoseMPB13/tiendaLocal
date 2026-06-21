@@ -9,5 +9,5 @@ async def obtener_estado():
     """
     return {
         "estado": "OK",
-        "mensaje": "Servidor backend de TiendaLocal funcionando correctamente en español."
+        "mensaje": "Servidor backend de Tienda Margarita funcionando correctamente en español."
     }

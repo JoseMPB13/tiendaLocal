@@ -16,16 +16,16 @@ export const LayoutDelivery = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-premium-light overflow-hidden">
+    <div className="flex flex-col h-screen bg-[#fafafa] overflow-hidden">
       {/* Cabecera superior móvil */}
-      <header className="bg-premium-dark text-white px-4 py-3 flex items-center justify-between shadow-md">
+      <header className="bg-zinc-950 text-white px-4 py-4 flex items-center justify-between border-b border-zinc-900 shadow-sm">
         <div>
           <h1 className="text-base font-bold m-0 tracking-wide text-white">Delivery Local</h1>
-          <p className="text-xs text-gray-300 truncate w-40">{usuario?.nombre_completo}</p>
+          <p className="text-xs text-zinc-400 truncate w-40 mt-0.5">{usuario?.nombre_completo}</p>
         </div>
         <button 
           onClick={handleLogout}
-          className="p-2 text-gray-300 hover:text-white transition-colors"
+          className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl transition-all"
         >
           <LogOut size={20} />
         </button>
@@ -37,13 +37,13 @@ export const LayoutDelivery = () => {
       </main>
 
       {/* BARRA DE NAVEGACIÓN INFERIOR (Tab Bar Fijo) */}
-      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-gray-200 flex items-center justify-around shadow-lg z-50">
+      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white/90 backdrop-blur-md border-t border-zinc-200/80 flex items-center justify-around shadow-sm z-50">
         <NavLink 
           to="/delivery" 
           end
           className={({ isActive }) => 
-            `flex flex-col items-center justify-center w-full h-full text-xs font-semibold ${
-              isActive ? 'text-premium-primary border-t-2 border-premium-primary' : 'text-gray-500'
+            `flex flex-col items-center justify-center w-full h-full text-xs transition-all ${
+              isActive ? 'text-zinc-950 font-bold border-t-2 border-zinc-950' : 'text-zinc-400 hover:text-zinc-600 font-medium'
             }`
           }
         >
@@ -54,8 +54,8 @@ export const LayoutDelivery = () => {
         <NavLink 
           to="/delivery/historial" 
           className={({ isActive }) => 
-            `flex flex-col items-center justify-center w-full h-full text-xs font-semibold ${
-              isActive ? 'text-premium-primary border-t-2 border-premium-primary' : 'text-gray-500'
+            `flex flex-col items-center justify-center w-full h-full text-xs transition-all ${
+              isActive ? 'text-zinc-950 font-bold border-t-2 border-zinc-950' : 'text-zinc-400 hover:text-zinc-600 font-medium'
             }`
           }
         >

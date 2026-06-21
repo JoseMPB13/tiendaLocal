@@ -1,18 +1,21 @@
-import React, { useState } from 'react';
+/**
+ * Vista: Login.jsx
+ * Pantalla de inicio de sesión con diseño premium para Tienda Margarita.
+ * Incluye gradiente animado de fondo, glassmorphism y micro-animaciones.
+ */
+
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
-import { Lock, Mail, AlertTriangle } from 'lucide-react';
+import { Lock, Mail, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 import authService from '../services/authService';
 
-/**
- * Pantalla de inicio de sesión minimalista y responsiva conectada al backend y Zustand.
- */
 export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
-  
+
   const iniciarSesionStore = useAuthStore(state => state.iniciarSesion);
   const navigate = useNavigate();
 
@@ -44,75 +47,200 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-premium-light flex items-center justify-center p-4">
-      {/* CONTENEDOR CENTRAL */}
-      <div className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-md p-8">
-        
-        {/* Cabecera / Marca */}
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-extrabold text-premium-dark tracking-tight">TIENDALOCAL</h2>
-          <p className="text-sm text-gray-500 mt-2">Punto de venta e inventario optimizado</p>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 35%, #4c1d95 65%, #1e1b4b 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Orbes decorativos de fondo */}
+      <div style={{
+        position: 'absolute', top: '-80px', right: '-80px',
+        width: '320px', height: '320px',
+        background: 'radial-gradient(circle, rgba(139,92,246,.35) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute', bottom: '-60px', left: '-60px',
+        width: '260px', height: '260px',
+        background: 'radial-gradient(circle, rgba(99,102,241,.3) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+
+      {/* TARJETA CENTRAL */}
+      <div
+        className="animate-fade-in-up"
+        style={{
+          background: 'rgba(255,255,255,0.97)',
+          borderRadius: '24px',
+          boxShadow: '0 25px 60px rgba(30,27,75,.5)',
+          border: '1px solid rgba(196,181,253,.3)',
+          width: '100%',
+          maxWidth: '420px',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Franja de color superior */}
+        <div style={{
+          height: '5px',
+          background: 'linear-gradient(90deg, #6d28d9, #8b5cf6, #4338ca)',
+        }} />
+
+        <div style={{ padding: '36px 36px 40px' }}>
+          {/* Cabecera / Logotipo */}
+          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+            <div style={{
+              width: '60px', height: '60px',
+              background: 'linear-gradient(135deg, #6d28d9, #4338ca)',
+              borderRadius: '16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px',
+              boxShadow: '0 8px 24px rgba(109,40,217,.4)',
+            }}>
+              <span style={{ color: 'white', fontSize: '24px', fontFamily: 'Outfit, sans-serif', fontWeight: 800 }}>
+                M
+              </span>
+            </div>
+            <h1 style={{
+              fontFamily: 'Outfit, sans-serif',
+              fontSize: '1.5rem',
+              fontWeight: 800,
+              color: '#1e1b4b',
+              margin: 0,
+              letterSpacing: '-0.03em',
+            }}>
+              Tienda Margarita
+            </h1>
+            <p style={{
+              fontSize: '0.78rem',
+              color: '#9ca3af',
+              marginTop: '6px',
+              fontWeight: 500,
+            }}>
+              Sistema de Ventas e Inventario
+            </p>
+          </div>
+
+          {/* Mensaje de error */}
+          {error && (
+            <div
+              className="animate-fade-in-up"
+              style={{
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '10px',
+                padding: '12px 14px',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px',
+              }}
+            >
+              <AlertCircle size={15} style={{ color: '#dc2626', flexShrink: 0, marginTop: '1px' }} />
+              <p style={{ fontSize: '0.75rem', color: '#b91c1c', fontWeight: 500, margin: 0 }}>
+                {error}
+              </p>
+            </div>
+          )}
+
+          {/* Formulario */}
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            {/* Email */}
+            <div>
+              <label className="form-label">Correo Electrónico</label>
+              <div style={{ position: 'relative' }}>
+                <Mail
+                  size={15}
+                  style={{
+                    position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)',
+                    color: '#9ca3af', pointerEvents: 'none',
+                  }}
+                />
+                <input
+                  id="login-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="ejemplo@tiendamargarita.com"
+                  className="form-input form-input-icon"
+                  style={{ paddingLeft: '38px' }}
+                />
+              </div>
+            </div>
+
+            {/* Contraseña */}
+            <div>
+              <label className="form-label">Contraseña</label>
+              <div style={{ position: 'relative' }}>
+                <Lock
+                  size={15}
+                  style={{
+                    position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)',
+                    color: '#9ca3af', pointerEvents: 'none',
+                  }}
+                />
+                <input
+                  id="login-password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="form-input form-input-icon"
+                  style={{ paddingLeft: '38px' }}
+                />
+              </div>
+            </div>
+
+            {/* Botón Submit */}
+            <button
+              id="login-submit"
+              type="submit"
+              disabled={cargando}
+              className="btn-primary"
+              style={{
+                width: '100%',
+                padding: '11px',
+                fontSize: '0.875rem',
+                marginTop: '4px',
+                justifyContent: 'center',
+              }}
+            >
+              {cargando ? (
+                <>
+                  <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                  Verificando acceso...
+                </>
+              ) : (
+                <>
+                  Ingresar al Sistema
+                  <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Pie de tarjeta */}
+          <p style={{
+            textAlign: 'center',
+            fontSize: '0.6875rem',
+            color: '#d1d5db',
+            marginTop: '24px',
+            fontWeight: 500,
+          }}>
+            © {new Date().getFullYear()} Tienda Margarita — Acceso Privado
+          </p>
         </div>
-
-        {error && (
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded flex items-start">
-            <AlertTriangle className="text-red-500 mr-2 flex-shrink-0" size={20} />
-            <p className="text-sm text-red-700 font-medium">{error}</p>
-          </div>
-        )}
-
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Email */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Correo Electrónico</label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                <Mail size={18} />
-              </span>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="ejemplo@tienda.com"
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-premium-primary focus:border-premium-primary outline-none transition-all text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Contraseña */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                <Lock size={18} />
-              </span>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-premium-primary focus:border-premium-primary outline-none transition-all text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Botón de envío */}
-          <button
-            type="submit"
-            disabled={cargando}
-            className="w-full py-3 bg-premium-primary hover:bg-blue-700 text-white rounded font-semibold text-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-premium-primary outline-none disabled:opacity-50"
-          >
-            {cargando ? 'Iniciando sesión...' : 'Ingresar al Sistema'}
-          </button>
-        </form>
-
       </div>
     </div>
   );
 };
 
 export default Login;
-
