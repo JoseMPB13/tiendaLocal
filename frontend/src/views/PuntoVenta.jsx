@@ -12,7 +12,7 @@
  *  - Carrito con control de stock y confirmación transaccional
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import useCartStore from '../store/cartStore';
 import useAuthStore from '../store/authStore';
 import ventaService from '../services/ventaService';
@@ -77,46 +77,71 @@ export const PuntoVenta = () => {
   const { usuario } = useAuthStore();
   const total = obtenerTotal();
 
-  /* ── Carga inicial ──────────────────────────────────────────────────────── */
-  const cargarDatos = useCallback(async () => {
-    try {
-      setCargando(true);
-      const [resProds, resClis, resCats] = await Promise.all([
-        ventaService.obtenerProductos(),
-        ventaService.obtenerClientes(),
-        ventaService.obtenerCategorias()
-      ]);
-
-      if (resProds.ok) setProductos(resProds.data);
-
-      if (resClis.ok) {
-        setClientes(resClis.data);
-        // Preseleccionar "Cliente General" (DNI 00000000) si existe
-        const cliGeneral = resClis.data.find(c => c.dni_ruc === '00000000') || resClis.data[0];
-        if (cliGeneral) {
-          setCliente(cliGeneral);
-          setBuscarCliente(cliGeneral.nombre);
-        }
-      }
-
-      if (resCats.ok) {
-        setCategorias(['Todas', ...resCats.data.map(c => c.nombre)]);
-      }
-    } catch (ex) {
-      console.error(ex);
-      toast.error('Error al conectar con el servidor. Revisa la conexión.');
-    } finally {
-      setCargando(false);
-    }
-  }, [setCliente]);
-
+  /* ── Carga inicial ─────────────────────────────────────────────────────────
+   * La función async se define DENTRO del efecto para evitar el anti-patrón
+   * de llamar setState en cascada desde una función externa al efecto.
+   * Se ejecuta una sola vez al montar el componente (deps vacías).
+   * ─────────────────────────────────────────────────────────────────────── */
   useEffect(() => {
-    // Autogenerar código de factura si no hay uno al montar la vista
-    if (!codigoFactura) {
-      setCodigoFactura(generarCodigoFactura());
-    }
-    cargarDatos();
-  }, [cargarDatos, codigoFactura, setCodigoFactura]);
+    // Generar código de factura inicial si el carrito está limpio
+    setCodigoFactura(prev => prev || generarCodigoFactura());
+
+    let cancelado = false; // Flag para evitar actualizar estado si el componente se desmontó
+
+    const inicializarPOS = async () => {
+      try {
+        setCargando(true);
+        const [resProds, resClis, resCats] = await Promise.all([
+          ventaService.obtenerProductos(),
+          ventaService.obtenerClientes(),
+          ventaService.obtenerCategorias()
+        ]);
+
+        if (cancelado) return;
+
+        if (resProds.ok && resCats.ok) {
+          // Construir mapa id → nombre de categorías para enriquecer productos localmente.
+          // Esto garantiza que el filtro funciona aunque el join del backend falle.
+          const mapaCategorias = {};
+          resCats.data.forEach(c => { mapaCategorias[c.id] = c.nombre; });
+
+          const productosEnriquecidos = resProds.data.map(p => ({
+            ...p,
+            // Usar categoria_nombre del backend si viene; si no, buscarlo por categoria_id
+            categoria_nombre: p.categoria_nombre || mapaCategorias[p.categoria_id] || null,
+          }));
+          setProductos(productosEnriquecidos);
+          setCategorias(['Todas', ...resCats.data.map(c => c.nombre)]);
+        } else if (resProds.ok) {
+          setProductos(resProds.data);
+        } else if (resCats.ok) {
+          setCategorias(['Todas', ...resCats.data.map(c => c.nombre)]);
+        }
+
+        if (resClis.ok) {
+          setClientes(resClis.data);
+          // Preseleccionar "Cliente General" (DNI 00000000) si existe
+          const cliGeneral = resClis.data.find(c => c.dni_ruc === '00000000') || resClis.data[0];
+          if (cliGeneral) {
+            setCliente(cliGeneral);
+            setBuscarCliente(cliGeneral.nombre);
+          }
+        }
+      } catch (ex) {
+        if (!cancelado) {
+          console.error(ex);
+          toast.error('Error al conectar con el servidor. Revisa la conexión.');
+        }
+      } finally {
+        if (!cancelado) setCargando(false);
+      }
+    };
+
+    inicializarPOS();
+
+    // Cleanup: si el componente se desmonta antes de que la promesa resuelva, ignorar
+    return () => { cancelado = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Cerrar dropdown de clientes al hacer clic fuera ───────────────────── */
   useEffect(() => {
