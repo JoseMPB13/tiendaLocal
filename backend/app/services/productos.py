@@ -62,14 +62,23 @@ class ProductoService:
     @staticmethod
     def obtener_todos(incluir_inactivos: bool = False) -> List[dict]:
         """
-        Retorna la lista de todos los productos.
+        Retorna la lista de todos los productos, incluyendo el nombre de categoría
+        mediante un join con la tabla categorias (útil para el filtro del POS).
         """
-        query = supabase.table("productos").select("*")
+        # Join con categorias para incluir el nombre de la categoría en la respuesta
+        query = supabase.table("productos").select("*, categorias(nombre)")
         if not incluir_inactivos:
             query = query.eq("estado", "Activo")
-        
+
         resultado = query.execute()
-        return resultado.data or []
+        productos = resultado.data or []
+
+        # Aplanar el campo anidado 'categorias' para extraer el nombre directamente
+        for prod in productos:
+            cat = prod.pop("categorias", None)
+            prod["categoria_nombre"] = cat["nombre"] if cat and isinstance(cat, dict) else None
+
+        return productos
 
     @staticmethod
     def obtener_por_id(producto_id: UUID) -> dict:

@@ -89,6 +89,7 @@ class ProductoActualizar(BaseModel):
 class ProductoRespuesta(ProductoBase):
     id: UUID
     estado: str
+    categoria_nombre: Optional[str] = None  # Campo enriquecido con join para el POS
     fecha_creacion: datetime
     fecha_actualizacion: datetime
 

@@ -1,124 +1,247 @@
-import { useState, useEffect, useRef } from 'react';
+/**
+ * Vista: PuntoVenta.jsx
+ * Módulo POS (Punto de Venta) de Tienda Margarita.
+ *
+ * Funcionalidades:
+ *  - Búsqueda de productos por nombre o código de barras
+ *  - Filtro por categoría (funcional)
+ *  - Código de factura autogenerado (editable)
+ *  - Selector de cliente con buscador autocomplete en tiempo real
+ *  - Mini-modal de registro rápido de cliente desde el POS
+ *  - Métodos de pago: Efectivo (con vuelto), Tarjeta, Crédito (con límite)
+ *  - Carrito con control de stock y confirmación transaccional
+ */
+
+import { useState, useEffect, useRef, useCallback } from 'react';
 import useCartStore from '../store/cartStore';
 import useAuthStore from '../store/authStore';
 import ventaService from '../services/ventaService';
+import clienteService from '../services/clienteService';
 import toast, { Toaster } from 'react-hot-toast';
-import { 
-  Search, Trash2, ShoppingCart, UserPlus, CreditCard, 
-  DollarSign, X 
+import {
+  Search, Trash2, ShoppingCart, CreditCard,
+  DollarSign, X, ChevronDown, UserPlus, Plus,
+  RefreshCw, Package, ArrowRight, Loader2
 } from 'lucide-react';
 
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
+
+/** Genera un código de factura único con formato F-YYYYMMDD-XXXXX */
+const generarCodigoFactura = () => {
+  const hoy = new Date();
+  const yyyy = hoy.getFullYear();
+  const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+  const dd = String(hoy.getDate()).padStart(2, '0');
+  const rand = Math.floor(10000 + Math.random() * 90000);
+  return `F-${yyyy}${mm}${dd}-${rand}`;
+};
+
+/* ── Componente principal ────────────────────────────────────────────────── */
 export const PuntoVenta = () => {
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
-  const [categorias, setCategorias] = useState(["Todas"]);
-  
+  const [categorias, setCategorias] = useState(['Todas']);
+  const [cargando, setCargando] = useState(true);
+
+  // Búsqueda y filtros de la rejilla
   const [buscar, setBuscar] = useState('');
   const [categoriaSel, setCategoriaSel] = useState('Todas');
-  const [mostrarCarritoMovil, setMostrarCarritoMovil] = useState(false);
-  const [cargando, setCargando] = useState(true);
-  
-  // Estado para el modal de confirmación de cobro
-  const [mostrarModal, setMostrarModal] = useState(false);
+
+  // Autocomplete de clientes
+  const [buscarCliente, setBuscarCliente] = useState('');
+  const [dropdownClienteVisible, setDropdownClienteVisible] = useState(false);
+  const clienteInputRef = useRef(null);
+  const dropdownRef = useRef(null);
+
+  // Modal de cobro
+  const [mostrarModalCobro, setMostrarModalCobro] = useState(false);
   const [efectivoRecibido, setEfectivoRecibido] = useState('');
   const [procesandoPago, setProcesandoPago] = useState(false);
 
+  // Mini-modal de registro rápido de cliente
+  const [mostrarModalCliente, setMostrarModalCliente] = useState(false);
+  const [nuevoCliNombre, setNuevoCliNombre] = useState('');
+  const [nuevoCliTelefono, setNuevoCliTelefono] = useState('');
+  const [nuevoCliDni, setNuevoCliDni] = useState('');
+  const [guardandoCliente, setGuardandoCliente] = useState(false);
+
   const inputBuscarRef = useRef(null);
 
-  // Zustand POS Cart Store
-  const { 
+  // Zustand stores
+  const {
     carrito, clienteSeleccionado, metodoPago, codigoFactura,
     agregarProducto, actualizarCantidad, removerProducto, vaciarCarrito,
-    setCliente, setMetodoPago, setCodigoFactura, obtenerTotal 
+    setCliente, setMetodoPago, setCodigoFactura, obtenerTotal
   } = useCartStore();
 
   const { usuario } = useAuthStore();
   const total = obtenerTotal();
 
-  // 1. CARGA DINÁMICA DESDE LA API DE FASTAPI
-  useEffect(() => {
-    const cargarDatos = async () => {
-      try {
-        setCargando(true);
-        const [resProds, resClis, resCats] = await Promise.all([
-          ventaService.obtenerProductos(),
-          ventaService.obtenerClientes(),
-          ventaService.obtenerCategorias()
-        ]);
+  /* ── Carga inicial ──────────────────────────────────────────────────────── */
+  const cargarDatos = useCallback(async () => {
+    try {
+      setCargando(true);
+      const [resProds, resClis, resCats] = await Promise.all([
+        ventaService.obtenerProductos(),
+        ventaService.obtenerClientes(),
+        ventaService.obtenerCategorias()
+      ]);
 
-        if (resProds.ok) setProductos(resProds.data);
-        if (resClis.ok) {
-          setClientes(resClis.data);
-          // Cliente General por defecto
-          const cliGeneral = resClis.data.find(c => c.dni_ruc === '00000000') || resClis.data[0];
+      if (resProds.ok) setProductos(resProds.data);
+
+      if (resClis.ok) {
+        setClientes(resClis.data);
+        // Preseleccionar "Cliente General" (DNI 00000000) si existe
+        const cliGeneral = resClis.data.find(c => c.dni_ruc === '00000000') || resClis.data[0];
+        if (cliGeneral) {
           setCliente(cliGeneral);
+          setBuscarCliente(cliGeneral.nombre);
         }
-        if (resCats.ok) {
-          const listado = ["Todas", ...resCats.data.map(c => c.nombre)];
-          setCategorias(listado);
-        }
-      } catch (ex) {
-        console.error(ex);
-        toast.error("Error al conectar con la API de FastAPI. Cargando simulación.");
-      } finally {
-        setCargando(false);
       }
-    };
-    cargarDatos();
+
+      if (resCats.ok) {
+        setCategorias(['Todas', ...resCats.data.map(c => c.nombre)]);
+      }
+    } catch (ex) {
+      console.error(ex);
+      toast.error('Error al conectar con el servidor. Revisa la conexión.');
+    } finally {
+      setCargando(false);
+    }
   }, [setCliente]);
 
-  /**
-   * EMULACIÓN DE LECTOR DE BARRAS:
-   * Si la cadena coincide exactamente con un producto del catálogo API, se añade y limpia.
-   */
+  useEffect(() => {
+    // Autogenerar código de factura si no hay uno al montar la vista
+    if (!codigoFactura) {
+      setCodigoFactura(generarCodigoFactura());
+    }
+    cargarDatos();
+  }, [cargarDatos, codigoFactura, setCodigoFactura]);
+
+  /* ── Cerrar dropdown de clientes al hacer clic fuera ───────────────────── */
+  useEffect(() => {
+    const handleClickFuera = (e) => {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target) &&
+        clienteInputRef.current && !clienteInputRef.current.contains(e.target)
+      ) {
+        setDropdownClienteVisible(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickFuera);
+    return () => document.removeEventListener('mousedown', handleClickFuera);
+  }, []);
+
+  /* ── Búsqueda de productos (con detección de lector de barras) ──────────── */
   const handleBuscarChange = (e) => {
     const valor = e.target.value;
     setBuscar(valor);
-
-    const coincidencia = productos.find(p => p.codigo_barras === valor.trim() && p.estado === 'Activo');
+    // Emulación de lector de barras: coincidencia exacta → agregar y limpiar
+    const coincidencia = productos.find(
+      p => p.codigo_barras === valor.trim() && p.estado === 'Activo'
+    );
     if (coincidencia) {
       agregarProducto(coincidencia);
-      setBuscar(''); // Limpiar de inmediato
-      toast.success(`${coincidencia.nombre} agregado`);
-      if (inputBuscarRef.current) {
-        inputBuscarRef.current.focus();
-      }
+      setBuscar('');
+      toast.success(`✓ ${coincidencia.nombre} agregado al carrito`);
+      inputBuscarRef.current?.focus();
     }
   };
 
-  const handleSeleccionarProductoClick = (producto) => {
-    agregarProducto(producto);
-    toast.success(`${producto.nombre} agregado`);
+  /* ── Autocomplete de clientes ───────────────────────────────────────────── */
+  const clientesFiltrados = clientes.filter(c =>
+    c.nombre.toLowerCase().includes(buscarCliente.toLowerCase()) ||
+    (c.dni_ruc && c.dni_ruc.includes(buscarCliente)) ||
+    (c.telefono && c.telefono.includes(buscarCliente))
+  );
+
+  const handleSeleccionarCliente = (cli) => {
+    setCliente(cli);
+    setBuscarCliente(cli.nombre);
+    setDropdownClienteVisible(false);
   };
 
+  const handleClienteInputChange = (e) => {
+    setBuscarCliente(e.target.value);
+    setDropdownClienteVisible(true);
+    // Si borra todo, limpiar el cliente seleccionado
+    if (!e.target.value) setCliente(null);
+  };
+
+  /* ── Registro rápido de cliente ─────────────────────────────────────────── */
+  const abrirModalCliente = () => {
+    setNuevoCliNombre(buscarCliente); // Pre-llenar con lo que escribió
+    setNuevoCliTelefono('');
+    setNuevoCliDni('');
+    setMostrarModalCliente(true);
+    setDropdownClienteVisible(false);
+  };
+
+  const handleGuardarClienteRapido = async (e) => {
+    e.preventDefault();
+    if (!nuevoCliNombre.trim()) {
+      toast.error('El nombre del cliente es obligatorio.');
+      return;
+    }
+    setGuardandoCliente(true);
+    try {
+      const res = await clienteService.crear({
+        nombre: nuevoCliNombre,
+        telefono: nuevoCliTelefono || null,
+        dni_ruc: nuevoCliDni || null,
+        saldo_deudor: 0.00,
+        limite_credito: 0.00,
+      });
+      if (res.ok) {
+        // Recargar lista y seleccionar el nuevo cliente
+        const resClis = await ventaService.obtenerClientes();
+        if (resClis.ok) {
+          setClientes(resClis.data);
+          const nuevo = resClis.data.find(c => c.id === res.data.id);
+          if (nuevo) {
+            handleSeleccionarCliente(nuevo);
+          }
+        }
+        toast.success(`✓ Cliente "${nuevoCliNombre}" registrado y seleccionado.`);
+        setMostrarModalCliente(false);
+      }
+    } catch (ex) {
+      const msg = ex.response?.data?.detail || 'Error al registrar el cliente.';
+      toast.error(msg);
+    } finally {
+      setGuardandoCliente(false);
+    }
+  };
+
+  /* ── Confirmar y cobrar ─────────────────────────────────────────────────── */
   const handleAbrirConfirmacion = () => {
     if (carrito.length === 0) {
-      toast.error("El carrito está vacío.");
+      toast.error('El carrito está vacío. Agrega productos primero.');
+      return;
+    }
+    if (!clienteSeleccionado) {
+      toast.error('Selecciona un cliente antes de proceder.');
       return;
     }
     if (!codigoFactura.trim()) {
-      toast.error("Ingrese el código del comprobante de venta.");
+      toast.error('El código de factura no puede estar vacío.');
       return;
     }
-
-    // Regla de Negocio: Validar límite de crédito antes de abrir
-    if (metodoPago === "Credito" && clienteSeleccionado) {
+    // Validar límite de crédito antes de abrir modal
+    if (metodoPago === 'Credito' && clienteSeleccionado) {
       const nuevoSaldo = clienteSeleccionado.saldo_deudor + total;
       if (nuevoSaldo > clienteSeleccionado.limite_credito) {
-        toast.error(`Rechazado: El cliente supera su límite de crédito disponible.`);
+        toast.error('Rechazado: el cliente supera su límite de crédito disponible.');
         return;
       }
     }
-
-    // Inicializar inputs del modal
     setEfectivoRecibido('');
-    setMostrarModal(true);
+    setMostrarModalCobro(true);
   };
 
-  const handleConfirmarCobroTransaccional = async () => {
+  const handleConfirmarVenta = async () => {
     setProcesandoPago(true);
     try {
-      // Formatear payload de venta para el endpoint del backend
       const payload = {
         cliente_id: clienteSeleccionado.id,
         usuario_id: usuario.id,
@@ -130,64 +253,98 @@ export const PuntoVenta = () => {
           precio_unitario: item.precio_venta
         }))
       };
-
       const respuesta = await ventaService.registrarVenta(payload);
-
       if (respuesta.ok) {
-        toast.success(`Venta ${codigoFactura} registrada con éxito. Transacción consolidada.`);
+        toast.success(`✓ Venta ${codigoFactura} registrada exitosamente.`);
+        // Vaciar carrito y generar nuevo código para la siguiente venta
         vaciarCarrito();
-        setMostrarModal(false);
+        setCodigoFactura(generarCodigoFactura());
+        const cliGeneral = clientes.find(c => c.dni_ruc === '00000000') || clientes[0];
+        if (cliGeneral) { setCliente(cliGeneral); setBuscarCliente(cliGeneral.nombre); }
+        setMostrarModalCobro(false);
+        // Recargar productos para reflejar el nuevo stock
+        const resProds = await ventaService.obtenerProductos();
+        if (resProds.ok) setProductos(resProds.data);
       }
     } catch (ex) {
-      const errorDetail = ex.response?.data?.detail || "Error desconocido al procesar transacción.";
-      toast.error(`Error transaccional: ${errorDetail}`);
+      const errorDetail = ex.response?.data?.detail || 'Error desconocido al procesar la transacción.';
+      toast.error(`Error: ${errorDetail}`);
     } finally {
       setProcesandoPago(false);
     }
   };
 
-  // Filtrado de productos en la rejilla
+  /* ── Filtrado de productos ──────────────────────────────────────────────── */
   const productosFiltrados = productos.filter(p => {
-    const coincideBuscar = p.nombre.toLowerCase().includes(buscar.toLowerCase()) || (p.codigo_barras && p.codigo_barras.includes(buscar));
-    const coincideCategoria = categoriaSel === "Todas"; // Simplificado para simulación/categoría
-    return coincideBuscar && coincideCategoria && p.estado === 'Activo';
+    const textoBuscar = buscar.toLowerCase();
+    const coincideTexto =
+      p.nombre.toLowerCase().includes(textoBuscar) ||
+      (p.codigo_barras && p.codigo_barras.toLowerCase().includes(textoBuscar));
+    // ← CORRECCIÓN: comparar la categoría real del producto con la seleccionada
+    const coincideCategoria =
+      categoriaSel === 'Todas' || p.categoria_nombre === categoriaSel;
+    return coincideTexto && coincideCategoria && p.estado === 'Activo';
   });
 
-  const vuelto = parseFloat(efectivoRecibido) ? parseFloat(efectivoRecibido) - total : 0;
+  const vuelto = parseFloat(efectivoRecibido) - total;
 
+  /* ─────────────────────────────── RENDER ───────────────────────────────── */
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
-      <Toaster position="top-right" />
-      
-      {/* SECCIÓN IZQUIERDA: BUSCADOR Y REJILLA */}
-      <div className="lg:col-span-2 flex flex-col space-y-4">
-        
-        {/* Controles de Búsqueda y Filtro */}
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-[#e4e4e7] flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-              <Search size={16} />
-            </span>
+    <div style={{ display: 'flex', gap: '20px', height: 'calc(100vh - 108px)', minHeight: '600px' }}>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: { fontFamily: 'Inter, sans-serif', fontSize: '0.8rem', fontWeight: 500, borderRadius: '12px' },
+          success: { iconTheme: { primary: '#059669', secondary: 'white' } },
+          error: { iconTheme: { primary: '#dc2626', secondary: 'white' } },
+        }}
+      />
+
+      {/* ══════════════════ PANEL IZQUIERDO: CATÁLOGO ══════════════════ */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '14px', overflow: 'hidden' }}>
+
+        {/* ─ Barra de búsqueda + filtros ─ */}
+        <div style={{
+          background: 'white', borderRadius: '14px', padding: '14px 16px',
+          border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)',
+        }}>
+          {/* Buscador */}
+          <div style={{ position: 'relative', marginBottom: '12px' }}>
+            <Search size={15} style={{
+              position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)',
+              color: '#9ca3af', pointerEvents: 'none',
+            }} />
             <input
-              type="text"
               ref={inputBuscarRef}
+              type="text"
               value={buscar}
               onChange={handleBuscarChange}
-              placeholder="Buscador por código de barras o nombre..."
-              className="w-full pl-9 pr-3 py-1.5 border border-[#e4e4e7] rounded-lg focus:border-black focus:ring-1 focus:ring-black outline-none transition-all text-xs placeholder:text-gray-400"
+              placeholder="Buscar por nombre o escanear código de barras..."
+              className="form-input"
+              style={{ paddingLeft: '34px', fontSize: '0.8125rem' }}
             />
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          {/* Filtros de categoría */}
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             {categorias.map(cat => (
               <button
                 key={cat}
                 onClick={() => setCategoriaSel(cat)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-                  categoriaSel === cat 
-                    ? 'bg-[#09090b] text-white' 
-                    : 'bg-[#f4f4f5] text-[#71717a] hover:bg-[#e4e4e7] hover:text-[#18181b]'
-                }`}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '9999px',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  border: '1px solid',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  whiteSpace: 'nowrap',
+                  background: categoriaSel === cat ? 'var(--color-primary)' : 'white',
+                  color: categoriaSel === cat ? 'white' : '#6b7280',
+                  borderColor: categoriaSel === cat ? 'var(--color-primary)' : 'var(--color-border-strong)',
+                  boxShadow: categoriaSel === cat ? '0 2px 8px rgba(109,40,217,.3)' : 'none',
+                }}
               >
                 {cat}
               </button>
@@ -195,246 +352,623 @@ export const PuntoVenta = () => {
           </div>
         </div>
 
-        {/* Carga o Rejilla */}
-        {cargando ? (
-          <div className="text-center py-12 text-gray-400 font-semibold bg-white rounded-xl shadow-sm border border-[#e4e4e7] text-xs">
-            Cargando catálogo de productos desde FastAPI...
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {productosFiltrados.map(prod => {
-              const agotado = prod.stock_actual <= 0;
-              const bajoStock = prod.stock_actual <= prod.stock_minimo;
-              return (
-                <div 
-                  key={prod.id}
-                  onClick={() => !agotado && handleSeleccionarProductoClick(prod)}
-                  className={`bg-white rounded-xl p-4 shadow-sm border transition-all duration-200 flex flex-col justify-between ${
-                    agotado 
-                      ? 'opacity-40 border-[#e4e4e7] cursor-not-allowed' 
-                      : 'border-[#e4e4e7] hover:border-gray-400 hover:shadow-md cursor-pointer'
-                  }`}
-                >
-                  <div>
-                    <h4 className="font-bold text-[#09090b] text-xs line-clamp-2 font-display">{prod.nombre}</h4>
-                    <p className="text-[9px] text-gray-400 font-mono mt-0.5">Cód: {prod.codigo_barras}</p>
+        {/* ─ Rejilla de productos ─ */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {cargando ? (
+            <div style={{
+              textAlign: 'center', padding: '60px 24px',
+              background: 'white', borderRadius: '14px',
+              border: '1px solid var(--color-border)',
+              color: '#9ca3af', fontWeight: 500,
+            }}>
+              <Package size={32} style={{ margin: '0 auto 12px', opacity: .3 }} />
+              <p style={{ fontSize: '0.85rem' }}>Cargando catálogo de productos...</p>
+            </div>
+          ) : productosFiltrados.length === 0 ? (
+            <div style={{
+              textAlign: 'center', padding: '60px 24px',
+              background: 'white', borderRadius: '14px',
+              border: '1px solid var(--color-border)',
+              color: '#9ca3af',
+            }}>
+              <Search size={28} style={{ margin: '0 auto 12px', opacity: .3 }} />
+              <p style={{ fontSize: '0.8rem', fontWeight: 500 }}>Sin resultados para "{buscar || categoriaSel}"</p>
+            </div>
+          ) : (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))',
+              gap: '12px',
+            }}>
+              {productosFiltrados.map(prod => {
+                const agotado = prod.stock_actual <= 0;
+                const bajoStock = !agotado && prod.stock_actual <= prod.stock_minimo;
+                return (
+                  <div
+                    key={prod.id}
+                    onClick={() => !agotado && agregarProducto(prod)}
+                    style={{
+                      background: 'white',
+                      borderRadius: '12px',
+                      padding: '14px',
+                      border: agotado ? '1px solid #fee2e2' : '1px solid var(--color-border)',
+                      boxShadow: 'var(--shadow-sm)',
+                      cursor: agotado ? 'not-allowed' : 'pointer',
+                      opacity: agotado ? 0.55 : 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
+                    }}
+                    onMouseEnter={e => {
+                      if (!agotado) {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                        e.currentTarget.style.borderColor = 'var(--color-primary)';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                      e.currentTarget.style.borderColor = agotado ? '#fee2e2' : 'var(--color-border)';
+                    }}
+                  >
+                    <div>
+                      {/* Badge de categoría */}
+                      {prod.categoria_nombre && (
+                        <span style={{
+                          fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase',
+                          letterSpacing: '0.06em', color: '#8b5cf6', background: '#f5f3ff',
+                          padding: '2px 6px', borderRadius: '4px',
+                          display: 'inline-block', marginBottom: '6px',
+                        }}>
+                          {prod.categoria_nombre}
+                        </span>
+                      )}
+                      <h4 style={{
+                        fontFamily: 'Outfit, sans-serif', fontWeight: 700,
+                        fontSize: '0.8rem', color: '#1e1b4b',
+                        lineHeight: 1.3, margin: 0,
+                        display: '-webkit-box', WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                      }}>
+                        {prod.nombre}
+                      </h4>
+                      <p style={{ fontSize: '0.6rem', color: '#d1d5db', fontFamily: 'monospace', marginTop: '3px' }}>
+                        {prod.codigo_barras}
+                      </p>
+                    </div>
+                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 800, fontSize: '0.9rem', color: '#1e1b4b' }}>
+                        Bs. {prod.precio_venta.toFixed(2)}
+                      </span>
+                      <span style={{
+                        fontSize: '0.6rem', fontWeight: 700,
+                        padding: '3px 7px', borderRadius: '9999px',
+                        background: agotado ? '#fee2e2' : bajoStock ? '#fff7ed' : '#f0fdf4',
+                        color: agotado ? '#dc2626' : bajoStock ? '#c2410c' : '#15803d',
+                        border: `1px solid ${agotado ? '#fecaca' : bajoStock ? '#fed7aa' : '#dcfce7'}`,
+                      }}>
+                        {agotado ? 'Sin Stock' : `${prod.stock_actual} uds`}
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-4 flex items-center justify-between">
-                    <span className="text-[#09090b] font-bold text-sm">Bs. {prod.precio_venta.toFixed(2)}</span>
-                    <span className={`text-[9px] px-2 py-0.5 rounded font-bold border ${
-                      agotado ? 'bg-red-50 text-red-600 border-red-100' :
-                      bajoStock ? 'bg-[#fff7ed] text-[#c2410c] border-[#ffedd5]' : 'bg-[#f0fdf4] text-[#16a34a] border-[#dcfce7]'
-                    }`}>
-                      Stock: {prod.stock_actual}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* SECCIÓN DERECHA: PANEL CARRITO */}
-      <button
-        onClick={() => setMostrarCarritoMovil(!mostrarCarritoMovil)}
-        className="lg:hidden fixed bottom-6 right-6 p-4 bg-[#09090b] text-white rounded-full shadow-2xl z-50 flex items-center justify-center cursor-pointer"
-      >
-        <ShoppingCart size={20} />
-      </button>
-
-      <div 
-        className={`lg:block bg-white rounded-xl border border-[#e4e4e7] shadow-sm p-6 flex flex-col justify-between h-[calc(100vh-140px)] min-h-[480px] ${
-          mostrarCarritoMovil ? 'fixed inset-0 z-40 p-6 lg:static bg-white' : 'hidden'
-        }`}
-      >
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <div className="flex items-center justify-between pb-4 border-b border-[#e4e4e7]">
-            <h3 className="font-bold text-[#09090b] text-sm flex items-center font-display">
-              <ShoppingCart className="mr-2 text-black font-semibold" size={16} />
+      {/* ══════════════════ PANEL DERECHO: CARRITO / POS ══════════════════ */}
+      <div style={{
+        width: '300px', flexShrink: 0,
+        background: 'white', borderRadius: '14px',
+        border: '1px solid var(--color-border)',
+        boxShadow: 'var(--shadow-sm)',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        {/* Cabecera del carrito */}
+        <div style={{
+          padding: '14px 16px',
+          background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShoppingCart size={16} style={{ color: '#c4b5fd' }} />
+            <span style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 700, fontSize: '0.875rem', color: 'white' }}>
               Caja POS
-            </h3>
-            {mostrarCarritoMovil && (
-              <button onClick={() => setMostrarCarritoMovil(false)} className="text-xs text-black font-bold">
-                Volver
-              </button>
+            </span>
+            {carrito.length > 0 && (
+              <span style={{
+                background: '#6d28d9', color: 'white', fontSize: '0.6rem',
+                fontWeight: 700, padding: '2px 7px', borderRadius: '9999px',
+              }}>
+                {carrito.length}
+              </span>
             )}
           </div>
-
-          <div className="flex-1 overflow-y-auto my-4 space-y-3">
-            {carrito.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <ShoppingCart className="mx-auto mb-2 text-gray-300" size={24} />
-                <p className="text-[11px] font-medium">El carrito está vacío</p>
-              </div>
-            ) : (
-              carrito.map(item => (
-                <div key={item.id} className="flex items-center justify-between border-b border-[#f4f4f5] pb-2">
-                  <div className="flex-1 pr-2">
-                    <h5 className="text-xs font-semibold text-[#09090b] truncate w-32 font-display">{item.nombre}</h5>
-                    <p className="text-[10px] text-gray-400">Bs. {item.precio_venta.toFixed(2)} x {item.cantidad}</p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="number"
-                      value={item.cantidad}
-                      onChange={(e) => actualizarCantidad(item.id, parseInt(e.target.value) || 0, item.stock_actual)}
-                      className="w-12 text-center border border-[#e4e4e7] rounded py-0.5 text-xs outline-none focus:border-black focus:ring-1 focus:ring-black"
-                    />
-                    <button onClick={() => { removerProducto(item.id); toast.success("Eliminado"); }} className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition-colors cursor-pointer">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+          {carrito.length > 0 && (
+            <button
+              onClick={() => { vaciarCarrito(); setCodigoFactura(generarCodigoFactura()); const cg = clientes.find(c => c.dni_ruc === '00000000'); if (cg) { setCliente(cg); setBuscarCliente(cg.nombre); } }}
+              title="Vaciar carrito"
+              style={{
+                background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.15)',
+                borderRadius: '7px', padding: '4px 8px',
+                color: '#fca5a5', fontSize: '0.6rem', fontWeight: 600,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+              }}
+            >
+              <Trash2 size={11} /> Vaciar
+            </button>
+          )}
         </div>
 
-        <div className="space-y-4 pt-4 border-t border-[#e4e4e7]">
+        {/* Lista del carrito */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
+          {carrito.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 16px', color: '#d1d5db' }}>
+              <ShoppingCart size={28} style={{ margin: '0 auto 8px' }} />
+              <p style={{ fontSize: '0.75rem', fontWeight: 500, color: '#9ca3af' }}>
+                El carrito está vacío
+              </p>
+              <p style={{ fontSize: '0.7rem', color: '#d1d5db', marginTop: '4px' }}>
+                Haz clic en un producto o escanea su código
+              </p>
+            </div>
+          ) : (
+            carrito.map(item => (
+              <div
+                key={item.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '8px 0', borderBottom: '1px solid #f3f4f6',
+                }}
+              >
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  <p style={{
+                    fontSize: '0.75rem', fontWeight: 700, color: '#1e1b4b',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0,
+                  }}>
+                    {item.nombre}
+                  </p>
+                  <p style={{ fontSize: '0.65rem', color: '#9ca3af', margin: '2px 0 0' }}>
+                    Bs. {item.precio_venta.toFixed(2)} × {item.cantidad} = <strong style={{ color: '#6d28d9' }}>Bs. {(item.precio_venta * item.cantidad).toFixed(2)}</strong>
+                  </p>
+                </div>
+                <input
+                  type="number"
+                  value={item.cantidad}
+                  min={1}
+                  onChange={e => actualizarCantidad(item.id, parseInt(e.target.value) || 0, item.stock_actual)}
+                  style={{
+                    width: '44px', textAlign: 'center', padding: '3px 4px',
+                    border: '1px solid var(--color-border-strong)',
+                    borderRadius: '7px', fontSize: '0.75rem', fontWeight: 700,
+                    color: '#1e1b4b', outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={() => { removerProducto(item.id); toast.success('Producto eliminado'); }}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: '#fca5a5', padding: '4px', borderRadius: '6px',
+                    display: 'flex', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#dc2626'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#fca5a5'; }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* ─ Sección inferior: Config de venta ─ */}
+        <div style={{ padding: '12px 14px', borderTop: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+
+          {/* Código de Factura */}
           <div>
-            <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1">Código Factura</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+              <label style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9ca3af' }}>
+                Código de Factura
+              </label>
+              <button
+                onClick={() => setCodigoFactura(generarCodigoFactura())}
+                title="Generar nuevo código"
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#8b5cf6', display: 'flex', alignItems: 'center',
+                  gap: '3px', fontSize: '0.6rem', fontWeight: 600,
+                  padding: '2px 4px', borderRadius: '4px', transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f5f3ff'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <RefreshCw size={10} /> Regenerar
+              </button>
+            </div>
             <input
               type="text"
               value={codigoFactura}
-              onChange={(e) => setCodigoFactura(e.target.value)}
-              placeholder="Ej: F001-000025"
-              className="w-full px-2.5 py-1.5 border border-[#e4e4e7] rounded-lg text-xs focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
+              onChange={e => setCodigoFactura(e.target.value)}
+              className="form-input"
+              style={{ fontSize: '0.75rem', fontFamily: 'monospace', letterSpacing: '0.02em' }}
             />
           </div>
 
-          <div>
-            <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1">Cliente</label>
-            <select
-              value={clienteSeleccionado?.id || ''}
-              onChange={(e) => setCliente(clientes.find(c => c.id === e.target.value))}
-              className="w-full border border-[#e4e4e7] rounded-lg text-xs py-1.5 px-2 bg-white outline-none focus:border-black focus:ring-1 focus:ring-black"
-            >
-              {clientes.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre} {c.saldo_deudor > 0 ? `(Deuda: Bs. ${c.saldo_deudor})` : ''}
-                </option>
-              ))}
-            </select>
+          {/* Selector de cliente con Autocomplete */}
+          <div style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+              <label style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9ca3af' }}>
+                Cliente
+              </label>
+              <button
+                onClick={abrirModalCliente}
+                title="Registrar nuevo cliente"
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#059669', display: 'flex', alignItems: 'center',
+                  gap: '3px', fontSize: '0.6rem', fontWeight: 600,
+                  padding: '2px 4px', borderRadius: '4px', transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <Plus size={10} /> Nuevo Cliente
+              </button>
+            </div>
+
+            {/* Input de búsqueda */}
+            <div style={{ position: 'relative' }}>
+              <input
+                ref={clienteInputRef}
+                type="text"
+                value={buscarCliente}
+                onChange={handleClienteInputChange}
+                onFocus={() => setDropdownClienteVisible(true)}
+                placeholder="Buscar cliente por nombre o DNI..."
+                className="form-input"
+                style={{ fontSize: '0.75rem', paddingRight: '28px' }}
+              />
+              <ChevronDown size={13} style={{
+                position: 'absolute', right: '9px', top: '50%', transform: 'translateY(-50%)',
+                color: '#9ca3af', pointerEvents: 'none',
+              }} />
+            </div>
+
+            {/* Mostrar cliente seleccionado */}
+            {clienteSeleccionado && clienteSeleccionado.saldo_deudor > 0 && (
+              <p style={{ fontSize: '0.62rem', color: '#dc2626', fontWeight: 600, marginTop: '4px' }}>
+                ⚠ Deuda activa: Bs. {clienteSeleccionado.saldo_deudor.toFixed(2)}
+              </p>
+            )}
+
+            {/* Dropdown autocomplete */}
+            {dropdownClienteVisible && buscarCliente && (
+              <div
+                ref={dropdownRef}
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 4px)',
+                  left: 0, right: 0, zIndex: 200,
+                  background: 'white',
+                  border: '1px solid var(--color-border-strong)',
+                  borderRadius: '10px',
+                  boxShadow: 'var(--shadow-lg)',
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                }}
+              >
+                {clientesFiltrados.length === 0 ? (
+                  <div style={{ padding: '10px 12px' }}>
+                    <p style={{ fontSize: '0.72rem', color: '#9ca3af', margin: '0 0 8px' }}>
+                      Sin resultados para "{buscarCliente}"
+                    </p>
+                    <button
+                      onClick={abrirModalCliente}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: '6px',
+                        padding: '7px 10px',
+                        background: '#f0fdf4', border: '1px dashed #86efac',
+                        borderRadius: '8px', cursor: 'pointer',
+                        color: '#059669', fontSize: '0.72rem', fontWeight: 700,
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      <Plus size={13} /> Registrar "{buscarCliente}" como nuevo cliente
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {clientesFiltrados.slice(0, 8).map(cli => (
+                      <button
+                        key={cli.id}
+                        onClick={() => handleSeleccionarCliente(cli)}
+                        style={{
+                          width: '100%', textAlign: 'left', padding: '8px 12px',
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          borderBottom: '1px solid #f9fafb',
+                          transition: 'background 0.1s',
+                          display: 'block',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f5f3ff'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                      >
+                        <p style={{ fontSize: '0.77rem', fontWeight: 700, color: '#1e1b4b', margin: 0 }}>
+                          {cli.nombre}
+                        </p>
+                        <p style={{ fontSize: '0.65rem', color: '#9ca3af', margin: '1px 0 0' }}>
+                          {cli.dni_ruc ? `DNI: ${cli.dni_ruc}` : ''}
+                          {cli.saldo_deudor > 0 ? ` · Deuda: Bs. ${cli.saldo_deudor.toFixed(2)}` : ''}
+                        </p>
+                      </button>
+                    ))}
+                    {/* Botón de crear cliente al final */}
+                    <button
+                      onClick={abrirModalCliente}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: '6px',
+                        padding: '8px 12px', background: '#fafafa',
+                        border: 'none', borderTop: '1px solid var(--color-border)',
+                        cursor: 'pointer', color: '#059669', fontSize: '0.72rem', fontWeight: 700,
+                      }}
+                    >
+                      <UserPlus size={12} /> Registrar nuevo cliente...
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
+          {/* Método de pago */}
           <div>
-            <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1">Método de Pago</label>
-            <div className="grid grid-cols-3 gap-2">
+            <label style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9ca3af', display: 'block', marginBottom: '6px' }}>
+              Método de Pago
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
               {[
-                { id: "Efectivo", etiqueta: "Efectivo", icono: <DollarSign size={12} /> },
-                { id: "Tarjeta", etiqueta: "Tarjeta", icono: <CreditCard size={12} /> },
-                { id: "Credito", etiqueta: "Crédito (Fiado)", icono: <UserPlus size={12} /> }
-              ].map(metodo => (
+                { id: 'Efectivo', label: 'Efectivo', icon: <DollarSign size={12} /> },
+                { id: 'Tarjeta',  label: 'Tarjeta',  icon: <CreditCard size={12} /> },
+                { id: 'Credito', label: 'Crédito',  icon: <UserPlus size={12} /> },
+              ].map(m => (
                 <button
-                  key={metodo.id}
-                  type="button"
-                  onClick={() => setMetodoPago(metodo.id)}
-                  className={`flex items-center justify-center py-2 px-1 rounded-lg text-xs border transition-colors cursor-pointer ${
-                    metodoPago === metodo.id 
-                      ? 'bg-[#09090b] border-[#09090b] text-white font-medium shadow-sm' 
-                      : 'bg-white border-[#e4e4e7] text-gray-600 hover:bg-[#f4f4f5] hover:text-black'
-                  }`}
+                  key={m.id}
+                  onClick={() => setMetodoPago(m.id)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    gap: '3px', padding: '7px 4px',
+                    borderRadius: '8px', border: '1px solid',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                    fontSize: '0.6rem', fontWeight: 700,
+                    background: metodoPago === m.id ? 'var(--color-primary)' : 'white',
+                    color: metodoPago === m.id ? 'white' : '#6b7280',
+                    borderColor: metodoPago === m.id ? 'var(--color-primary)' : 'var(--color-border-strong)',
+                    boxShadow: metodoPago === m.id ? '0 2px 8px rgba(109,40,217,.35)' : 'none',
+                  }}
                 >
-                  {metodo.icono}
-                  <span className="ml-1 text-[9px]">{metodo.etiqueta}</span>
+                  {m.icon}
+                  {m.label}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="flex items-center justify-between py-2 border-t border-b border-[#f4f4f5]">
-            <span className="text-xs font-semibold text-gray-500">Total a Pagar:</span>
-            <span className="text-lg font-bold text-[#09090b] font-display">Bs. {total.toFixed(2)}</span>
+          {/* Total + Botón cobrar */}
+          <div style={{
+            background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
+            borderRadius: '10px', padding: '12px 14px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div>
+              <p style={{ fontSize: '0.6rem', color: '#a5b4fc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
+                Total a Cobrar
+              </p>
+              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: '1.25rem', fontWeight: 900, color: 'white', margin: '2px 0 0' }}>
+                Bs. {total.toFixed(2)}
+              </p>
+            </div>
+            <button
+              onClick={handleAbrirConfirmacion}
+              style={{
+                background: '#7c3aed',
+                border: '2px solid rgba(255,255,255,.2)',
+                borderRadius: '10px',
+                color: 'white',
+                padding: '9px 14px',
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '6px',
+                fontSize: '0.75rem', fontWeight: 700,
+                transition: 'all 0.15s',
+                boxShadow: '0 4px 12px rgba(124,58,237,.5)',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#6d28d9'; e.currentTarget.style.transform = 'scale(1.03)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#7c3aed'; e.currentTarget.style.transform = 'scale(1)'; }}
+            >
+              Cobrar <ArrowRight size={14} />
+            </button>
           </div>
-
-          <button
-            onClick={handleAbrirConfirmacion}
-            className="w-full py-2.5 bg-[#09090b] hover:bg-[#18181b] text-white rounded-lg font-bold text-xs transition-colors flex items-center justify-center cursor-pointer shadow-sm"
-          >
-            Confirmar y Cobrar
-          </button>
         </div>
       </div>
 
-      {/* MODAL DE CONFIRMACIÓN DE COBRO */}
-      {mostrarModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 border border-[#e4e4e7]">
-            <div className="flex items-center justify-between pb-3 border-b border-[#f4f4f5]">
-              <h3 className="font-bold text-[#09090b] text-sm font-display">Detalle de Cobro ({metodoPago})</h3>
-              <button onClick={() => setMostrarModal(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
-                <X size={18} />
+      {/* ══════════════════ MODAL DE COBRO ══════════════════ */}
+      {mostrarModalCobro && (
+        <div className="modal-backdrop">
+          <div className="modal-container animate-fade-in-up" style={{ maxWidth: '380px' }}>
+            <div style={{ height: '4px', background: 'linear-gradient(90deg, #6d28d9, #059669)' }} />
+
+            <div className="modal-header">
+              <span className="modal-title">💳 Confirmación de Cobro — {metodoPago}</span>
+              <button onClick={() => setMostrarModalCobro(false)} style={{
+                background: '#f3f4f6', border: 'none', borderRadius: '8px',
+                width: '28px', height: '28px', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', cursor: 'pointer', color: '#6b7280',
+              }}>
+                <X size={14} />
               </button>
             </div>
 
-            <div className="my-5 space-y-4">
-              <div className="flex justify-between text-xs text-gray-500 font-medium">
-                <span>Total Neto:</span>
-                <span className="font-bold text-[#09090b] text-sm font-display">Bs. {total.toFixed(2)}</span>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Resumen */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#f5f3ff', borderRadius: '10px', border: '1px solid #e9d5ff' }}>
+                <div>
+                  <p style={{ fontSize: '0.65rem', color: '#8b5cf6', fontWeight: 700, textTransform: 'uppercase', margin: 0 }}>Total Neto</p>
+                  <p style={{ fontFamily: 'Outfit', fontWeight: 900, fontSize: '1.4rem', color: '#1e1b4b', margin: '2px 0 0' }}>
+                    Bs. {total.toFixed(2)}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ fontSize: '0.65rem', color: '#9ca3af', margin: 0 }}>Factura</p>
+                  <p style={{ fontSize: '0.72rem', fontWeight: 700, color: '#374151', fontFamily: 'monospace', margin: '2px 0 0' }}>{codigoFactura}</p>
+                </div>
               </div>
 
-              {/* Lógica para Pago en Efectivo: Calcular vuelto */}
-              {metodoPago === "Efectivo" && (
-                <div className="space-y-3 bg-[#fafafa] p-3 rounded-lg border border-[#e4e4e7]">
-                  <div>
-                    <label className="block text-[10px] font-semibold text-[#71717a] mb-1">Monto Recibido (Bs.)</label>
-                    <input
-                      type="number"
-                      required
-                      value={efectivoRecibido}
-                      onChange={(e) => setEfectivoRecibido(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full px-2.5 py-1.5 border border-[#e4e4e7] rounded-lg text-xs focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
-                    />
-                  </div>
+              {/* Cliente */}
+              {clienteSeleccionado && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#6b7280' }}>
+                  <span>Cliente:</span>
+                  <span style={{ fontWeight: 700, color: '#374151' }}>{clienteSeleccionado.nombre}</span>
+                </div>
+              )}
+
+              {/* Panel efectivo */}
+              {metodoPago === 'Efectivo' && (
+                <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
+                  <label className="form-label">Monto Recibido (Bs.) *</label>
+                  <input
+                    type="number"
+                    step="0.50"
+                    value={efectivoRecibido}
+                    onChange={e => setEfectivoRecibido(e.target.value)}
+                    placeholder="0.00"
+                    className="form-input"
+                    autoFocus
+                  />
                   {parseFloat(efectivoRecibido) >= total && (
-                    <div className="flex justify-between text-xs text-green-700 font-bold">
-                      <span>Vuelto a entregar:</span>
-                      <span>Bs. {vuelto.toFixed(2)}</span>
+                    <div style={{
+                      marginTop: '10px', display: 'flex', justifyContent: 'space-between',
+                      padding: '8px 12px', background: '#d1fae5', borderRadius: '8px',
+                      border: '1px solid #a7f3d0',
+                    }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>Vuelto a entregar:</span>
+                      <span style={{ fontSize: '0.875rem', fontWeight: 900, color: '#047857', fontFamily: 'Outfit' }}>
+                        Bs. {vuelto.toFixed(2)}
+                      </span>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Lógica para Crédito: Verificación de límite */}
-              {metodoPago === "Credito" && clienteSeleccionado && (
-                <div className="space-y-2 bg-[#f4f4f5] p-3 rounded-lg border border-[#e4e4e7] text-[11px] text-[#71717a]">
-                  <div className="flex justify-between">
-                    <span>Saldo Deudor Actual:</span>
-                    <span className="font-semibold text-black">Bs. {clienteSeleccionado.saldo_deudor.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Venta Proyectada:</span>
-                    <span className="font-semibold text-black">+ Bs. {total.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-[#e4e4e7] pt-1 font-bold">
-                    <span>Nuevo Saldo Estimado:</span>
-                    <span className="text-[#09090b]">Bs. {(clienteSeleccionado.saldo_deudor + total).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-[10px] text-gray-400 mt-2 border-t border-[#e4e4e7]/60 pt-1.5">
-                    <span>Límite de Crédito Autorizado:</span>
-                    <span className="font-bold text-gray-500">Bs. {clienteSeleccionado.limite_credito.toFixed(2)}</span>
-                  </div>
+              {/* Panel crédito */}
+              {metodoPago === 'Credito' && clienteSeleccionado && (
+                <div style={{ background: '#fef9f0', padding: '12px', borderRadius: '10px', border: '1px solid #fed7aa', fontSize: '0.75rem' }}>
+                  {[
+                    ['Saldo deudor actual', `Bs. ${clienteSeleccionado.saldo_deudor.toFixed(2)}`],
+                    ['Esta venta', `+ Bs. ${total.toFixed(2)}`],
+                    ['Nuevo saldo estimado', `Bs. ${(clienteSeleccionado.saldo_deudor + total).toFixed(2)}`],
+                    ['Límite de crédito', `Bs. ${clienteSeleccionado.limite_credito.toFixed(2)}`],
+                  ].map(([label, value], i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: i < 3 ? '1px solid #fde68a' : 'none' }}>
+                      <span style={{ color: '#92400e' }}>{label}:</span>
+                      <span style={{ fontWeight: 700, color: '#78350f' }}>{value}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
 
-            <div className="flex gap-2 justify-end pt-2 border-t border-[#f4f4f5]">
-              <button 
-                onClick={() => setMostrarModal(false)}
-                className="py-1.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
-              >
+            <div className="modal-footer">
+              <button onClick={() => setMostrarModalCobro(false)} className="btn-secondary">
                 Cancelar
               </button>
-              <button 
-                onClick={handleConfirmarCobroTransaccional}
-                disabled={procesandoPago || (metodoPago === "Efectivo" && (!efectivoRecibido || parseFloat(efectivoRecibido) < total))}
-                className="py-1.5 px-3 bg-[#09090b] hover:bg-[#18181b] text-white rounded-lg text-xs font-semibold disabled:opacity-40 cursor-pointer transition-colors"
+              <button
+                onClick={handleConfirmarVenta}
+                disabled={
+                  procesandoPago ||
+                  (metodoPago === 'Efectivo' && (!efectivoRecibido || parseFloat(efectivoRecibido) < total))
+                }
+                className="btn-primary"
+                style={{ minWidth: '130px', justifyContent: 'center' }}
               >
-                {procesandoPago ? 'Procesando en DB...' : 'Confirmar Venta'}
+                {procesandoPago
+                  ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Procesando...</>
+                  : <><ArrowRight size={14} /> Confirmar Venta</>}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════ MINI-MODAL CLIENTE RÁPIDO ══════════════════ */}
+      {mostrarModalCliente && (
+        <div className="modal-backdrop">
+          <div className="modal-container animate-fade-in-up" style={{ maxWidth: '380px' }}>
+            <div style={{ height: '4px', background: 'linear-gradient(90deg, #059669, #10b981)' }} />
+
+            <div className="modal-header">
+              <span className="modal-title">👤 Registro Rápido de Cliente</span>
+              <button onClick={() => setMostrarModalCliente(false)} style={{
+                background: '#f3f4f6', border: 'none', borderRadius: '8px',
+                width: '28px', height: '28px', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', cursor: 'pointer', color: '#6b7280',
+              }}>
+                <X size={14} />
+              </button>
+            </div>
+
+            <form onSubmit={handleGuardarClienteRapido}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div>
+                  <label className="form-label">Nombre Completo *</label>
+                  <input
+                    type="text" required
+                    value={nuevoCliNombre}
+                    onChange={e => setNuevoCliNombre(e.target.value)}
+                    placeholder="Ej: María García"
+                    className="form-input"
+                    autoFocus
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label className="form-label">Teléfono (Opcional)</label>
+                    <input
+                      type="text"
+                      value={nuevoCliTelefono}
+                      onChange={e => setNuevoCliTelefono(e.target.value)}
+                      placeholder="70012345"
+                      className="form-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">DNI / CI (Opcional)</label>
+                    <input
+                      type="text"
+                      value={nuevoCliDni}
+                      onChange={e => setNuevoCliDni(e.target.value)}
+                      placeholder="12345678"
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+                <p style={{ fontSize: '0.68rem', color: '#9ca3af', background: '#f9fafb', padding: '8px 10px', borderRadius: '8px', margin: 0 }}>
+                  💡 El crédito y dirección se pueden configurar después desde la sección de Clientes.
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setMostrarModalCliente(false)} className="btn-secondary">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={guardandoCliente} className="btn-primary" style={{ background: '#059669', minWidth: '130px', justifyContent: 'center' }}>
+                  {guardandoCliente
+                    ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Guardando...</>
+                    : <><UserPlus size={14} /> Crear y Seleccionar</>}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
