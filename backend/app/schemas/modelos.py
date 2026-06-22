@@ -153,7 +153,7 @@ class DetalleVentaRespuesta(DetalleVentaBase):
 
 class VentaBase(BaseModel):
     cliente_id: UUID
-    usuario_id: UUID
+    usuario_id: Optional[UUID] = None
     codigo_factura: str = Field(..., max_length=50)
     tipo_pago: str = Field(..., description="Efectivo, Tarjeta, Credito, Transferencia")
 

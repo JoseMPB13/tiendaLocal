@@ -10,13 +10,15 @@ router = APIRouter(prefix="/ventas", tags=["Ventas"])
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def registrar_venta(
     venta: VentaCrear,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Registra una nueva transacción de venta (al contado o a crédito).
-    Accesible por Administrador y Cajero.
+    Accesible por Administrador y Cajero. El ID del operador se extrae de manera segura del JWT.
     """
-    resultado = VentaService.registrar_venta(venta)
+    # Inyectar el ID del cajero extraído de forma segura desde el JWT
+    usuario_id = usuario_actual["id"]
+    resultado = VentaService.registrar_venta(venta, usuario_id)
     respuesta = VentaRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 

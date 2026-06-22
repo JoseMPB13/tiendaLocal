@@ -38,6 +38,7 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 ## 7. Cliente HTTP y Comunicación con API (`api.js`)
 - Configurado centralizadamente mediante **Axios** para conectar el cliente React con la API de FastAPI.
 - **Intercepción de Peticiones:** Añade de forma transparente el token Bearer (`Authorization`) y el rol activo del operador (`X-User-Rol`) a partir de la información del `authStore` antes de despacharse al backend, garantizando la seguridad en la pasarela.
+- **Gobernanza del Servidor en Ventas:** El backend FastAPI valida y gobierna de forma estricta los datos clave de la venta. El campo `usuario_id` es ignorado del payload recibido y sobrescrito con la identidad segura obtenida del token JWT. Asimismo, los precios unitarios de los ítems son validados y recalculados en base al catálogo oficial de la base de datos para productos activos, rechazando transacciones con precios alterados o productos inactivos.
 
 ## 8. Flujo de Confirmación de Pago y Captura de Errores
 - **Modal de Pago Dinámico:** Al finalizar la compra, se abre un modal de confirmación. En efectivo, requiere ingresar la cantidad recibida y calcula en caliente el vuelto. En ventas a crédito, despliega el estado actual de la deuda y el nuevo saldo proyectado del cliente para aprobación antes de la transacción.

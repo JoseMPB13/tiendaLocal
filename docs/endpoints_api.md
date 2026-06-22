@@ -302,10 +302,11 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
 * **Ruta:** `POST /ventas/`
 * **Permisos:** `Administrador`, `Cajero`
 * **Cuerpo de Petición (JSON):**
+  *(Nota: El campo `usuario_id` es opcional en la petición. El servidor ignorará cualquier valor enviado en este campo y lo sobrescribirá con el identificador de usuario autenticado en el token JWT. Asimismo, los campos `precio_unitario` de cada producto se validan contra el precio de venta oficial del catálogo para productos con estado 'Activo').*
   ```json
   {
     "cliente_id": "b1bcf4d1-c24a-464a-9351-4096bead19e1",
-    "usuario_id": "a933f2bd-1fb7-4e78-becc-82f5d918b958",
+    "usuario_id": null,
     "codigo_factura": "F001-000001",
     "tipo_pago": "Credito",
     "detalles": [
@@ -331,6 +332,12 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
       "estado_venta": "Completada",
       "fecha_venta": "2026-06-20T13:50:00Z"
     }
+  }
+  ```
+* **Respuesta (400 Bad Request — Discrepancia de Precio o Inactividad):**
+  ```json
+  {
+    "detail": "El precio unitario enviado para 'Coca Cola 3L' (Bs. 1.00) no coincide con el oficial de inventario (Bs. 3.50)."
   }
   ```
 
