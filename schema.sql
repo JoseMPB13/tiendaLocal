@@ -107,6 +107,7 @@ create table if not exists clientes (
     nombre varchar(150) not null,
     telefono varchar(20),
     direccion text,
+    enlace_ubicacion text,
     saldo_deudor numeric(12, 2) default 0.00 not null check (saldo_deudor >= 0),
     limite_credito numeric(12, 2) default 0.00 not null check (limite_credito >= 0),
     estado varchar(20) default 'Activo' not null check (estado in ('Activo', 'Inactivo')),
@@ -350,6 +351,7 @@ declare
     v_cantidad_transacciones bigint;
     v_deudas_activas_calle numeric(12, 2);
     v_efectividad_delivery_porcentaje numeric(5, 2);
+    v_clientes_activos bigint;
     v_ventas_por_categoria jsonb;
 begin
     -- 1. Suma total vendida y conteo (solo ventas Completadas)
@@ -372,7 +374,13 @@ begin
     into v_efectividad_delivery_porcentaje
     from envios;
 
-    -- 4. Distribución de ventas por categoría (excluye las que tienen 0.00 de ventas)
+    -- 4. Cantidad de clientes activos
+    select count(*)
+    into v_clientes_activos
+    from clientes
+    where estado = 'Activo';
+
+    -- 5. Distribución de ventas por categoría (excluye las que tienen 0.00 de ventas)
     select coalesce(jsonb_agg(t), '[]'::jsonb)
     into v_ventas_por_categoria
     from (
@@ -391,9 +399,18 @@ begin
         'cantidad_transacciones', v_cantidad_transacciones,
         'deudas_activas_calle', v_deudas_activas_calle,
         'efectividad_delivery_porcentaje', v_efectividad_delivery_porcentaje,
+        'clientes_activos', v_clientes_activos,
         'ventas_por_categoria', v_ventas_por_categoria
     );
 end;
 $$ language plpgsql;
+
+-- -----------------------------------------------------------------------------
+-- 11. POLÍTICAS DE SEGURIDAD (RLS)
+-- -----------------------------------------------------------------------------
+alter table historial_stock enable row level security;
+
+create policy "Permitir select de historial_stock a todos"
+on historial_stock for select to anon, authenticated using (true);
 
 

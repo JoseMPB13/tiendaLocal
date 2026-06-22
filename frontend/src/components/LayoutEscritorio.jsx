@@ -32,9 +32,11 @@ export const LayoutEscritorio = () => {
     { ruta: '/categorias',   etiqueta: 'Categorías',       icono: <Tag size={19} />,             color: '#f59e0b' },
     { ruta: '/clientes',     etiqueta: 'Clientes',         icono: <Users size={19} />,           color: '#f472b6' },
     { ruta: '/envios',       etiqueta: 'Envíos & Reparto', icono: <Truck size={19} />,           color: '#2dd4bf' },
-    { ruta: '/kardex',       etiqueta: 'Kárdex de Stock',  icono: <Database size={19} />,        color: '#fb923c' },
     ...(usuario?.rol === 'Administrador'
-      ? [{ ruta: '/usuarios', etiqueta: 'Personal', icono: <UserCog size={19} />, color: '#c084fc' }]
+      ? [
+          { ruta: '/kardex',     etiqueta: 'Kárdex de Stock',  icono: <Database size={19} />,        color: '#fb923c' },
+          { ruta: '/usuarios',   etiqueta: 'Personal',         icono: <UserCog size={19} />,         color: '#c084fc' }
+        ]
       : []
     ),
   ];

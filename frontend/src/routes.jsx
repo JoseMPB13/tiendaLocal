@@ -31,13 +31,13 @@ export const RutasApp = () => {
             <Route path="/categorias" element={<GestionCategorias />} />
             <Route path="/clientes" element={<GestionClientes />} />
             <Route path="/envios" element={<GestionEnvios />} />
-            <Route path="/kardex" element={<KardexInventario />} />
           </Route>
         </Route>
 
-        {/* RUTA DE ADMINISTRADOR EXCLUSIVA PARA USUARIOS */}
+        {/* RUTA DE ADMINISTRADOR EXCLUSIVA PARA USUARIOS Y KARDEX */}
         <Route element={<RutaProtegida rolesPermitidos={['Administrador']} />}>
           <Route element={<LayoutEscritorio />}>
+            <Route path="/kardex" element={<KardexInventario />} />
             <Route path="/usuarios" element={<GestionUsuarios />} />
           </Route>
         </Route>

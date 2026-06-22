@@ -364,6 +364,7 @@ declare
     v_cantidad_transacciones bigint;
     v_deudas_activas_calle numeric(12, 2);
     v_efectividad_delivery_porcentaje numeric(5, 2);
+    v_clientes_activos bigint;
     v_ventas_por_categoria jsonb;
 begin
     -- 1. Suma total vendida y conteo (solo ventas Completadas)
@@ -386,7 +387,13 @@ begin
     into v_efectividad_delivery_porcentaje
     from envios;
 
-    -- 4. Distribución de ventas por categoría (excluye las que tienen 0.00 de ventas)
+    -- 4. Cantidad de clientes activos
+    select count(*)
+    into v_clientes_activos
+    from clientes
+    where estado = 'Activo';
+
+    -- 5. Distribución de ventas por categoría (excluye las que tienen 0.00 de ventas)
     select coalesce(jsonb_agg(t), '[]'::jsonb)
     into v_ventas_por_categoria
     from (
@@ -405,6 +412,7 @@ begin
         'cantidad_transacciones', v_cantidad_transacciones,
         'deudas_activas_calle', v_deudas_activas_calle,
         'efectividad_delivery_porcentaje', v_efectividad_delivery_porcentaje,
+        'clientes_activos', v_clientes_activos,
         'ventas_por_categoria', v_ventas_por_categoria
     );
 end;

@@ -30,6 +30,7 @@ export const GestionClientes = () => {
   const [nombre, setNombre] = useState('');
   const [telefono, setTelefono] = useState('');
   const [direccion, setDireccion] = useState('');
+  const [enlaceUbicacion, setEnlaceUbicacion] = useState('');
   const [saldoDeudor, setSaldoDeudor] = useState('');
   const [limiteCredito, setLimiteCredito] = useState('');
   const [procesandoForm, setProcesandoForm] = useState(false);
@@ -69,6 +70,7 @@ export const GestionClientes = () => {
     setNombre('');
     setTelefono('');
     setDireccion('');
+    setEnlaceUbicacion('');
     setSaldoDeudor(0.00);
     setLimiteCredito(0.00);
     setMostrarForm(true);
@@ -80,6 +82,7 @@ export const GestionClientes = () => {
     setNombre(cli.nombre);
     setTelefono(cli.telefono || '');
     setDireccion(cli.direccion || '');
+    setEnlaceUbicacion(cli.enlace_ubicacion || '');
     setSaldoDeudor(cli.saldo_deudor);
     setLimiteCredito(cli.limite_credito);
     setMostrarForm(true);
@@ -94,6 +97,7 @@ export const GestionClientes = () => {
       nombre,
       telefono: telefono || null,
       direccion: direccion || null,
+      enlace_ubicacion: enlaceUbicacion || null,
       saldo_deudor: parseFloat(saldoDeudor),
       limite_credito: parseFloat(limiteCredito)
     };
@@ -318,6 +322,16 @@ export const GestionClientes = () => {
                     type="text" value={direccion}
                     onChange={(e) => setDireccion(e.target.value)}
                     placeholder="Av. Los Tulipanes 789"
+                    className="form-input"
+                  />
+                </div>
+
+                <div style={fieldStyle}>
+                  <label className="form-label">Enlace de Ubicación GPS (Google Maps / Waze - Opcional)</label>
+                  <input
+                    type="text" value={enlaceUbicacion}
+                    onChange={(e) => setEnlaceUbicacion(e.target.value)}
+                    placeholder="https://maps.google.com/?q=..."
                     className="form-input"
                   />
                 </div>

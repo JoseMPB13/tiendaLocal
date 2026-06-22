@@ -46,6 +46,7 @@ export const DashboardAdmin = () => {
     cantidad_transacciones: 0,
     deudas_activas_calle: 0.00,
     efectividad_delivery_porcentaje: 0.00,
+    clientes_activos: 0,
     ventas_por_categoria: []
   });
 
@@ -142,12 +143,12 @@ export const DashboardAdmin = () => {
     },
     {
       label: 'Clientes Activos',
-      valor: '24',
+      valor: String(metricas.clientes_activos || 0),
       sub: 'Registrados en la tienda',
       icono: <Users size={22} />,
       gradient: 'linear-gradient(135deg, #2563eb, #3b82f6)',
       glow: 'rgba(37,99,235,.3)',
-      tendencia: '+3',
+      tendencia: null,
     },
   ];
 

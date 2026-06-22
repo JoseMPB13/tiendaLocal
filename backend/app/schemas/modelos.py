@@ -106,6 +106,7 @@ class ClienteBase(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=150)
     telefono: Optional[str] = Field(None, max_length=20)
     direccion: Optional[str] = None
+    enlace_ubicacion: Optional[str] = None
     saldo_deudor: float = Field(0.00, ge=0)
     limite_credito: float = Field(0.00, ge=0)
 
@@ -117,6 +118,7 @@ class ClienteActualizar(BaseModel):
     nombre: Optional[str] = Field(None, min_length=2, max_length=150)
     telefono: Optional[str] = Field(None, max_length=20)
     direccion: Optional[str] = None
+    enlace_ubicacion: Optional[str] = None
     saldo_deudor: Optional[float] = Field(None, ge=0)
     limite_credito: Optional[float] = Field(None, ge=0)
     estado: Optional[str] = Field(None, description="Estados válidos: Activo, Inactivo")
@@ -241,6 +243,7 @@ class DashboardMetricas(BaseModel):
     cantidad_transacciones: int = Field(..., description="Cantidad total de ventas registradas")
     deudas_activas_calle: float = Field(..., description="Suma total de saldos deudores de clientes")
     efectividad_delivery_porcentaje: float = Field(..., description="Porcentaje de entregas completadas con éxito")
+    clientes_activos: int = Field(..., description="Cantidad de clientes activos registrados")
     ventas_por_categoria: list[CategoriaVentas] = Field(default=[], description="Distribución de ventas por categoría")
 
 class MovimientoKardex(BaseModel):
