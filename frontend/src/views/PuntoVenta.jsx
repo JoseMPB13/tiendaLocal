@@ -21,7 +21,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import {
   Search, Trash2, ShoppingCart, CreditCard,
   DollarSign, X, ChevronDown, UserPlus, Plus,
-  RefreshCw, Package, ArrowRight, Loader2
+  RefreshCw, Package, ArrowRight, Loader2, QrCode
 } from 'lucide-react';
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -275,7 +275,11 @@ export const PuntoVenta = () => {
         return;
       }
     }
-    setEfectivoRecibido('');
+    if (metodoPago === 'QR') {
+      setEfectivoRecibido(total.toString());
+    } else {
+      setEfectivoRecibido('');
+    }
     setMostrarModalCobro(true);
   };
 
@@ -362,7 +366,7 @@ export const PuntoVenta = () => {
             <input
               ref={inputBuscarRef}
               type="text"
-              value={buscarInput}
+              value={buscarInput || ''}
               onChange={handleBuscarChange}
               placeholder="Buscar por nombre o escanear código de barras..."
               className="form-input"
@@ -584,7 +588,7 @@ export const PuntoVenta = () => {
                 </div>
                 <input
                   type="number"
-                  value={item.cantidad}
+                  value={item.cantidad || ''}
                   min={1}
                   onChange={e => actualizarCantidad(item.id, parseInt(e.target.value) || 0, item.stock_actual)}
                   style={{
@@ -637,7 +641,7 @@ export const PuntoVenta = () => {
             </div>
             <input
               type="text"
-              value={codigoFactura}
+              value={codigoFactura || ''}
               onChange={e => setCodigoFactura(e.target.value)}
               className="form-input"
               style={{ fontSize: '0.75rem', fontFamily: 'monospace', letterSpacing: '0.02em' }}
@@ -671,7 +675,7 @@ export const PuntoVenta = () => {
               <input
                 ref={clienteInputRef}
                 type="text"
-                value={buscarCliente}
+                value={buscarCliente || ''}
                 onChange={handleClienteInputChange}
                 onFocus={() => setDropdownClienteVisible(true)}
                 placeholder="Buscar cliente por nombre o DNI..."
@@ -774,11 +778,12 @@ export const PuntoVenta = () => {
             <label style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9ca3af', display: 'block', marginBottom: '6px' }}>
               Método de Pago
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
               {[
                 { id: 'Efectivo', label: 'Efectivo', icon: <DollarSign size={12} /> },
                 { id: 'Tarjeta',  label: 'Tarjeta',  icon: <CreditCard size={12} /> },
-                { id: 'Credito', label: 'Crédito',  icon: <UserPlus size={12} /> },
+                { id: 'QR',       label: 'Pago QR',  icon: <QrCode size={12} /> },
+                { id: 'Credito',  label: 'Crédito',  icon: <UserPlus size={12} /> },
               ].map(m => (
                 <button
                   key={m.id}
@@ -879,20 +884,23 @@ export const PuntoVenta = () => {
                 </div>
               )}
 
-              {/* Panel efectivo */}
-              {metodoPago === 'Efectivo' && (
+              {/* Panel efectivo o QR */}
+              {(metodoPago === 'Efectivo' || metodoPago === 'QR') && (
                 <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
-                  <label className="form-label">Monto Recibido (Bs.) *</label>
+                  <label className="form-label">
+                    {metodoPago === 'QR' ? 'Monto a transferir por QR (Bs.)' : 'Monto Recibido (Bs.) *'}
+                  </label>
                   <input
                     type="number"
                     step="0.50"
-                    value={efectivoRecibido}
+                    value={efectivoRecibido || ''}
                     onChange={e => setEfectivoRecibido(e.target.value)}
                     placeholder="0.00"
                     className="form-input"
-                    autoFocus
+                    disabled={metodoPago === 'QR'}
+                    autoFocus={metodoPago !== 'QR'}
                   />
-                  {parseFloat(efectivoRecibido) >= total && (
+                  {metodoPago === 'Efectivo' && parseFloat(efectivoRecibido) >= total && (
                     <div style={{
                       marginTop: '10px', display: 'flex', justifyContent: 'space-between',
                       padding: '8px 12px', background: '#d1fae5', borderRadius: '8px',
@@ -901,6 +909,18 @@ export const PuntoVenta = () => {
                       <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>Vuelto a entregar:</span>
                       <span style={{ fontSize: '0.875rem', fontWeight: 900, color: '#047857', fontFamily: 'Outfit' }}>
                         Bs. {vuelto.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  {metodoPago === 'QR' && (
+                    <div style={{
+                      marginTop: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+                      padding: '12px', background: '#f5f3ff', borderRadius: '8px',
+                      border: '1px dashed #c4b5fd',
+                    }}>
+                      <QrCode size={40} style={{ color: '#6d28d9' }} />
+                      <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6d28d9', textAlign: 'center' }}>
+                        Muestre el código QR al cliente para recibir el pago inmediato
                       </span>
                     </div>
                   )}
@@ -970,7 +990,7 @@ export const PuntoVenta = () => {
                   <label className="form-label">Nombre Completo *</label>
                   <input
                     type="text" required
-                    value={nuevoCliNombre}
+                    value={nuevoCliNombre || ''}
                     onChange={e => setNuevoCliNombre(e.target.value)}
                     placeholder="Ej: María García"
                     className="form-input"
@@ -982,7 +1002,7 @@ export const PuntoVenta = () => {
                     <label className="form-label">Teléfono (Opcional)</label>
                     <input
                       type="text"
-                      value={nuevoCliTelefono}
+                      value={nuevoCliTelefono || ''}
                       onChange={e => setNuevoCliTelefono(e.target.value)}
                       placeholder="70012345"
                       className="form-input"
@@ -992,7 +1012,7 @@ export const PuntoVenta = () => {
                     <label className="form-label">DNI / CI (Opcional)</label>
                     <input
                       type="text"
-                      value={nuevoCliDni}
+                      value={nuevoCliDni || ''}
                       onChange={e => setNuevoCliDni(e.target.value)}
                       placeholder="12345678"
                       className="form-input"

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from uuid import UUID
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 
 # -----------------------------------------------------------------------------
 # ESQUEMAS PARA EL MÓDULO DE USUARIOS
@@ -155,7 +155,7 @@ class VentaBase(BaseModel):
     cliente_id: UUID
     usuario_id: Optional[UUID] = None
     codigo_factura: str = Field(..., max_length=50)
-    tipo_pago: str = Field(..., description="Efectivo, Tarjeta, Credito, Transferencia")
+    tipo_pago: Literal['Efectivo', 'Tarjeta', 'Credito', 'Transferencia', 'QR'] = Field(..., description="Efectivo, Tarjeta, Credito, Transferencia, QR")
 
 class VentaCrear(VentaBase):
     detalles: list[DetalleVentaCrear] = Field(..., min_items=1)

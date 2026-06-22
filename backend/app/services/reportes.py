@@ -84,6 +84,7 @@ class ReporteService:
         ventas_completadas = [v for v in ventas if v["estado_venta"] == "Completada"]
         total_efectivo = sum(Decimal(str(v["total"])) for v in ventas_completadas if v["tipo_pago"] == "Efectivo") if ventas_completadas else Decimal("0.00")
         total_tarjeta = sum(Decimal(str(v["total"])) for v in ventas_completadas if v["tipo_pago"] == "Tarjeta") if ventas_completadas else Decimal("0.00")
+        total_qr = sum(Decimal(str(v["total"])) for v in ventas_completadas if v["tipo_pago"] == "QR") if ventas_completadas else Decimal("0.00")
         total_credito = sum(Decimal(str(v["total"])) for v in ventas_completadas if v["tipo_pago"] == "Credito") if ventas_completadas else Decimal("0.00")
         total_transferencia = sum(Decimal(str(v["total"])) for v in ventas_completadas if v["tipo_pago"] == "Transferencia") if ventas_completadas else Decimal("0.00")
         total_general = sum(Decimal(str(v["total"])) for v in ventas_completadas) if ventas_completadas else Decimal("0.00")
@@ -152,6 +153,7 @@ class ReporteService:
             ["Método de Pago", "Monto Total"],
             ["Efectivo", f"Bs. {total_efectivo:,.2f}"],
             ["Tarjeta", f"Bs. {total_tarjeta:,.2f}"],
+            ["Pago QR", f"Bs. {total_qr:,.2f}"],
             ["Crédito (Cuentas por Cobrar)", f"Bs. {total_credito:,.2f}"],
             ["Transferencia Bancaria", f"Bs. {total_transferencia:,.2f}"],
             ["TOTAL RECAUDADO", f"Bs. {total_general:,.2f}"]

@@ -348,7 +348,7 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
 * **Ruta:** `POST /ventas/`
 * **Permisos:** `Administrador`, `Cajero`
 * **Cuerpo de Petición (JSON):**
-  *(Nota: El campo `usuario_id` es opcional en la petición. El servidor ignorará cualquier valor enviado en este campo y lo sobrescribirá con el identificador de usuario autenticado en el token JWT. Asimismo, los campos `precio_unitario` de cada producto se validan contra el precio de venta oficial del catálogo para productos con estado 'Activo').*
+  *(Nota: El campo `usuario_id` es opcional en la petición. El servidor ignorará cualquier valor enviado en este campo y lo sobrescribirá con el identificador de usuario autenticado en el token JWT. Asimismo, los campos `precio_unitario` de cada producto se validan contra el precio de venta oficial del catálogo para productos con estado 'Activo'. El campo `tipo_pago` acepta los siguientes valores: 'Efectivo', 'Tarjeta', 'Credito', 'Transferencia' o 'QR').*
   ```json
   {
     "cliente_id": "b1bcf4d1-c24a-464a-9351-4096bead19e1",

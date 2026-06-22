@@ -127,7 +127,7 @@ create table if not exists ventas (
     usuario_id uuid references usuarios(id) on delete restrict,
     codigo_factura varchar(50) unique not null,
     total numeric(12, 2) default 0.00 not null check (total >= 0),
-    tipo_pago varchar(30) not null check (tipo_pago in ('Efectivo', 'Tarjeta', 'Credito', 'Transferencia')),
+    tipo_pago varchar(30) not null check (tipo_pago in ('Efectivo', 'Tarjeta', 'Credito', 'Transferencia', 'QR')),
     estado_venta varchar(30) default 'Completada' not null check (estado_venta in ('Completada', 'Cancelada', 'Pendiente')),
     fecha_venta timestamp with time zone default timezone('utc'::text, now()) not null
 );

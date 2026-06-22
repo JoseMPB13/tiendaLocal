@@ -316,8 +316,8 @@ export const DashboardAdmin = () => {
               Total recaudado por categoría de inventario
             </p>
           </div>
-          <div style={{ height: '260px' }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ height: '300px', minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart data={metricas.ventas_por_categoria} barSize={36}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af', fontFamily: 'Inter' }} axisLine={false} tickLine={false} />
@@ -346,8 +346,8 @@ export const DashboardAdmin = () => {
               Porcentaje de ventas según tipo de producto
             </p>
           </div>
-          <div style={{ height: '260px' }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ height: '300px', minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
                   data={metricas.ventas_por_categoria}
