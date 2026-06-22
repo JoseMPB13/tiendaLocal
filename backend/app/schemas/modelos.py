@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pydantic import BaseModel, EmailStr, Field
 from uuid import UUID
 from datetime import datetime
@@ -161,6 +162,9 @@ class VentaBase(BaseModel):
 
 class VentaCrear(VentaBase):
     detalles: list[DetalleVentaCrear] = Field(..., min_items=1)
+    para_delivery: bool = Field(default=False, description="Indica si la venta requiere envío a domicilio")
+    direccion_despacho: Optional[str] = Field(default=None, description="Dirección física de envío")
+    costo_envio: Optional[Decimal] = Field(default=Decimal('0.00'), ge=0, description="Costo de transporte del delivery")
 
 class VentaRespuesta(VentaBase):
     id: UUID

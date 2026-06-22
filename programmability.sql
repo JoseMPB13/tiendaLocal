@@ -75,7 +75,10 @@ create or replace function registrar_venta_credito(
     p_usuario_id uuid,
     p_codigo_factura varchar(50),
     p_total numeric(12, 2),
-    p_items jsonb -- Formato: [{"producto_id": "...", "cantidad": 2, "precio_unitario": 10.00}]
+    p_items jsonb,
+    p_para_delivery boolean DEFAULT false,
+    p_direccion_despacho text DEFAULT NULL,
+    p_costo_envio numeric DEFAULT 0.00
 )
 returns uuid as $$
 declare
@@ -129,6 +132,17 @@ begin
     set saldo_deudor = saldo_deudor + p_total
     where id = p_cliente_id;
 
+    -- 5. Registrar envío de delivery si se requiere
+    if p_para_delivery then
+        if p_direccion_despacho is null or p_direccion_despacho = '' then
+            raise exception 'La dirección de despacho es obligatoria para pedidos con delivery.'
+                using errcode = 'P0003';
+        end if;
+
+        insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio)
+        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Pendiente');
+    end if;
+
     return v_venta_id;
 end;
 $$ language plpgsql;
@@ -143,7 +157,10 @@ create or replace function registrar_venta_contado(
     p_codigo_factura varchar(50),
     p_total numeric(12, 2),
     p_tipo_pago varchar(30),
-    p_items jsonb -- Formato: [{"producto_id": "...", "cantidad": 2, "precio_unitario": 10.00}]
+    p_items jsonb,
+    p_para_delivery boolean DEFAULT false,
+    p_direccion_despacho text DEFAULT NULL,
+    p_costo_envio numeric DEFAULT 0.00
 )
 returns uuid as $$
 declare
@@ -177,6 +194,17 @@ begin
             v_subtotal
         );
     end loop;
+
+    -- 3. Registrar envío de delivery si se requiere
+    if p_para_delivery then
+        if p_direccion_despacho is null or p_direccion_despacho = '' then
+            raise exception 'La dirección de despacho es obligatoria para pedidos con delivery.'
+                using errcode = 'P0003';
+        end if;
+
+        insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio)
+        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Pendiente');
+    end if;
 
     return v_venta_id;
 end;

@@ -69,6 +69,11 @@ export const PuntoVenta = () => {
   const [efectivoRecibido, setEfectivoRecibido] = useState('');
   const [procesandoPago, setProcesandoPago] = useState(false);
 
+  // Opciones de delivery
+  const [requiereDelivery, setRequiereDelivery] = useState(false);
+  const [direccionDespacho, setDireccionDespacho] = useState('');
+  const [costoEnvio, setCostoEnvio] = useState('0.00');
+
   // Mini-modal de registro rápido de cliente
   const [mostrarModalCliente, setMostrarModalCliente] = useState(false);
   const [nuevoCliNombre, setNuevoCliNombre] = useState('');
@@ -280,6 +285,9 @@ export const PuntoVenta = () => {
     } else {
       setEfectivoRecibido('');
     }
+    setRequiereDelivery(false);
+    setDireccionDespacho(clienteSeleccionado?.direccion || '');
+    setCostoEnvio('0.00');
     setMostrarModalCobro(true);
   };
 
@@ -295,7 +303,10 @@ export const PuntoVenta = () => {
           producto_id: item.id,
           cantidad: item.cantidad,
           precio_unitario: item.precio_venta
-        }))
+        })),
+        para_delivery: requiereDelivery,
+        direccion_despacho: requiereDelivery ? direccionDespacho : null,
+        costo_envio: requiereDelivery ? parseFloat(costoEnvio) || 0.00 : 0.00
       };
       const respuesta = await ventaService.registrarVenta(payload);
       if (respuesta.ok) {
@@ -305,6 +316,9 @@ export const PuntoVenta = () => {
         setCodigoFactura(generarCodigoFactura());
         const cliGeneral = clientes.find(c => c.dni_ruc === '00000000') || clientes[0];
         if (cliGeneral) { setCliente(cliGeneral); setBuscarCliente(cliGeneral.nombre); }
+        setRequiereDelivery(false);
+        setDireccionDespacho('');
+        setCostoEnvio('0.00');
         setMostrarModalCobro(false);
         // Recargar productos para reflejar el nuevo stock
         const resProds = await ventaService.obtenerProductos();
@@ -884,6 +898,63 @@ export const PuntoVenta = () => {
                 </div>
               )}
 
+              {/* Delivery / Envío */}
+              <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, color: '#334155', margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={requiereDelivery}
+                    onChange={(e) => {
+                      setRequiereDelivery(e.target.checked);
+                      if (e.target.checked && !direccionDespacho) {
+                        setDireccionDespacho(clienteSeleccionado?.direccion || '');
+                      }
+                    }}
+                    style={{
+                      width: '15px',
+                      height: '15px',
+                      accentColor: '#6d28d9',
+                      cursor: 'pointer'
+                    }}
+                  />
+                  ¿Registrar envío para Delivery?
+                </label>
+
+                {requiereDelivery && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                        Dirección de Despacho *
+                      </label>
+                      <textarea
+                        value={direccionDespacho || ''}
+                        onChange={(e) => setDireccionDespacho(e.target.value)}
+                        placeholder="Ingrese la ubicación real de entrega..."
+                        required={true}
+                        rows={2}
+                        className="form-input"
+                        style={{ fontSize: '0.75rem', padding: '6px 10px', resize: 'none' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                        Costo de Envío (Bs.)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.50"
+                        min="0"
+                        value={costoEnvio}
+                        onChange={(e) => setCostoEnvio(e.target.value)}
+                        placeholder="0.00"
+                        className="form-input"
+                        style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Panel efectivo o QR */}
               {(metodoPago === 'Efectivo' || metodoPago === 'QR') && (
                 <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
@@ -953,7 +1024,8 @@ export const PuntoVenta = () => {
                 onClick={handleConfirmarVenta}
                 disabled={
                   procesandoPago ||
-                  (metodoPago === 'Efectivo' && (!efectivoRecibido || parseFloat(efectivoRecibido) < total))
+                  (metodoPago === 'Efectivo' && (!efectivoRecibido || parseFloat(efectivoRecibido) < total)) ||
+                  (requiereDelivery && !direccionDespacho.trim())
                 }
                 className="btn-primary"
                 style={{ minWidth: '130px', justifyContent: 'center' }}

@@ -355,6 +355,9 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
     "usuario_id": null,
     "codigo_factura": "F001-000001",
     "tipo_pago": "Credito",
+    "para_delivery": true,
+    "direccion_despacho": "Calle Los Laureles 123",
+    "costo_envio": 5.00,
     "detalles": [
       {
         "producto_id": "c86a60db-bcf5-48fa-bb4e-7b7ab9344445",
@@ -384,6 +387,12 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
   ```json
   {
     "detail": "El precio unitario enviado para 'Coca Cola 3L' (Bs. 1.00) no coincide con el oficial de inventario (Bs. 3.50)."
+  }
+  ```
+* **Respuesta (400 Bad Request — Dirección Faltante para Delivery):**
+  ```json
+  {
+    "detail": "La dirección de despacho es obligatoria para pedidos con delivery."
   }
   ```
 

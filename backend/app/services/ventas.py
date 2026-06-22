@@ -83,7 +83,10 @@ class VentaService:
                     "p_usuario_id": str(usuario_id),
                     "p_codigo_factura": venta.codigo_factura,
                     "p_total": total_recalculado,
-                    "p_items": items_json
+                    "p_items": items_json,
+                    "p_para_delivery": venta.para_delivery,
+                    "p_direccion_despacho": venta.direccion_despacho,
+                    "p_costo_envio": float(venta.costo_envio) if venta.costo_envio is not None else 0.0
                 }).execute()
                 
                 if not sp_result.data:
@@ -97,9 +100,14 @@ class VentaService:
                 return venta_creada.data[0]
                 
             except Exception as ex:
-                # Capturar excepciones generadas por RAISE EXCEPTION en PostgreSQL (Stock o Límite de Crédito)
+                # Capturar excepciones generadas por RAISE EXCEPTION en PostgreSQL (Stock, Límite de Crédito o Delivery)
                 error_msg = str(ex)
-                if "Límite de crédito excedido" in error_msg:
+                if "P0003" in error_msg or "dirección de despacho es obligatoria" in error_msg:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="La dirección de despacho es obligatoria para pedidos con delivery."
+                    )
+                elif "Límite de crédito excedido" in error_msg:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=error_msg
@@ -115,7 +123,7 @@ class VentaService:
                 )
 
         else:
-            # Ventas al contado (Efectivo, Tarjeta, Transferencia)
+            # Ventas al contado (Efectivo, Tarjeta, Transferencia, QR)
             # Invocamos el nuevo RPC registrar_venta_contado de forma atómica
             try:
                 sp_result = supabase.rpc("registrar_venta_contado", {
@@ -124,7 +132,10 @@ class VentaService:
                     "p_codigo_factura": venta.codigo_factura,
                     "p_total": total_recalculado,
                     "p_tipo_pago": venta.tipo_pago,
-                    "p_items": items_json
+                    "p_items": items_json,
+                    "p_para_delivery": venta.para_delivery,
+                    "p_direccion_despacho": venta.direccion_despacho,
+                    "p_costo_envio": float(venta.costo_envio) if venta.costo_envio is not None else 0.0
                 }).execute()
                 
                 if not sp_result.data:
@@ -139,7 +150,12 @@ class VentaService:
                 
             except Exception as ex:
                 error_msg = str(ex)
-                if "Stock insuficiente" in error_msg:
+                if "P0003" in error_msg or "dirección de despacho es obligatoria" in error_msg:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="La dirección de despacho es obligatoria para pedidos con delivery."
+                    )
+                elif "Stock insuficiente" in error_msg:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=error_msg
