@@ -14,7 +14,8 @@ create table if not exists bitacora (
     datos_anteriores jsonb,
     datos_nuevos jsonb,
     usuario_db varchar(100) default current_user,
-    fecha_registro timestamp with time zone default timezone('utc'::text, now()) not null
+    fecha_registro timestamp with time zone default timezone('utc'::text, now()) not null,
+    usuario_id uuid -- Guardará el ID de usuario real de la aplicación
 );
 
 comment on table bitacora is 'Registro de auditoría automática para cambios de datos críticos en el sistema.';
@@ -100,16 +101,22 @@ begin
     values (p_cliente_id, p_usuario_id, p_codigo_factura, p_total, 'Credito', 'Completada')
     returning id into v_venta_id;
 
-    -- 3. Iterar sobre los productos e insertarlos en el detalle
-    for v_item in select * from jsonb_array_elements(p_items) loop
-        v_subtotal := (v_item->>'cantidad')::integer * (v_item->>'precio_unitario')::numeric(12, 2);
+    -- 3. Iterar sobre los productos ordenados por producto_id para prevenir deadlocks
+    for v_item in 
+        select (x.value->>'producto_id')::uuid as prod_id,
+               (x.value->>'cantidad')::integer as cant,
+               (x.value->>'precio_unitario')::numeric(12, 2) as precio
+        from jsonb_array_elements(p_items) as x(value)
+        order by prod_id asc
+    loop
+        v_subtotal := v_item.cant * v_item.precio;
         
         insert into detalles_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal)
         values (
             v_venta_id, 
-            (v_item->>'producto_id')::uuid, 
-            (v_item->>'cantidad')::integer, 
-            (v_item->>'precio_unitario')::numeric(12, 2),
+            v_item.prod_id, 
+            v_item.cant, 
+            v_item.precio,
             v_subtotal
         );
     end loop;
@@ -148,15 +155,22 @@ begin
 
     -- 2. Iterar sobre los productos e insertarlos en el detalle
     -- Esto disparará automáticamente el trigger trg_detalles_ventas_before_insert que verifica stock con FOR UPDATE
-    for v_item in select * from jsonb_array_elements(p_items) loop
-        v_subtotal := (v_item->>'cantidad')::integer * (v_item->>'precio_unitario')::numeric(12, 2);
+    -- Iterar sobre los productos ordenados por producto_id para prevenir deadlocks
+    for v_item in 
+        select (x.value->>'producto_id')::uuid as prod_id,
+               (x.value->>'cantidad')::integer as cant,
+               (x.value->>'precio_unitario')::numeric(12, 2) as precio
+        from jsonb_array_elements(p_items) as x(value)
+        order by prod_id asc
+    loop
+        v_subtotal := v_item.cant * v_item.precio;
         
         insert into detalles_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal)
         values (
             v_venta_id, 
-            (v_item->>'producto_id')::uuid, 
-            (v_item->>'cantidad')::integer, 
-            (v_item->>'precio_unitario')::numeric(12, 2),
+            v_item.prod_id, 
+            v_item.cant, 
+            v_item.precio,
             v_subtotal
         );
     end loop;
@@ -175,6 +189,7 @@ declare
     v_datos_anteriores jsonb := null;
     v_datos_nuevos jsonb := null;
     v_registro_id uuid;
+    v_usuario_id uuid := null;
 begin
     if (tg_op = 'UPDATE' or tg_op = 'DELETE') then
         v_datos_anteriores := to_jsonb(old);
@@ -186,8 +201,25 @@ begin
         v_registro_id := new.id;
     end if;
 
-    insert into bitacora (tabla_afectada, operacion, registro_id, datos_anteriores, datos_nuevos)
-    values (tg_table_name, tg_op, v_registro_id, v_datos_anteriores, v_datos_nuevos);
+    -- Capturar el ID de usuario real de la aplicación
+    -- 1. Intentar leer la variable de sesión 'app.current_user_id'
+    begin
+        v_usuario_id := nullif(current_setting('app.current_user_id', true), '')::uuid;
+    exception when others then
+        v_usuario_id := null;
+    end;
+
+    -- 2. Fallback: intentar leer el usuario de Supabase Auth
+    if v_usuario_id is null then
+        begin
+            v_usuario_id := auth.uid();
+        exception when others then
+            v_usuario_id := null;
+        end;
+    end if;
+
+    insert into bitacora (tabla_afectada, operacion, registro_id, datos_anteriores, datos_nuevos, usuario_id)
+    values (tg_table_name, tg_op, v_registro_id, v_datos_anteriores, v_datos_nuevos, v_usuario_id);
 
     return new;
 end;
@@ -265,11 +297,12 @@ begin
     -- Evaluar únicamente si el estado de la venta cambia a 'Cancelada'
     if old.estado_venta <> 'Cancelada' and new.estado_venta = 'Cancelada' then
         
-        -- 1. Iterar sobre todos los productos que forman parte de la venta
+        -- 1. Iterar sobre todos los productos que forman parte de la venta ordenados por producto_id para prevenir deadlocks
         for v_item in 
             select producto_id, cantidad 
             from detalles_ventas 
             where venta_id = new.id
+            order by producto_id asc
         loop
             -- Bloquear el producto antes de modificar su stock para evitar race conditions
             perform id from productos where id = v_item.producto_id for update;

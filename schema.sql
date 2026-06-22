@@ -135,6 +135,8 @@ create table if not exists ventas (
 comment on table ventas is 'Cabecera de transacciones de venta.';
 create index if not exists idx_ventas_codigo_factura on ventas(codigo_factura);
 create index if not exists idx_ventas_fecha on ventas(fecha_venta);
+create index if not exists idx_ventas_cliente_id on ventas(cliente_id);
+create index if not exists idx_ventas_usuario_id on ventas(usuario_id);
 
 -- -----------------------------------------------------------------------------
 -- 6. TABLA: detalles_ventas
@@ -149,6 +151,8 @@ create table if not exists detalles_ventas (
 );
 
 comment on table detalles_ventas is 'Detalle individual de productos en cada venta.';
+create index if not exists idx_detalles_ventas_venta_id on detalles_ventas(venta_id);
+create index if not exists idx_detalles_ventas_producto_id on detalles_ventas(producto_id);
 
 -- -----------------------------------------------------------------------------
 -- 7. TABLA: compras
@@ -164,6 +168,7 @@ create table if not exists compras (
 
 comment on table compras is 'Registro de compras o reabastecimiento de inventario.';
 create index if not exists idx_compras_fecha on compras(fecha_compra);
+create index if not exists idx_compras_usuario_id on compras(usuario_id);
 
 -- -----------------------------------------------------------------------------
 -- 8. TABLA: detalles_compras
@@ -178,6 +183,8 @@ create table if not exists detalles_compras (
 );
 
 comment on table detalles_compras is 'Detalle de los productos adquiridos en una compra.';
+create index if not exists idx_detalles_compras_compra_id on detalles_compras(compra_id);
+create index if not exists idx_detalles_compras_producto_id on detalles_compras(producto_id);
 
 -- -----------------------------------------------------------------------------
 -- 9. TABLA: historial_stock
