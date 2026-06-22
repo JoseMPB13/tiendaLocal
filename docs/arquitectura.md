@@ -32,3 +32,9 @@ Para garantizar la integridad transaccional, rendimiento de concurrencia y rollb
 - **Firma y Generación:** Tras la verificación exitosa, el backend emite un token JWT firmado criptográficamente en el servidor con algoritmo `HS256`, utilizando la clave privada `JWT_SECRET` y un tiempo de expiración preestablecido de 12 horas.
 - **Autorización de Peticiones:** El frontend adjunta de forma transparente el token en cada cabecera HTTP bajo el formato `Authorization: Bearer <TOKEN>`.
 - **Dependencias de Control:** El backend utiliza la clase de FastAPI `OAuth2PasswordBearer` y la función de dependencia `obtener_usuario_actual` para decodificar, validar firmas digitales y validar roles en caliente (`verificar_roles`), bloqueando accesos no autorizados con código HTTP 401 Unauthorized o 403 Forbidden.
+- **Control Criptográfico en Cliente:** El frontend decodifica nativamente el token mediante `window.atob` al arrancar y en el guardián `RutaProtegida.jsx`, forzando el logout automático y redirigiendo al login si detecta que la marca `exp` es superada por el tiempo del sistema.
+
+## 6. Reglas de Consistencia Comercial y Bajas Lógicas en Backend
+- **Protección de Cuentas por Cobrar:** Se prohíbe la inactivación lógica (tanto en el endpoint DELETE como en payloads de actualización PUT/PATCH) de clientes que posean deudas activas (`saldo_deudor > 0.0`), retornando un código de error HTTP 400 Bad Request en español.
+- **Prevención de Productos Huérfanos:** Se bloquea la inactivación lógica de categorías si existen artículos en estado activo (`estado = 'Activo'`) asociados a su identificador en el inventario. Se requiere la reubicación de los productos antes de poder dar de baja la categoría, garantizando la consistencia estructural del inventario.
+

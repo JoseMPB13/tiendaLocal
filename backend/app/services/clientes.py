@@ -85,6 +85,13 @@ class ClienteService:
                 detail=f"El límite de crédito ({l_credito}) no puede ser menor al saldo deudor actual ({s_deudor})."
             )
 
+        # Validar si se está intentando inactivar un cliente con deudas activas
+        if datos_actualizar.get("estado") == "Inactivo" and s_deudor > 0.0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se puede inactivar un cliente con deudas pendientes."
+            )
+
         resultado = supabase.table("clientes").update(datos_actualizar).eq("id", str(cliente_id)).execute()
         if not resultado.data:
             raise HTTPException(
@@ -98,7 +105,15 @@ class ClienteService:
         """
         Baja lógica del cliente (estado = 'Inactivo').
         """
-        ClienteService.obtener_por_id(cliente_id)
+        cli_actual = ClienteService.obtener_por_id(cliente_id)
+
+        # Validar si posee saldo deudor mayor a 0
+        if cli_actual.get("saldo_deudor", 0.0) > 0.0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se puede inactivar un cliente con deudas pendientes."
+            )
+
         resultado = supabase.table("clientes").update({"estado": "Inactivo"}).eq("id", str(cliente_id)).execute()
         if not resultado.data:
             raise HTTPException(

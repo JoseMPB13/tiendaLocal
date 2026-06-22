@@ -1,16 +1,26 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
+import toast from 'react-hot-toast';
 
 /**
  * Componente contenedor para proteger rutas que requieren autenticacion
- * y roles especificos.
+ * y roles especificos, validando activamente la expiracion del token.
  */
 export const RutaProtegida = ({ rolesPermitidos }) => {
-  const { autenticado, rol } = useAuthStore();
+  const { autenticado, rol, esTokenValido, cerrarSesion } = useAuthStore();
 
-  if (!autenticado) {
-    // Si no está logueado, redirigir al login
+  const tokenValido = esTokenValido();
+
+  useEffect(() => {
+    if (autenticado && !tokenValido) {
+      toast.error("Tu sesión ha expirado por seguridad. Por favor, inicia sesión nuevamente.");
+      cerrarSesion();
+    }
+  }, [autenticado, tokenValido, cerrarSesion]);
+
+  if (!autenticado || !tokenValido) {
+    // Si no está logueado o expiró, redirigir al login
     return <Navigate to="/login" replace />;
   }
 

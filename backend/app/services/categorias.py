@@ -65,6 +65,20 @@ class CategoriaService:
         CategoriaService.obtener_por_id(categoria_id)
 
         datos_actualizar = categoria.model_dump(exclude_unset=True)
+
+        # Impedir inactivación si la categoría tiene productos activos asociados
+        if datos_actualizar.get("estado") == "Inactivo":
+            prods = supabase.table("productos")\
+                .select("id")\
+                .eq("categoria_id", str(categoria_id))\
+                .eq("estado", "Activo")\
+                .execute()
+            if prods.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No se puede inactivar una categoría que tiene productos activos asociados. Reubique los productos primero."
+                )
+
         resultado = supabase.table("categorias").update(datos_actualizar).eq("id", str(categoria_id)).execute()
         if not resultado.data:
             raise HTTPException(
@@ -80,6 +94,19 @@ class CategoriaService:
         Regla estricta: Bajas Lógicas.
         """
         CategoriaService.obtener_por_id(categoria_id)
+
+        # Verificar si existen productos activos asociados a esta categoría
+        prods = supabase.table("productos")\
+            .select("id")\
+            .eq("categoria_id", str(categoria_id))\
+            .eq("estado", "Activo")\
+            .execute()
+        
+        if prods.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se puede inactivar una categoría que tiene productos activos asociados. Reubique los productos primero."
+            )
 
         resultado = supabase.table("categorias").update({"estado": "Inactivo"}).eq("id", str(categoria_id)).execute()
         if not resultado.data:
