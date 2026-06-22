@@ -219,3 +219,105 @@ create trigger trg_usuarios_update before update on usuarios
 
 create trigger trg_clientes_update before update on clientes
     for each row execute function update_fecha_actualizacion();
+
+-- -----------------------------------------------------------------------------
+-- 10. TRIGGERS Y FUNCIONES ADICIONALES PARA INVENTARIO Y REVERSIONES
+-- -----------------------------------------------------------------------------
+
+-- =============================================================================
+-- FUNCIÓN: fn_controlar_stock_compra
+-- DESCRIPCIÓN: Incrementa automáticamente el stock de un producto cuando se
+--              registra un detalle de compra. Registra la transacción en el historial.
+-- PARÁMETROS: Disparado por trigger (NEW contiene el registro de detalles_compras).
+-- RETORNO: trigger (NEW)
+-- =============================================================================
+create or replace function fn_controlar_stock_compra()
+returns trigger as $$
+declare
+    v_nombre_prod varchar(150);
+begin
+    -- Bloquear la fila del producto para evitar condiciones de carrera (Race Conditions)
+    -- en actualizaciones concurrentes de stock.
+    select nombre 
+    into v_nombre_prod
+    from productos 
+    where id = new.producto_id
+    for update;
+
+    -- Incrementar el stock actual del producto con la cantidad comprada
+    update productos 
+    set stock_actual = stock_actual + new.cantidad
+    where id = new.producto_id;
+
+    -- Registrar el movimiento de tipo 'Compra' en el historial de stock
+    insert into historial_stock (producto_id, cantidad_cambio, tipo_movimiento, referencia_id)
+    values (new.producto_id, new.cantidad, 'Compra', new.compra_id);
+
+    return new;
+end;
+$$ language plpgsql;
+
+-- Trigger para ejecutar fn_controlar_stock_compra BEFORE INSERT en detalles_compras
+create or replace trigger tg_controlar_stock_compra
+before insert on detalles_compras
+for each row
+execute function fn_controlar_stock_compra();
+
+
+-- =============================================================================
+-- FUNCIÓN: fn_revertir_venta_cancelada
+-- DESCRIPCIÓN: Revierte de forma atómica el stock de los productos vendidos y el
+--              saldo deudor de un cliente cuando una venta cambia a 'Cancelada'.
+-- PARÁMETROS: Disparado por trigger AFTER UPDATE en ventas (OLD y NEW disponibles).
+-- RETORNO: trigger (NEW)
+-- =============================================================================
+create or replace function fn_revertir_venta_cancelada()
+returns trigger as $$
+declare
+    v_item record;
+begin
+    -- Evaluar únicamente si el estado de la venta cambia a 'Cancelada'
+    if old.estado_venta <> 'Cancelada' and new.estado_venta = 'Cancelada' then
+        
+        -- 1. Iterar sobre todos los productos que forman parte de la venta
+        for v_item in 
+            select producto_id, cantidad 
+            from detalles_ventas 
+            where venta_id = new.id
+        loop
+            -- Bloquear el producto antes de modificar su stock para evitar race conditions
+            perform id from productos where id = v_item.producto_id for update;
+
+            -- Devolver (sumar) las cantidades vendidas al stock_actual
+            update productos 
+            set stock_actual = stock_actual + v_item.cantidad
+            where id = v_item.producto_id;
+
+            -- Registrar el movimiento de reversión en historial_stock como 'Cancelacion Venta'
+            insert into historial_stock (producto_id, cantidad_cambio, tipo_movimiento, referencia_id)
+            values (v_item.producto_id, v_item.cantidad, 'Cancelacion Venta', new.id);
+        end loop;
+
+        -- 2. Si la venta original fue bajo modalidad de 'Credito', ajustar la deuda del cliente
+        if new.tipo_pago = 'Credito' then
+            -- Bloquear la fila del cliente para garantizar la consistencia en el saldo
+            perform id from clientes where id = new.cliente_id for update;
+
+            -- Restar el total de la venta del saldo deudor, asegurando que no descienda de 0
+            update clientes 
+            set saldo_deudor = greatest(0.00, saldo_deudor - new.total)
+            where id = new.cliente_id;
+        end if;
+
+    end if;
+
+    return new;
+end;
+$$ language plpgsql;
+
+-- Trigger para ejecutar fn_revertir_venta_cancelada AFTER UPDATE en ventas
+create or replace trigger tg_revertir_venta_cancelada
+after update on ventas
+for each row
+execute function fn_revertir_venta_cancelada();
+
