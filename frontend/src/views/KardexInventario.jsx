@@ -55,10 +55,12 @@ export const KardexInventario = () => {
     toast.success("Filtros restablecidos");
   };
 
-  // Filtrado reactivo en memoria para el buscador de productos
-  const kardexFiltrado = kardex.filter(item => 
-    item.nombre_producto.toLowerCase().includes(productoFiltro.toLowerCase())
-  );
+  // Filtrado reactivo en memoria para el buscador de productos, ordenando cronológicamente
+  const kardexFiltrado = kardex
+    .filter(item => 
+      item.nombre_producto.toLowerCase().includes(productoFiltro.toLowerCase())
+    )
+    .sort((a, b) => new Date(b.fecha_movimiento) - new Date(a.fecha_movimiento));
 
   // Métricas dinámicas basadas en los resultados del kárdex
   const totalMovimientos = kardexFiltrado.length;
@@ -75,6 +77,50 @@ export const KardexInventario = () => {
   // Segmentación para paginación local
   const indexInicio = (pagina - 1) * itemsPorPagina;
   const kardexPaginado = kardexFiltrado.slice(indexInicio, indexInicio + itemsPorPagina);
+
+  // Mapeo inteligente de badges para tipos de movimientos
+  const renderBadgeMovimiento = (item) => {
+    const tipo = item.tipo_movimiento;
+    const cant = item.cantidad_cambio;
+
+    if (tipo === 'Compra' || tipo === 'Cancelacion Venta') {
+      return (
+        <span className="px-2.5 py-1 rounded-full font-semibold text-xs uppercase bg-emerald-50 text-emerald-700 border border-emerald-200/50">
+          {tipo === 'Cancelacion Venta' ? 'Canc. Venta' : tipo}
+        </span>
+      );
+    }
+
+    if (tipo === 'Venta' || tipo === 'Cancelacion Compra') {
+      return (
+        <span className="px-2.5 py-1 rounded-full font-semibold text-xs uppercase bg-rose-50 text-rose-700 border border-rose-200/50">
+          {tipo === 'Cancelacion Compra' ? 'Canc. Compra' : tipo}
+        </span>
+      );
+    }
+
+    if (tipo === 'Ajuste') {
+      if (cant > 0) {
+        return (
+          <span className="px-2.5 py-1 rounded-full font-semibold text-xs uppercase bg-teal-50 text-teal-700 border border-teal-200/50" title="Ajuste positivo de stock">
+            Ajuste / Ingreso
+          </span>
+        );
+      } else {
+        return (
+          <span className="px-2.5 py-1 rounded-full font-semibold text-xs uppercase bg-amber-50 text-amber-700 border border-amber-200/50" title="Ajuste negativo de stock (merma)">
+            Ajuste / Merma
+          </span>
+        );
+      }
+    }
+
+    return (
+      <span className="px-2.5 py-1 rounded-full font-semibold text-xs uppercase bg-zinc-100 text-zinc-700 border border-zinc-200/50">
+        {tipo}
+      </span>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -206,6 +252,7 @@ export const KardexInventario = () => {
                 <option value="Compra">Compras</option>
                 <option value="Ajuste">Ajustes / Mermas</option>
                 <option value="Cancelacion Venta">Cancelación Venta</option>
+                <option value="Cancelacion Compra">Cancelación Compra</option>
               </select>
             </div>
           </div>
@@ -237,6 +284,7 @@ export const KardexInventario = () => {
                 <th className="py-3.5 px-6 font-semibold">Fecha Movimiento</th>
                 <th className="py-3.5 px-6 font-semibold">Producto</th>
                 <th className="py-3.5 px-6 font-semibold">Tipo Movimiento</th>
+                <th className="py-3.5 px-6 font-semibold">Motivo / Referencia</th>
                 <th className="py-3.5 px-6 font-semibold text-right">Variación Stock</th>
               </tr>
             </thead>
@@ -244,7 +292,7 @@ export const KardexInventario = () => {
             {cargando ? (
               <tbody>
                 <tr>
-                  <td colSpan="4" className="text-center py-12 text-zinc-500 font-medium">
+                  <td colSpan="5" className="text-center py-12 text-zinc-500 font-medium">
                     Cargando movimientos de inventario desde la base de datos...
                   </td>
                 </tr>
@@ -252,7 +300,7 @@ export const KardexInventario = () => {
             ) : kardexFiltrado.length === 0 ? (
               <tbody>
                 <tr>
-                  <td colSpan="4" className="text-center py-12 text-zinc-400">
+                  <td colSpan="5" className="text-center py-12 text-zinc-400">
                     No se encontraron registros de kárdex con los filtros aplicados.
                   </td>
                 </tr>
@@ -261,7 +309,6 @@ export const KardexInventario = () => {
               <tbody className="divide-y divide-zinc-100 text-zinc-700">
                 {kardexPaginado.map((item) => {
                   const esEntrada = item.cantidad_cambio > 0;
-                  const esAjuste = item.tipo_movimiento === "Ajuste";
                   
                   return (
                     <tr key={item.id} className="hover:bg-zinc-50/50 transition-colors">
@@ -272,13 +319,20 @@ export const KardexInventario = () => {
                         {item.nombre_producto}
                       </td>
                       <td className="py-4 px-6">
-                        <span className={`px-2.5 py-1 rounded-full font-medium text-xs uppercase ${
-                          item.tipo_movimiento === 'Venta' ? 'bg-sky-50 text-sky-700 border border-sky-200/50' :
-                          item.tipo_movimiento === 'Compra' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50' :
-                          esAjuste ? 'bg-rose-50 text-rose-700 border border-rose-200/50' : 'bg-zinc-100 text-zinc-700 border border-zinc-200/50'
-                        }`}>
-                          {item.tipo_movimiento}
-                        </span>
+                        {renderBadgeMovimiento(item)}
+                      </td>
+                      <td className="py-4 px-6 text-zinc-600 text-xs font-medium">
+                        {item.motivo ? (
+                          <span className="text-zinc-800 bg-zinc-50 border border-zinc-100 rounded-lg px-2.5 py-1 inline-block max-w-[200px] truncate" title={item.motivo}>
+                            {item.motivo}
+                          </span>
+                        ) : item.referencia_id ? (
+                          <span className="text-zinc-400 font-mono" title={`Referencia ID: ${item.referencia_id}`}>
+                            Ref: {item.referencia_id.substring(0, 8)}...
+                          </span>
+                        ) : (
+                          <span className="text-zinc-300 italic">Sin justificación</span>
+                        )}
                       </td>
                       <td className={`py-4 px-6 font-semibold text-right text-base ${
                         esEntrada ? 'text-emerald-600' : 'text-rose-600'

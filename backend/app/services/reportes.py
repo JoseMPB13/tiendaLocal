@@ -63,6 +63,7 @@ class ReporteService:
                 "cantidad_cambio": r["cantidad_cambio"],
                 "tipo_movimiento": r["tipo_movimiento"],
                 "referencia_id": r.get("referencia_id"),
+                "motivo": r.get("motivo"),
                 "fecha_movimiento": r["fecha_movimiento"]
             })
         return lista_kardex

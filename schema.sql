@@ -196,6 +196,7 @@ create table if not exists historial_stock (
     cantidad_cambio integer not null,
     tipo_movimiento varchar(50) not null check (tipo_movimiento in ('Venta', 'Compra', 'Ajuste', 'Cancelacion Venta', 'Cancelacion Compra')),
     referencia_id uuid, -- ID de la Venta o Compra que generó el movimiento
+    motivo text, -- Justificación o comentario del movimiento
     fecha_movimiento timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -261,8 +262,9 @@ begin
     where id = new.producto_id;
 
     -- Registrar el movimiento de tipo 'Compra' en el historial de stock
-    insert into historial_stock (producto_id, cantidad_cambio, tipo_movimiento, referencia_id)
-    values (new.producto_id, new.cantidad, 'Compra', new.compra_id);
+    insert into historial_stock (producto_id, cantidad_cambio, tipo_movimiento, referencia_id, motivo)
+    select new.producto_id, new.cantidad, 'Compra', new.compra_id, coalesce('Compra ref: ' || codigo_referencia, 'Compra registrada')
+    from compras where id = new.compra_id;
 
     return new;
 end;
@@ -309,8 +311,12 @@ begin
             where id = v_item.producto_id;
 
             -- Registrar el movimiento de reversión en historial_stock como 'Cancelacion Venta'
-            insert into historial_stock (producto_id, cantidad_cambio, tipo_movimiento, referencia_id)
-            values (v_item.producto_id, v_item.cantidad, 'Cancelacion Venta', new.id);
+            insert into historial_stock (producto_id, cantidad_cambio, tipo_movimiento, referencia_id, motivo)
+            select v_item.producto_id, v_item.cantidad, 'Cancelacion Venta', new.id, coalesce('Cancelación: ' || e.motivo_cancelacion, 'Venta Cancelada / Anulada')
+            from ventas v
+            left join envios e on e.venta_id = v.id
+            where v.id = new.id
+            limit 1;
         end loop;
 
         -- 2. Si la venta original fue bajo modalidad de 'Credito', ajustar la deuda del cliente

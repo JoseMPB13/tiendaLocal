@@ -266,6 +266,7 @@ class MovimientoKardex(BaseModel):
     cantidad_cambio: int
     tipo_movimiento: str
     referencia_id: Optional[UUID]
+    motivo: Optional[str] = None
     fecha_movimiento: datetime
 
     class Config:
