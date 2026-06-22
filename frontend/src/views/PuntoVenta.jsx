@@ -43,9 +43,20 @@ export const PuntoVenta = () => {
   const [categorias, setCategorias] = useState(['Todas']);
   const [cargando, setCargando] = useState(true);
 
-  // Búsqueda y filtros de la rejilla
-  const [buscar, setBuscar] = useState('');
+  // Búsqueda y filtros de la rejilla con Debounce inteligente
+  const [buscarInput, setBuscarInput] = useState('');
+  const [buscarDebounced, setBuscarDebounced] = useState('');
   const [categoriaSel, setCategoriaSel] = useState('Todas');
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setBuscarDebounced(buscarInput);
+    }, 300);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [buscarInput]);
 
   // Autocomplete de clientes
   const [buscarCliente, setBuscarCliente] = useState('');
@@ -86,28 +97,28 @@ export const PuntoVenta = () => {
     // Generar código de factura inicial si el carrito está limpio
     setCodigoFactura(prev => prev || generarCodigoFactura());
 
+    const controller = new AbortController();
+    const signal = controller.signal;
     let cancelado = false; // Flag para evitar actualizar estado si el componente se desmontó
 
     const inicializarPOS = async () => {
       try {
         setCargando(true);
         const [resProds, resClis, resCats] = await Promise.all([
-          ventaService.obtenerProductos(),
-          ventaService.obtenerClientes(),
-          ventaService.obtenerCategorias()
+          ventaService.obtenerProductos({ signal }),
+          ventaService.obtenerClientes({ signal }),
+          ventaService.obtenerCategorias({ signal })
         ]);
 
         if (cancelado) return;
 
         if (resProds.ok && resCats.ok) {
           // Construir mapa id → nombre de categorías para enriquecer productos localmente.
-          // Esto garantiza que el filtro funciona aunque el join del backend falle.
           const mapaCategorias = {};
           resCats.data.forEach(c => { mapaCategorias[c.id] = c.nombre; });
 
           const productosEnriquecidos = resProds.data.map(p => ({
             ...p,
-            // Usar categoria_nombre del backend si viene; si no, buscarlo por categoria_id
             categoria_nombre: p.categoria_nombre || mapaCategorias[p.categoria_id] || null,
           }));
           setProductos(productosEnriquecidos);
@@ -128,7 +139,7 @@ export const PuntoVenta = () => {
           }
         }
       } catch (ex) {
-        if (!cancelado) {
+        if (!cancelado && ex.name !== 'CanceledError' && ex.code !== 'ERR_CANCELED') {
           console.error(ex);
           toast.error('Error al conectar con el servidor. Revisa la conexión.');
         }
@@ -139,8 +150,11 @@ export const PuntoVenta = () => {
 
     inicializarPOS();
 
-    // Cleanup: si el componente se desmonta antes de que la promesa resuelva, ignorar
-    return () => { cancelado = true; };
+    // Cleanup: si el componente se desmonta antes de que la promesa resuelva, abortar y cancelar
+    return () => {
+      cancelado = true;
+      controller.abort();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Cerrar dropdown de clientes al hacer clic fuera ───────────────────── */
@@ -160,14 +174,15 @@ export const PuntoVenta = () => {
   /* ── Búsqueda de productos (con detección de lector de barras) ──────────── */
   const handleBuscarChange = (e) => {
     const valor = e.target.value;
-    setBuscar(valor);
-    // Emulación de lector de barras: coincidencia exacta → agregar y limpiar
+    setBuscarInput(valor);
+    // Emulación de lector de barras: coincidencia exacta instantánea → agregar y limpiar
     const coincidencia = productos.find(
       p => p.codigo_barras === valor.trim() && p.estado === 'Activo'
     );
     if (coincidencia) {
       agregarProducto(coincidencia);
-      setBuscar('');
+      setBuscarInput('');
+      setBuscarDebounced('');
       toast.success(`✓ ${coincidencia.nombre} agregado al carrito`);
       inputBuscarRef.current?.focus();
     }
@@ -294,6 +309,9 @@ export const PuntoVenta = () => {
     } catch (ex) {
       const errorDetail = ex.response?.data?.detail || 'Error desconocido al procesar la transacción.';
       toast.error(`Error: ${errorDetail}`);
+      // Recargar productos para actualizar stocks obsoletos en pantalla tras el fallo
+      const resProds = await ventaService.obtenerProductos();
+      if (resProds.ok) setProductos(resProds.data);
     } finally {
       setProcesandoPago(false);
     }
@@ -301,17 +319,19 @@ export const PuntoVenta = () => {
 
   /* ── Filtrado de productos ──────────────────────────────────────────────── */
   const productosFiltrados = productos.filter(p => {
-    const textoBuscar = buscar.toLowerCase();
+    const textoBuscar = buscarDebounced.toLowerCase();
     const coincideTexto =
       p.nombre.toLowerCase().includes(textoBuscar) ||
       (p.codigo_barras && p.codigo_barras.toLowerCase().includes(textoBuscar));
-    // ← CORRECCIÓN: comparar la categoría real del producto con la seleccionada
     const coincideCategoria =
       categoriaSel === 'Todas' || p.categoria_nombre === categoriaSel;
     return coincideTexto && coincideCategoria && p.estado === 'Activo';
   });
 
-  const vuelto = parseFloat(efectivoRecibido) - total;
+  // Aritmética exacta en centavos para el cálculo de vuelto
+  const efectivoCentavos = Math.round((parseFloat(efectivoRecibido) || 0) * 100);
+  const totalCentavos = Math.round(total * 100);
+  const vuelto = (efectivoCentavos - totalCentavos) / 100;
 
   /* ─────────────────────────────── RENDER ───────────────────────────────── */
   return (
@@ -342,7 +362,7 @@ export const PuntoVenta = () => {
             <input
               ref={inputBuscarRef}
               type="text"
-              value={buscar}
+              value={buscarInput}
               onChange={handleBuscarChange}
               placeholder="Buscar por nombre o escanear código de barras..."
               className="form-input"
@@ -397,7 +417,7 @@ export const PuntoVenta = () => {
               color: '#9ca3af',
             }}>
               <Search size={28} style={{ margin: '0 auto 12px', opacity: .3 }} />
-              <p style={{ fontSize: '0.8rem', fontWeight: 500 }}>Sin resultados para "{buscar || categoriaSel}"</p>
+              <p style={{ fontSize: '0.8rem', fontWeight: 500 }}>Sin resultados para "{buscarInput || categoriaSel}"</p>
             </div>
           ) : (
             <div style={{
@@ -559,7 +579,7 @@ export const PuntoVenta = () => {
                     {item.nombre}
                   </p>
                   <p style={{ fontSize: '0.65rem', color: '#9ca3af', margin: '2px 0 0' }}>
-                    Bs. {item.precio_venta.toFixed(2)} × {item.cantidad} = <strong style={{ color: '#6d28d9' }}>Bs. {(item.precio_venta * item.cantidad).toFixed(2)}</strong>
+                    Bs. {item.precio_venta.toFixed(2)} × {item.cantidad} = <strong style={{ color: '#6d28d9' }}>Bs. {((Math.round(item.precio_venta * 100) * item.cantidad) / 100).toFixed(2)}</strong>
                   </p>
                 </div>
                 <input
@@ -893,7 +913,7 @@ export const PuntoVenta = () => {
                   {[
                     ['Saldo deudor actual', `Bs. ${clienteSeleccionado.saldo_deudor.toFixed(2)}`],
                     ['Esta venta', `+ Bs. ${total.toFixed(2)}`],
-                    ['Nuevo saldo estimado', `Bs. ${(clienteSeleccionado.saldo_deudor + total).toFixed(2)}`],
+                    ['Nuevo saldo estimado', `Bs. ${((Math.round(clienteSeleccionado.saldo_deudor * 100) + Math.round(total * 100)) / 100).toFixed(2)}`],
                     ['Límite de crédito', `Bs. ${clienteSeleccionado.limite_credito.toFixed(2)}`],
                   ].map(([label, value], i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: i < 3 ? '1px solid #fde68a' : 'none' }}>

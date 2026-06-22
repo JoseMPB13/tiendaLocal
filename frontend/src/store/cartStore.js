@@ -89,11 +89,16 @@ export const useCartStore = create((set, get) => ({
   setCodigoFactura: (codigo) => set({ codigoFactura: codigo }),
 
   /**
-   * Retorna el monto total calculado sumando subtotales del carrito.
+   * Retorna el monto total calculado de forma precisa usando aritmética de centavos (enteros)
+   * para mitigar los errores de redondeo de punto flotante en JavaScript.
    */
   obtenerTotal: () => {
     const { carrito } = get();
-    return carrito.reduce((acc, item) => acc + (item.cantidad * item.precio_venta), 0.00);
+    const totalCentavos = carrito.reduce((acc, item) => {
+      const precioCentavos = Math.round(item.precio_venta * 100);
+      return acc + (item.cantidad * precioCentavos);
+    }, 0);
+    return totalCentavos / 100;
   }
 }));
 

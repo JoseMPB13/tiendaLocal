@@ -12,24 +12,24 @@ export const ventaService = {
   /**
    * Obtiene la lista de productos activos desde el backend.
    */
-  obtenerProductos: async () => {
-    const respuesta = await clienteApi.get('/productos/');
+  obtenerProductos: async (options = {}) => {
+    const respuesta = await clienteApi.get('/productos/', options);
     return respuesta.data;
   },
 
   /**
    * Obtiene la lista de clientes activos desde el backend.
    */
-  obtenerClientes: async () => {
-    const respuesta = await clienteApi.get('/clientes/');
+  obtenerClientes: async (options = {}) => {
+    const respuesta = await clienteApi.get('/clientes/', options);
     return respuesta.data;
   },
 
   /**
    * Obtiene las categorías de inventario activas desde el backend.
    */
-  obtenerCategorias: async () => {
-    const respuesta = await clienteApi.get('/categorias/');
+  obtenerCategorias: async (options = {}) => {
+    const respuesta = await clienteApi.get('/categorias/', options);
     return respuesta.data;
   }
 };

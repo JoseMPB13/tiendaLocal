@@ -28,6 +28,7 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 
 ## 5. Gestión del Carrito del Punto de Venta (`cartStore.js`)
 - Maneja el estado atómico del carrito POS: listado de productos agregados, cantidad solicitada, cliente seleccionado para el comprobante, código de la factura y método de pago.
+- **Aritmética Monetaria Precisa (Centavos):** Para mitigar errores de redondeo IEEE 754 asociados a floats en JavaScript, todos los cálculos de totales se procesan internamente multiplicando precios y subtotales por 100 usando `Math.round(precio * 100)` para trabajar con centavos enteros en el acumulador. El resultado es dividido entre 100 únicamente al ser retornado para su renderizado.
 - **Validaciones Integradas:** Controla que la cantidad de ítems no exceda el `stock_actual` disponible de forma reactiva en el cliente.
 - **Control de Crédito Local:** Si el método de pago seleccionado es "Crédito", valida en caliente que la suma de la deuda existente del cliente más el total a cobrar no supere su `limite_credito` autorizado, rechazando la venta antes de enviarla.
 
@@ -59,6 +60,13 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **Paginación Clásica (`PaginadorTablas.jsx`):** Diseñado con botones de "Anterior", "Siguiente" y acceso a páginas numeradas en la parte inferior de las tablas de datos para garantizar la legibilidad y un control estructurado de los conjuntos de datos.
 - **Confirmación de Baja Lógica (`ModalDesactivar.jsx`):** Todas las acciones de inactivación muestran un modal flotante personalizado con advertencias claras de las implicaciones (ej: bloqueo de acceso para usuarios, desaparición en POS para productos, o exclusión de selectores para clientes). La desactivación se envía mediante una petición de actualización para cambiar el campo `estado` a `'Inactivo'` (Baja Lógica), asegurando la conservación de los datos para auditoría histórica.
 - **Gestión de Usuarios y Seguridad:** El módulo `GestionUsuarios.jsx` está protegido estrictamente por rol permitiendo acceso únicamente a usuarios con rol `Administrador`. Incluye un botón interactivo (ojo) para ocultar/mostrar la contraseña y validaciones de longitud mínima de 6 caracteres en el cliente.
+
+## 12. Rendimiento y Seguridad de Ciclo de Vida en el POS
+- **Debounce de Búsqueda de Productos:** Para proteger el hilo de ejecución principal de React y evitar refiltrar la colección completa de productos con cada pulsación de tecla, se introdujo un debounce de 300ms. Al escribir en la barra de búsqueda, el filtrado semántico por nombre se pospone hasta 300ms de inactividad de teclado, previniendo re-renderizados innecesarios.
+- **Lector de Códigos de Barra Instantáneo:** El debounce se aplica de forma selectiva. Si el valor ingresado corresponde a un código de barras exacto, el sistema detecta de forma instantánea la coincidencia, añade el producto al carrito sin demoras y limpia el input, asegurando una experiencia ágil con lectores físicos.
+- **AbortController en Peticiones Asíncronas:** El efecto de carga de inventario inicial (`useEffect`) integra la API nativa de `AbortController`. Si el componente se desmonta porque el cajero navega hacia otra sección antes de que resuelvan las promesas de la API, las llamadas Axios HTTP pendientes son canceladas de forma segura (`controller.abort()`), evitando fugas de memoria y actualizaciones de estado sobre componentes desmontados.
+- **Resiliencia ante Datos Obsoletos:** El sistema confía en la validación atómica del Backend. Si al presionar "Confirmar Venta" la API de ventas retorna una falla de stock o precio obsoleto (HTTP 400), el frontend captura el error de forma controlado en un bloque `try/catch`, muestra el detalle descriptivo con un toast y recarga inmediatamente el catálogo local para refrescar los stocks en pantalla.
+
 
 
 
