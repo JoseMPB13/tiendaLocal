@@ -11,7 +11,7 @@ El sistema utiliza una arquitectura desacoplada estructurada en un monorepo:
 ## 2. Estructura del Backend (FastAPI - Modular)
 El backend se encuentra estructurado en el directorio `/backend/app` bajo los siguientes submódulos:
 - `/database`: Configuración del cliente y conexión centralizada a Supabase.
-- `/routers`: Controladores y enrutadores HTTP de la API (por ejemplo, `prueba.py`).
+- `/routers`: Controladores y enrutadores HTTP de la API (por ejemplo, `ventas.py`).
 - `/schemas`: Modelos de validación de datos de entrada/salida implementados mediante **Pydantic v2**.
 - `/services`: Capa intermedia que coordina la lógica de negocio y realiza las transacciones/operaciones contra Supabase.
 - `main.py`: Archivo principal encargado de inicializar FastAPI, configurar CORS y registrar los enrutadores.
