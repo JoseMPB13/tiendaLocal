@@ -1,5 +1,5 @@
 from decimal import Decimal
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from uuid import UUID
 from datetime import datetime
 from typing import Optional, Literal
@@ -261,6 +261,46 @@ class MovimientoKardex(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# -----------------------------------------------------------------------------
+# ESQUEMAS PARA EL MÓDULO DE COMPRAS (Reabastecimiento)
+# -----------------------------------------------------------------------------
+
+class DetalleCompraCrear(BaseModel):
+    producto_id: UUID
+    cantidad: int = Field(..., gt=0)
+    costo_unitario: Decimal = Field(..., ge=0)
+
+class CompraCrear(BaseModel):
+    codigo_referencia: Optional[str] = Field(default=None, max_length=100)
+    detalles: list[DetalleCompraCrear] = Field(..., min_items=1)
+
+class DetalleCompraRespuesta(BaseModel):
+    id: UUID
+    compra_id: UUID
+    producto_id: UUID
+    cantidad: int
+    costo_unitario: Decimal
+    subtotal: Decimal
+
+    model_config = ConfigDict(from_attributes=True)
+
+class CompraRespuesta(BaseModel):
+    id: UUID
+    usuario_id: UUID
+    codigo_referencia: Optional[str]
+    total: Decimal
+    estado_compra: str
+    fecha_compra: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ProductoReabastecer(BaseModel):
+    producto_id: UUID
+    cantidad: int = Field(..., gt=0, description="Cantidad a ingresar")
+    costo_compra: Decimal = Field(..., ge=0, description="Nuevo costo de compra unitario")
+    codigo_referencia: Optional[str] = Field(default=None, max_length=100, description="Código de factura o nota de referencia")
 
 
 

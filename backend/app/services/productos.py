@@ -2,7 +2,7 @@ from typing import List, Optional
 from uuid import UUID
 from fastapi import HTTPException, status
 from app.database import supabase
-from app.schemas.modelos import ProductoCrear, ProductoActualizar
+from app.schemas.modelos import ProductoCrear, ProductoActualizar, ProductoReabastecer
 
 class ProductoService:
     @staticmethod
@@ -141,3 +141,47 @@ class ProductoService:
                 detail="No se pudo desactivar el producto."
             )
         return resultado.data[0]
+
+    @staticmethod
+    def reabastecer_producto(payload: ProductoReabastecer, usuario_id: str) -> dict:
+        """
+        Registra el reabastecimiento de stock de un producto atómicamente llamando al SP.
+        Actualiza el costo y valida que no supere el precio de venta actual.
+        """
+        try:
+            # Invocar la función RPC registrar_reabastecimiento
+            resultado = supabase.rpc("registrar_reabastecimiento", {
+                "p_producto_id": str(payload.producto_id),
+                "p_usuario_id": str(usuario_id),
+                "p_cantidad": payload.cantidad,
+                "p_costo_compra": float(payload.costo_compra),
+                "p_codigo_referencia": payload.codigo_referencia
+            }).execute()
+            
+            if not resultado.data:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="No se pudo registrar el reabastecimiento en la base de datos."
+                )
+                
+            # Retornar el producto actualizado
+            return ProductoService.obtener_por_id(payload.producto_id)
+            
+        except HTTPException:
+            raise
+        except Exception as ex:
+            error_msg = str(ex)
+            if "P0004" in error_msg or "costo de compra no puede ser mayor" in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El costo de compra no puede ser mayor al precio de venta actual. Ajuste el precio de venta primero."
+                )
+            elif "P0005" in error_msg or "producto especificado no existe" in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El producto especificado no existe."
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error transaccional al reabastecer stock: {error_msg}"
+            )

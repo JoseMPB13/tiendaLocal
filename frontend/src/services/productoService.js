@@ -16,6 +16,10 @@ export const productoService = {
   eliminar: async (id) => {
     const respuesta = await clienteApi.delete(`/productos/${id}`);
     return respuesta.data;
+  },
+  reabastecer: async (datos) => {
+    const respuesta = await clienteApi.post('/productos/reabastecer', datos);
+    return respuesta.data;
   }
 };
 export default productoService;

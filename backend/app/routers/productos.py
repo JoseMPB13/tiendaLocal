@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from typing import List
 from uuid import UUID
-from app.schemas.modelos import ProductoCrear, ProductoActualizar, ProductoRespuesta
+from app.schemas.modelos import ProductoCrear, ProductoActualizar, ProductoRespuesta, ProductoReabastecer
 from app.services.productos import ProductoService
 from app.services.dependencias import verificar_roles
 
@@ -65,5 +65,18 @@ async def eliminar_producto(
     Inactiva un producto (Baja lógica). Requiere rol 'Administrador'.
     """
     resultado = ProductoService.eliminar_producto(producto_id)
+    respuesta = ProductoRespuesta.model_validate(resultado)
+    return {"ok": True, "data": respuesta}
+
+@router.post("/reabastecer", response_model=dict)
+async def reabastecer_producto(
+    payload: ProductoReabastecer,
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
+):
+    """
+    Registra el reabastecimiento de stock de un producto atómicamente y actualiza su costo.
+    Requiere rol 'Administrador' o 'Cajero'.
+    """
+    resultado = ProductoService.reabastecer_producto(payload, usuario_actual["id"])
     respuesta = ProductoRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}

@@ -240,6 +240,45 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
   }
   ```
 
+### Reabastecer Producto (Stock y Costo)
+* **Ruta:** `POST /productos/reabastecer`
+* **Permisos:** `Administrador`, `Cajero`
+* **Cuerpo de Petición (JSON):**
+  ```json
+  {
+    "producto_id": "c86a60db-bcf5-48fa-bb4e-7b7ab9344445",
+    "cantidad": 10,
+    "costo_compra": 2.80,
+    "codigo_referencia": "Factura-789-Proveedor"
+  }
+  ```
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "id": "c86a60db-bcf5-48fa-bb4e-7b7ab9344445",
+      "categoria_id": "e2298e82-e02c-473d-9d7a-1ee824c9c1b8",
+      "codigo_barras": "KIO-00001",
+      "nombre": "Coca Cola 3L",
+      "descripcion": "Gaseosa familiar descartable",
+      "precio_compra": 2.80,
+      "precio_venta": 3.50,
+      "stock_actual": 30,
+      "stock_minimo": 5,
+      "estado": "Activo",
+      "fecha_creacion": "2026-06-20T13:35:00Z",
+      "fecha_actualizacion": "2026-06-22T22:38:00Z"
+    }
+  }
+  ```
+* **Respuesta (400 Bad Request — Costo de Compra Excede Precio Venta):**
+  ```json
+  {
+    "detail": "El costo de compra no puede ser mayor al precio de venta actual. Ajuste el precio de venta primero."
+  }
+  ```
+
 ---
 
 ## 5. Módulo de Clientes

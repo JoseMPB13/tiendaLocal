@@ -44,6 +44,14 @@ export const GestionProductos = () => {
   const [productoEliminarId, setProductoEliminarId] = useState(null);
   const [procesandoEliminar, setProcesandoEliminar] = useState(false);
 
+  // Modal de Reabastecimiento
+  const [mostrarReabastecer, setMostrarReabastecer] = useState(false);
+  const [productoReabastecer, setProductoReabastecer] = useState(null);
+  const [reabastecerCantidad, setReabastecerCantidad] = useState('');
+  const [reabastecerCosto, setReabastecerCosto] = useState('');
+  const [reabastecerReferencia, setReabastecerReferencia] = useState('');
+  const [procesandoReabastecer, setProcesandoReabastecer] = useState(false);
+
   const cargarDatos = async () => {
     try {
       setCargando(true);
@@ -157,6 +165,54 @@ export const GestionProductos = () => {
     }
   };
 
+  const abrirReabastecer = (prod) => {
+    setProductoReabastecer(prod);
+    setReabastecerCantidad('');
+    setReabastecerCosto(prod.precio_compra);
+    setReabastecerReferencia('');
+    setMostrarReabastecer(true);
+  };
+
+  const handleReabastecer = async (e) => {
+    e.preventDefault();
+    const cant = parseInt(reabastecerCantidad);
+    const costo = parseFloat(reabastecerCosto);
+
+    if (isNaN(cant) || cant <= 0) {
+      toast.error('La cantidad a ingresar debe ser mayor a 0.');
+      return;
+    }
+    if (isNaN(costo) || costo < 0) {
+      toast.error('El costo de compra no puede ser negativo.');
+      return;
+    }
+    if (costo > productoReabastecer.precio_venta) {
+      toast.error('El costo de compra no puede ser mayor al precio de venta actual. Ajuste el precio de venta primero.');
+      return;
+    }
+
+    setProcesandoReabastecer(true);
+    try {
+      const payload = {
+        producto_id: productoReabastecer.id,
+        cantidad: cant,
+        costo_compra: costo,
+        codigo_referencia: reabastecerReferencia || null
+      };
+      const res = await productoService.reabastecer(payload);
+      if (res.ok) {
+        toast.success('✓ Reabastecimiento de stock registrado exitosamente.');
+        setMostrarReabastecer(false);
+        cargarDatos();
+      }
+    } catch (ex) {
+      const errorMsg = ex.response?.data?.detail || 'Error al reabastecer el producto.';
+      toast.error(errorMsg);
+    } finally {
+      setProcesandoReabastecer(false);
+    }
+  };
+
   const indexInicio = (pagina - 1) * itemsPorPagina;
   const productosPaginados = productos.slice(indexInicio, indexInicio + itemsPorPagina);
 
@@ -243,6 +299,16 @@ export const GestionProductos = () => {
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        {prod.estado === 'Activo' && (
+                          <button
+                            onClick={() => abrirReabastecer(prod)}
+                            className="btn-icon"
+                            style={{ color: '#059669' }}
+                            title="Reabastecer stock"
+                          >
+                            <Plus size={15} />
+                          </button>
+                        )}
                         <button
                           onClick={() => abrirEditar(prod)}
                           className="btn-icon"
@@ -401,6 +467,97 @@ export const GestionProductos = () => {
                 </button>
                 <button type="submit" disabled={procesandoForm} className="btn-primary">
                   {procesandoForm ? 'Guardando...' : productoEdit ? 'Actualizar Producto' : 'Guardar Producto'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL REABASTECIMIENTO DE STOCK ── */}
+      {mostrarReabastecer && productoReabastecer && (
+        <div className="modal-backdrop">
+          <div className="modal-container animate-fade-in-up" style={{ maxWidth: '420px' }}>
+            <div style={{ height: '4px', background: 'linear-gradient(90deg, #059669, #10b981)' }} />
+
+            <div className="modal-header">
+              <span className="modal-title">📈 Reabastecer Stock de Producto</span>
+              <button
+                onClick={() => setMostrarReabastecer(false)}
+                style={{
+                  background: '#f3f4f6', border: 'none', borderRadius: '8px',
+                  width: '28px', height: '28px', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', cursor: 'pointer', color: '#6b7280',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#e5e7eb'; e.currentTarget.style.color = '#374151'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#6b7280'; }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <form onSubmit={handleReabastecer}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* Info del producto */}
+                <div style={{ padding: '10px 14px', background: '#ecfdf5', borderRadius: '10px', border: '1px solid #a7f3d0' }}>
+                  <p style={{ fontSize: '0.65rem', color: '#047857', fontWeight: 700, textTransform: 'uppercase', margin: 0 }}>Producto a Reabastecer</p>
+                  <p style={{ fontFamily: 'Outfit', fontWeight: 900, fontSize: '1.1rem', color: '#064e3b', margin: '2px 0 0' }}>
+                    {productoReabastecer.nombre}
+                  </p>
+                  <p style={{ fontSize: '0.72rem', color: '#047857', marginTop: '4px', margin: 0 }}>
+                    Stock actual: <strong>{productoReabastecer.stock_actual} uds</strong> · Precio venta actual: <strong>Bs. {productoReabastecer.precio_venta.toFixed(2)}</strong>
+                  </p>
+                </div>
+
+                {/* Cantidad a Ingresar */}
+                <div style={fieldStyle}>
+                  <label className="form-label">Cantidad a Ingresar *</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={reabastecerCantidad}
+                    onChange={(e) => setReabastecerCantidad(e.target.value)}
+                    placeholder="Ej: 10"
+                    className="form-input"
+                  />
+                </div>
+
+                {/* Nuevo Costo de Compra */}
+                <div style={fieldStyle}>
+                  <label className="form-label">Nuevo Costo de Compra Unitario (Bs.) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    min="0"
+                    value={reabastecerCosto}
+                    onChange={(e) => setReabastecerCosto(e.target.value)}
+                    placeholder="0.00"
+                    className="form-input"
+                  />
+                </div>
+
+                {/* Código de Referencia */}
+                <div style={fieldStyle}>
+                  <label className="form-label">Código de Referencia / Nota (Opcional)</label>
+                  <input
+                    type="text"
+                    value={reabastecerReferencia}
+                    onChange={(e) => setReabastecerReferencia(e.target.value)}
+                    placeholder="Ej: Factura 4567, Nota de entrega..."
+                    className="form-input"
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" onClick={() => setMostrarReabastecer(false)} className="btn-secondary">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={procesandoReabastecer} className="btn-primary" style={{ background: '#059669', borderColor: '#059669' }}>
+                  {procesandoReabastecer ? 'Registrando...' : 'Registrar Reabastecimiento'}
                 </button>
               </div>
             </form>
