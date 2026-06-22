@@ -26,7 +26,10 @@ create index if not exists idx_bitacora_fecha on bitacora(fecha_registro);
 -- 2. CONTROL ESTRUCTURADO Y TRIGGER DE STOCK (BEFORE INSERT en detalles_ventas)
 -- -----------------------------------------------------------------------------
 create or replace function fn_controlar_stock_venta()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+as $$
 declare
     v_stock_actual integer;
     v_stock_minimo integer;
@@ -57,7 +60,7 @@ begin
 
     return new;
 end;
-$$ language plpgsql;
+$$;
 
 create trigger trg_detalles_ventas_before_insert
 before insert on detalles_ventas
@@ -250,7 +253,10 @@ for each row execute function fn_auditar_cambios();
 -- RETORNO: trigger (NEW)
 -- =============================================================================
 create or replace function fn_controlar_stock_compra()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+as $$
 declare
     v_nombre_prod varchar(150);
 begin
@@ -273,7 +279,7 @@ begin
 
     return new;
 end;
-$$ language plpgsql;
+$$;
 
 -- Trigger para ejecutar fn_controlar_stock_compra BEFORE INSERT en detalles_compras
 create or replace trigger tg_controlar_stock_compra
@@ -290,7 +296,10 @@ execute function fn_controlar_stock_compra();
 -- RETORNO: trigger (NEW)
 -- =============================================================================
 create or replace function fn_revertir_venta_cancelada()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+as $$
 declare
     v_item record;
 begin
@@ -332,7 +341,7 @@ begin
 
     return new;
 end;
-$$ language plpgsql;
+$$;
 
 -- Trigger para ejecutar fn_revertir_venta_cancelada AFTER UPDATE en ventas
 create or replace trigger tg_revertir_venta_cancelada

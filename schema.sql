@@ -239,7 +239,10 @@ create trigger trg_clientes_update before update on clientes
 -- RETORNO: trigger (NEW)
 -- =============================================================================
 create or replace function fn_controlar_stock_compra()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+as $$
 declare
     v_nombre_prod varchar(150);
 begin
@@ -262,7 +265,7 @@ begin
 
     return new;
 end;
-$$ language plpgsql;
+$$;
 
 -- Trigger para ejecutar fn_controlar_stock_compra BEFORE INSERT en detalles_compras
 create or replace trigger tg_controlar_stock_compra
@@ -279,18 +282,22 @@ execute function fn_controlar_stock_compra();
 -- RETORNO: trigger (NEW)
 -- =============================================================================
 create or replace function fn_revertir_venta_cancelada()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+as $$
 declare
     v_item record;
 begin
     -- Evaluar únicamente si el estado de la venta cambia a 'Cancelada'
     if old.estado_venta <> 'Cancelada' and new.estado_venta = 'Cancelada' then
         
-        -- 1. Iterar sobre todos los productos que forman parte de la venta
+        -- 1. Iterar sobre todos los productos que forman parte de la venta ordenados por producto_id para prevenir deadlocks
         for v_item in 
             select producto_id, cantidad 
             from detalles_ventas 
             where venta_id = new.id
+            order by producto_id asc
         loop
             -- Bloquear el producto antes de modificar su stock para evitar race conditions
             perform id from productos where id = v_item.producto_id for update;
@@ -320,7 +327,7 @@ begin
 
     return new;
 end;
-$$ language plpgsql;
+$$;
 
 -- Trigger para ejecutar fn_revertir_venta_cancelada AFTER UPDATE en ventas
 create or replace trigger tg_revertir_venta_cancelada
