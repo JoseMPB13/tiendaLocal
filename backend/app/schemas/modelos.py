@@ -243,7 +243,7 @@ class DashboardMetricas(BaseModel):
     cantidad_transacciones: int = Field(..., description="Cantidad total de ventas registradas")
     deudas_activas_calle: float = Field(..., description="Suma total de saldos deudores de clientes")
     efectividad_delivery_porcentaje: float = Field(..., description="Porcentaje de entregas completadas con éxito")
-    clientes_activos: int = Field(..., description="Cantidad de clientes activos registrados")
+    clientes_activos: int = Field(default=0, description="Cantidad de clientes activos registrados")
     ventas_por_categoria: list[CategoriaVentas] = Field(default=[], description="Distribución de ventas por categoría")
 
 class MovimientoKardex(BaseModel):
