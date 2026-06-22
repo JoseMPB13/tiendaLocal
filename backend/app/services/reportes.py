@@ -2,6 +2,7 @@ import io
 from typing import List, Optional
 from datetime import datetime, date
 from uuid import UUID
+from decimal import Decimal
 from fastapi import HTTPException, status
 from app.database import supabase
 from app.schemas.modelos import DashboardMetricas, MovimientoKardex
@@ -17,49 +18,18 @@ class ReporteService:
     @staticmethod
     def obtener_metricas_dashboard() -> dict:
         """
-        Calcula y agrupa métricas clave del negocio consumiendo agregaciones de Supabase.
+        Calcula y agrupa métricas clave del negocio consumiendo una función RPC en Supabase.
         """
-        # 1. Total ventas y conteo (solo ventas con estado Completada)
-        vta_res = supabase.table("ventas").select("total").eq("estado_venta", "Completada").execute()
-        total_ventas = sum(item["total"] for item in vta_res.data) if vta_res.data else 0.00
-        cantidad_transacciones = len(vta_res.data) if vta_res.data else 0
-
-        # 2. Deudas activas en la calle (suma de saldo deudor)
-        cli_res = supabase.table("clientes").select("saldo_deudor").gt("saldo_deudor", 0).execute()
-        deudas_activas = sum(item["saldo_deudor"] for item in cli_res.data) if cli_res.data else 0.00
-
-        # 3. Efectividad del delivery (Porcentaje de envíos Entregados vs totales)
-        env_res = supabase.table("envios").select("estado_envio").execute()
-        total_envios = len(env_res.data) if env_res.data else 0
-        entregados = len([e for e in env_res.data if e["estado_envio"] == "Entregado"]) if env_res.data else 0
-        
-        porcentaje_efectividad = (entregados / total_envios * 100) if total_envios > 0 else 0.00
-
-        # 4. Distribución de ventas por categoría
-        vta_ids_res = supabase.table("ventas").select("id").eq("estado_venta", "Completada").execute()
-        venta_ids = [v["id"] for v in vta_ids_res.data] if vta_ids_res.data else []
-        
-        ventas_por_categoria = []
-        if venta_ids:
-            detalles_query = supabase.table("detalles_ventas").select("subtotal, productos(categorias(nombre))").in_("venta_id", venta_ids).execute()
-            ventas_categorias = {}
-            for item in (detalles_query.data or []):
-                if item.get("productos") and item["productos"].get("categorias"):
-                    cat_nombre = item["productos"]["categorias"]["nombre"]
-                    ventas_categorias[cat_nombre] = ventas_categorias.get(cat_nombre, 0.00) + float(item["subtotal"])
-            
-            ventas_por_categoria = [
-                {"name": name, "valor": float(monto)}
-                for name, monto in ventas_categorias.items()
-            ]
-
-        return {
-            "total_ventas": float(total_ventas),
-            "cantidad_transacciones": int(cantidad_transacciones),
-            "deudas_activas_calle": float(deudas_activas),
-            "efectividad_delivery_porcentaje": float(porcentaje_efectividad),
-            "ventas_por_categoria": ventas_por_categoria
-        }
+        resultado = supabase.rpc("obtener_metricas_dashboard").execute()
+        if not resultado.data:
+            return {
+                "total_ventas": 0.00,
+                "cantidad_transacciones": 0,
+                "deudas_activas_calle": 0.00,
+                "efectividad_delivery_porcentaje": 0.00,
+                "ventas_por_categoria": []
+            }
+        return resultado.data
 
     @staticmethod
     def obtener_historial_kardex(
@@ -110,13 +80,13 @@ class ReporteService:
         ventas_dia = supabase.table("ventas").select("id, total, tipo_pago, estado_venta").gte("fecha_venta", rango_inicio).lte("fecha_venta", rango_fin).execute()
         ventas = ventas_dia.data or []
 
-        # Totales por método de pago
+        # Totales por método de pago usando precisión Decimal
         ventas_completadas = [v for v in ventas if v["estado_venta"] == "Completada"]
-        total_efectivo = sum(v["total"] for v in ventas_completadas if v["tipo_pago"] == "Efectivo")
-        total_tarjeta = sum(v["total"] for v in ventas_completadas if v["tipo_pago"] == "Tarjeta")
-        total_credito = sum(v["total"] for v in ventas_completadas if v["tipo_pago"] == "Credito")
-        total_transferencia = sum(v["total"] for v in ventas_completadas if v["tipo_pago"] == "Transferencia")
-        total_general = sum(v["total"] for v in ventas_completadas)
+        total_efectivo = sum(Decimal(str(v["total"])) for v in ventas_completadas if v["tipo_pago"] == "Efectivo") if ventas_completadas else Decimal("0.00")
+        total_tarjeta = sum(Decimal(str(v["total"])) for v in ventas_completadas if v["tipo_pago"] == "Tarjeta") if ventas_completadas else Decimal("0.00")
+        total_credito = sum(Decimal(str(v["total"])) for v in ventas_completadas if v["tipo_pago"] == "Credito") if ventas_completadas else Decimal("0.00")
+        total_transferencia = sum(Decimal(str(v["total"])) for v in ventas_completadas if v["tipo_pago"] == "Transferencia") if ventas_completadas else Decimal("0.00")
+        total_general = sum(Decimal(str(v["total"])) for v in ventas_completadas) if ventas_completadas else Decimal("0.00")
 
         # Rendimiento de categorías (requiere listar los detalles de las ventas del día)
         ventas_categorias = {}
@@ -126,7 +96,7 @@ class ReporteService:
             for item in (detalles_query.data or []):
                 if item.get("productos") and item["productos"].get("categorias"):
                     cat_nombre = item["productos"]["categorias"]["nombre"]
-                    ventas_categorias[cat_nombre] = ventas_categorias.get(cat_nombre, 0.00) + float(item["subtotal"])
+                    ventas_categorias[cat_nombre] = ventas_categorias.get(cat_nombre, Decimal("0.00")) + Decimal(str(item["subtotal"]))
 
         # Registro de mermas (ajustes negativos del día en el historial de stock)
         mermas_query = supabase.table("historial_stock").select("cantidad_cambio, productos(nombre)").eq("tipo_movimiento", "Ajuste").gte("fecha_movimiento", rango_inicio).lte("fecha_movimiento", rango_fin).execute()
