@@ -10,7 +10,7 @@ router = APIRouter(prefix="/productos", tags=["Productos"])
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def crear_producto(
     producto: ProductoCrear,
-    rol_operador: str = Depends(verificar_roles(["Administrador"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Registra un nuevo producto en el catálogo. Requiere rol 'Administrador'.
@@ -22,7 +22,7 @@ async def crear_producto(
 @router.get("/", response_model=dict)
 async def listar_productos(
     incluir_inactivos: bool = False,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
 ):
     """
     Retorna la lista de productos registrados. Accesible por cualquier rol.
@@ -34,7 +34,7 @@ async def listar_productos(
 @router.get("/{producto_id}", response_model=dict)
 async def obtener_producto(
     producto_id: UUID,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
 ):
     """
     Busca un producto específico por ID.
@@ -47,7 +47,7 @@ async def obtener_producto(
 async def actualizar_producto(
     producto_id: UUID,
     producto: ProductoActualizar,
-    rol_operador: str = Depends(verificar_roles(["Administrador"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Actualiza la información de un producto. Requiere rol 'Administrador'.
@@ -59,7 +59,7 @@ async def actualizar_producto(
 @router.delete("/{producto_id}", response_model=dict)
 async def eliminar_producto(
     producto_id: UUID,
-    rol_operador: str = Depends(verificar_roles(["Administrador"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Inactiva un producto (Baja lógica). Requiere rol 'Administrador'.

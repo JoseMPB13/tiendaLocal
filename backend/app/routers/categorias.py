@@ -10,7 +10,7 @@ router = APIRouter(prefix="/categorias", tags=["Categorias"])
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def crear_categoria(
     categoria: CategoriaCrear,
-    rol_operador: str = Depends(verificar_roles(["Administrador"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Crea una nueva categoría. Limitado solo a Administradores.
@@ -22,7 +22,7 @@ async def crear_categoria(
 @router.get("/", response_model=dict)
 async def listar_categorias(
     incluir_inactivas: bool = False,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
 ):
     """
     Lista las categorías del inventario. Por defecto retorna solo las activas.
@@ -35,7 +35,7 @@ async def listar_categorias(
 @router.get("/{categoria_id}", response_model=dict)
 async def obtener_categoria(
     categoria_id: UUID,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Busca una categoría por ID.
@@ -48,7 +48,7 @@ async def obtener_categoria(
 async def actualizar_categoria(
     categoria_id: UUID,
     categoria: CategoriaActualizar,
-    rol_operador: str = Depends(verificar_roles(["Administrador"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Actualiza una categoría existente. Restringido a Administradores.
@@ -60,7 +60,7 @@ async def actualizar_categoria(
 @router.delete("/{categoria_id}", response_model=dict)
 async def eliminar_categoria(
     categoria_id: UUID,
-    rol_operador: str = Depends(verificar_roles(["Administrador"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Realiza una baja lógica de la categoría seleccionada (cambia estado a Inactivo).

@@ -25,7 +25,7 @@ async def registrar_venta(
 @router.get("/{venta_id}", response_model=dict)
 async def obtener_venta(
     venta_id: UUID,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
 ):
     """
     Busca los datos de cabecera de una venta.
@@ -37,7 +37,7 @@ async def obtener_venta(
 @router.get("/{venta_id}/detalles", response_model=dict)
 async def obtener_detalles_venta(
     venta_id: UUID,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
 ):
     """
     Retorna la lista de ítems detallados asociados a una venta.

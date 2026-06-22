@@ -12,7 +12,7 @@ router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def crear_usuario(
     usuario: UsuarioCrear,
-    rol_operador: str = Depends(verificar_roles(["Administrador"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Crea un nuevo usuario en el sistema. Limitado únicamente al rol 'Administrador'.
@@ -24,7 +24,7 @@ async def crear_usuario(
 
 @router.get("/", response_model=dict)
 async def listar_usuarios(
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Retorna todos los usuarios registrados. Accesible por Administradores y Cajeros.
@@ -36,7 +36,7 @@ async def listar_usuarios(
 @router.get("/{usuario_id}", response_model=dict)
 async def obtener_usuario(
     usuario_id: UUID,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Obtiene los datos de un usuario por su ID.
@@ -49,7 +49,7 @@ async def obtener_usuario(
 async def actualizar_usuario(
     usuario_id: UUID,
     usuario: UsuarioActualizar,
-    rol_operador: str = Depends(verificar_roles(["Administrador"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Actualiza la información de un usuario. Restringido a 'Administrador'.

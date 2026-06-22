@@ -4,8 +4,22 @@ from typing import Optional
 import jwt
 import bcrypt
 
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv()
+
 # Configuración de JWT
-SECRET_KEY = os.getenv("JWT_SECRET", "clave-secreta-desarrollo-tiendalocal-987654321")
+debug_mode = os.getenv("DEBUG", "").lower() == "true"
+jwt_secret = os.getenv("JWT_SECRET", "")
+
+if not jwt_secret:
+    if debug_mode:
+        jwt_secret = "clave-secreta-desarrollo-tiendalocal-987654321"
+    else:
+        raise RuntimeError("ERROR CRÍTICO DE INFRAESTRUCTURA: La variable JWT_SECRET no está configurada. El servidor no puede iniciar de forma segura.")
+
+SECRET_KEY = jwt_secret
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 12
 

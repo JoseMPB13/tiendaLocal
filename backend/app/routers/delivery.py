@@ -17,7 +17,7 @@ router = APIRouter(prefix="/delivery", tags=["Delivery & Reparto"])
 @router.post("/repartidores", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def registrar_repartidor(
     repartidor: RepartidorCrear,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Registra un perfil de repartidor para un usuario de rol Repartidor.
@@ -29,7 +29,7 @@ async def registrar_repartidor(
 
 @router.get("/repartidores", response_model=dict)
 async def listar_repartidores(
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Obtiene la lista de repartidores.
@@ -42,7 +42,7 @@ async def listar_repartidores(
 async def actualizar_repartidor(
     repartidor_id: UUID,
     datos: RepartidorActualizar,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Actualiza la información y el estado (Disponible, En Ruta, Inactivo) del repartidor.
@@ -58,7 +58,7 @@ async def actualizar_repartidor(
 @router.post("/envios", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def registrar_envio(
     envio: EnvioCrear,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Registra una orden de delivery para una venta.
@@ -69,7 +69,7 @@ async def registrar_envio(
 
 @router.get("/envios", response_model=dict)
 async def listar_envios(
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
 ):
     """
     Lista todos los envíos. Accesible por cualquier rol.

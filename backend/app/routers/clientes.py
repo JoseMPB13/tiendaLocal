@@ -10,7 +10,7 @@ router = APIRouter(prefix="/clientes", tags=["Clientes"])
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def crear_cliente(
     cliente: ClienteCrear,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Registra un nuevo cliente. Accesible por Administrador y Cajero.
@@ -22,7 +22,7 @@ async def crear_cliente(
 @router.get("/", response_model=dict)
 async def listar_clientes(
     incluir_inactivos: bool = False,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Lista todos los clientes. Accesible por todos los roles autorizados.
@@ -34,7 +34,7 @@ async def listar_clientes(
 @router.get("/{cliente_id}", response_model=dict)
 async def obtener_cliente(
     cliente_id: UUID,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Busca un cliente por su ID.
@@ -47,7 +47,7 @@ async def obtener_cliente(
 async def actualizar_cliente(
     cliente_id: UUID,
     cliente: ClienteActualizar,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Actualiza la información de un cliente. Accesible por Administrador y Cajero.
@@ -59,7 +59,7 @@ async def actualizar_cliente(
 @router.delete("/{cliente_id}", response_model=dict)
 async def eliminar_cliente(
     cliente_id: UUID,
-    rol_operador: str = Depends(verificar_roles(["Administrador"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Inactiva un cliente (Baja lógica). Requiere rol 'Administrador'.

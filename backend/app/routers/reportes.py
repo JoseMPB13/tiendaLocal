@@ -11,7 +11,7 @@ router = APIRouter(prefix="/reportes", tags=["Reportes"])
 
 @router.get("/dashboard", response_model=dict)
 async def obtener_dashboard(
-    rol_operador: str = Depends(verificar_roles(["Administrador"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Retorna métricas clave consolidadas para el Dashboard administrativo.
@@ -28,7 +28,7 @@ async def obtener_kardex(
     fecha_inicio: Optional[date] = Query(None, description="Fecha de inicio del rango (YYYY-MM-DD)"),
     fecha_fin: Optional[date] = Query(None, description="Fecha de fin del rango (YYYY-MM-DD)"),
     tipo_movimiento: Optional[str] = Query(None, description="Venta, Compra, Ajuste, etc."),
-    rol_operador: str = Depends(verificar_roles(["Administrador"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Retorna el kárdex/historial de stock de inventario filtrado.
@@ -46,7 +46,7 @@ async def obtener_kardex(
 @router.get("/cierre-pdf")
 async def descargar_cierre_caja(
     fecha: date = Query(..., description="Fecha del cierre de caja a exportar (YYYY-MM-DD)"),
-    rol_operador: str = Depends(verificar_roles(["Administrador"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Genera y descarga en tiempo real el PDF del Cierre de Caja Diario.
