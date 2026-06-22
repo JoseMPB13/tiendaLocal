@@ -30,6 +30,7 @@ create table if not exists envios (
     estado_envio varchar(30) default 'Pendiente' not null check (estado_envio in ('Pendiente', 'En Camino', 'Entregado', 'Cancelado')),
     fecha_despacho timestamp with time zone,
     fecha_entrega timestamp with time zone,
+    motivo_cancelacion text,
     fecha_creacion timestamp with time zone default timezone('utc'::text, now()) not null,
     fecha_actualizacion timestamp with time zone default timezone('utc'::text, now()) not null
 );

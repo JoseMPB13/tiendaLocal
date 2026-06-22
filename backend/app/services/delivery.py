@@ -123,8 +123,35 @@ class DeliveryService:
 
     @staticmethod
     def obtener_todos_envios() -> List[dict]:
-        resultado = supabase.table("envios").select("*").execute()
-        return resultado.data or []
+        query = supabase.table("envios")\
+            .select("*, ventas(id, cliente_id, clientes(nombre, telefono, direccion, enlace_ubicacion))")\
+            .execute()
+        
+        envios_formateados = []
+        for e in (query.data or []):
+            venta = e.get("ventas") or {}
+            cliente_data = venta.get("clientes") or {}
+            e_formateado = {
+                "id": e["id"],
+                "venta_id": e["venta_id"],
+                "repartidor_id": e["repartidor_id"],
+                "direccion_despacho": e["direccion_despacho"],
+                "costo_envio": float(e["costo_envio"]) if e.get("costo_envio") is not None else 0.0,
+                "estado_envio": e["estado_envio"],
+                "fecha_despacho": e["fecha_despacho"],
+                "fecha_entrega": e["fecha_entrega"],
+                "fecha_creacion": e["fecha_creacion"],
+                "fecha_actualizacion": e["fecha_actualizacion"],
+                "motivo_cancelacion": e.get("motivo_cancelacion"),
+                "cliente": {
+                    "nombre_completo": cliente_data.get("nombre", ""),
+                    "telefono": cliente_data.get("telefono", ""),
+                    "direccion": cliente_data.get("direccion", ""),
+                    "enlace_ubicacion": cliente_data.get("enlace_ubicacion", "")
+                }
+            }
+            envios_formateados.append(e_formateado)
+        return envios_formateados
 
     @staticmethod
     def obtener_envio_por_id(envio_id: UUID) -> dict:
@@ -144,6 +171,15 @@ class DeliveryService:
         """
         envio_act = DeliveryService.obtener_envio_por_id(envio_id)
         datos_up = datos.model_dump(exclude_unset=True)
+
+        # Validación obligatoria del motivo de cancelación
+        if datos_up.get("estado_envio") == "Cancelado":
+            motivo = datos_up.get("motivo_cancelacion")
+            if not motivo or not motivo.strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Debe proporcionar un motivo de cancelación obligatorio para cancelar el envío."
+                )
 
         if usuario_actual["rol"] == "Repartidor":
             # Buscar perfil de repartidor
@@ -263,7 +299,7 @@ class DeliveryService:
         repartidor_id = rep_res.data[0]["id"]
 
         query = supabase.table("envios")\
-            .select("*, ventas(id, cliente_id, clientes(nombre, telefono, direccion))")\
+            .select("*, ventas(id, cliente_id, clientes(nombre, telefono, direccion, enlace_ubicacion))")\
             .eq("repartidor_id", str(repartidor_id))\
             .eq("estado_envio", "En Camino")\
             .execute()
@@ -284,10 +320,12 @@ class DeliveryService:
                 "fecha_entrega": e["fecha_entrega"],
                 "fecha_creacion": e["fecha_creacion"],
                 "fecha_actualizacion": e["fecha_actualizacion"],
+                "motivo_cancelacion": e.get("motivo_cancelacion"),
                 "cliente": {
                     "nombre_completo": cliente_data.get("nombre", ""),
                     "telefono": cliente_data.get("telefono", ""),
-                    "direccion": cliente_data.get("direccion", "")
+                    "direccion": cliente_data.get("direccion", ""),
+                    "enlace_ubicacion": cliente_data.get("enlace_ubicacion", "")
                 }
             }
             envios_formateados.append(e_formateado)

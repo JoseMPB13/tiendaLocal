@@ -213,6 +213,12 @@ class EnvioBase(BaseModel):
     direccion_despacho: str
     costo_envio: float = Field(0.00, ge=0)
 
+class ClienteContacto(BaseModel):
+    nombre_completo: str
+    telefono: Optional[str] = None
+    direccion: Optional[str] = None
+    enlace_ubicacion: Optional[str] = None
+
 class EnvioCrear(EnvioBase):
     pass
 
@@ -221,12 +227,15 @@ class EnvioActualizar(BaseModel):
     direccion_despacho: Optional[str] = None
     costo_envio: Optional[float] = Field(None, ge=0)
     estado_envio: Optional[str] = Field(None, description="Pendiente, En Camino, Entregado, Cancelado")
+    motivo_cancelacion: Optional[str] = None
 
 class EnvioRespuesta(EnvioBase):
     id: UUID
     estado_envio: str
     fecha_despacho: Optional[datetime] = None
     fecha_entrega: Optional[datetime] = None
+    motivo_cancelacion: Optional[str] = None
+    cliente: Optional[ClienteContacto] = None
     fecha_creacion: datetime
     fecha_actualizacion: datetime
 

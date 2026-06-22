@@ -6,43 +6,88 @@ import {
   ChevronDown, ChevronUp, MapPin, Navigation, Phone, 
   Clock, FileText, CheckCircle2, XCircle 
 } from 'lucide-react';
+import useAuthStore from '../store/authStore';
 
 export const DeliveryReparto = () => {
+  const { usuario } = useAuthStore();
+  const [tabActiva, setTabActiva] = useState('disponibles');
   const [envios, setEnvios] = useState([]);
+  const [misEnviosActivos, setMisEnviosActivos] = useState([]);
+  const [repartidorId, setRepartidorId] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [acordeonesAbiertos, setAcordeonesAbiertos] = useState({});
 
-  // Carga de envíos simulando filtrado por el repartidor logueado
-  const cargarEnvios = async () => {
+  // Estados del modal de cancelación
+  const [mostrarModalCancelacion, setMostrarModalCancelacion] = useState(false);
+  const [envioACancelar, setEnvioACancelar] = useState(null);
+  const [motivoCancelacionText, setMotivoCancelacionText] = useState("");
+  const [procesandoCancelacion, setProcesandoCancelacion] = useState(false);
+
+  // Carga de datos unificada
+  const cargarDatos = async () => {
     try {
       setCargando(true);
-      const res = await deliveryService.obtenerEnvios();
-      if (res.ok) {
-        setEnvios(res.data);
-        
-        // Auto-expandir los envíos que tengan estado 'En Camino' prioritariamente
-        const estadoAcordeonInicial = {};
-        res.data.forEach(env => {
-          estadoAcordeonInicial[env.id] = env.estado_envio === 'En Camino';
-        });
-        setAcordeonesAbiertos(estadoAcordeonInicial);
+      
+      // 1. Obtener ID de repartidor del usuario autenticado
+      let repId = repartidorId;
+      if (!repId && usuario) {
+        const resRep = await deliveryService.obtenerRepartidores();
+        if (resRep.ok) {
+          const miRep = resRep.data.find(r => r.usuario_id === usuario.id);
+          if (miRep) {
+            repId = miRep.id;
+            setRepartidorId(miRep.id);
+          }
+        }
       }
+
+      // 2. Obtener envíos del sistema
+      const resEnvios = await deliveryService.obtenerEnvios();
+      let envs = [];
+      if (resEnvios.ok) {
+        envs = resEnvios.data;
+        setEnvios(envs);
+      }
+
+      // 3. Obtener envíos activos asignados al repartidor
+      let misActivos = [];
+      if (usuario && usuario.rol === 'Repartidor') {
+        const resMisActivos = await deliveryService.obtenerMisEnviosActivos();
+        if (resMisActivos.ok) {
+          misActivos = resMisActivos.data;
+          setMisEnviosActivos(misActivos);
+        }
+      } else {
+        // Fallback defensivo para administradores/cajeros: mostrar todos los En Camino
+        misActivos = envs.filter(e => e.estado_envio === 'En Camino');
+        setMisEnviosActivos(misActivos);
+      }
+
+      // Inicializar acordeones abiertos por defecto para los que están pendientes o en camino
+      const estadoAcordeon = {};
+      envs.forEach(env => {
+        estadoAcordeon[env.id] = env.estado_envio === 'Pendiente' || env.estado_envio === 'En Camino';
+      });
+      misActivos.forEach(env => {
+        estadoAcordeon[env.id] = true;
+      });
+      setAcordeonesAbiertos(estadoAcordeon);
+
     } catch (ex) {
       console.error(ex);
-      toast.error("Error al obtener la lista de despachos.");
+      toast.error("Error al sincronizar datos de logística.");
     } finally {
       setCargando(false);
     }
   };
 
   useEffect(() => {
-    // Evita actualizaciones síncronas de estado en el render inicial de React
     const inicializar = async () => {
       await Promise.resolve();
-      cargarEnvios();
+      cargarDatos();
     };
     inicializar();
-  }, []);
+  }, [usuario]);
 
   const toggleAcordeon = (id) => {
     setAcordeonesAbiertos(prev => ({
@@ -52,7 +97,7 @@ export const DeliveryReparto = () => {
   };
 
   /**
-   * INICIAR RUTA: Transición de Pendiente -> En Camino
+   * INICIAR RUTA: Transición de Pendiente -> En Camino (Autoasignación)
    */
   const handleIniciarRuta = async (envioId) => {
     try {
@@ -60,12 +105,14 @@ export const DeliveryReparto = () => {
         estado_envio: "En Camino"
       });
       if (res.ok) {
-        toast.success("Ruta iniciada. Pedido en tránsito.");
-        cargarEnvios();
+        toast.success("Pedido asignado e iniciado con éxito.");
+        await cargarDatos();
       }
     } catch (ex) {
-      const detail = ex.response?.data?.detail || "No se pudo actualizar el envío.";
+      const detail = ex.response?.data?.detail || "No se pudo iniciar la ruta.";
       toast.error(`Error: ${detail}`);
+      // Recargar datos para sincronizar estado si falló por colisión
+      cargarDatos();
     }
   };
 
@@ -78,71 +125,164 @@ export const DeliveryReparto = () => {
         estado_envio: "Entregado"
       });
       if (res.ok) {
-        toast.success("¡Pedido entregado con éxito!");
-        cargarEnvios();
+        toast.success("¡Pedido marcado como Entregado!");
+        await cargarDatos();
       }
     } catch (ex) {
-      const detail = ex.response?.data?.detail || "No se pudo marcar como entregado.";
+      const detail = ex.response?.data?.detail || "No se pudo confirmar la entrega.";
       toast.error(`Error: ${detail}`);
     }
   };
 
   /**
-   * CANCELAR: Transición a Cancelado
+   * CANCELAR: Abre modal personalizado para anulación
    */
-  const handleAnularEntrega = async (envioId) => {
-    const motivo = prompt("Ingrese el motivo de la cancelación de la entrega:");
-    if (!motivo) return;
+  const handleAnularEntrega = (envioId) => {
+    setEnvioACancelar(envioId);
+    setMotivoCancelacionText("");
+    setMostrarModalCancelacion(true);
+  };
 
+  /**
+   * SUBMIT CANCELACIÓN: PUT para pasar a Cancelado con motivo
+   */
+  const submitCancelacion = async () => {
+    if (!motivoCancelacionText.trim() || !envioACancelar) return;
     try {
-      const res = await deliveryService.actualizarEstadoEnvio(envioId, {
-        estado_envio: "Cancelado"
+      setProcesandoCancelacion(true);
+      const res = await deliveryService.actualizarEstadoEnvio(envioACancelar, {
+        estado_envio: "Cancelado",
+        motivo_cancelacion: motivoCancelacionText.trim()
       });
       if (res.ok) {
-        toast.error(`Pedido cancelado: ${motivo}`);
-        cargarEnvios();
+        toast.success("Envío anulado / cancelado.");
+        setMostrarModalCancelacion(false);
+        setEnvioACancelar(null);
+        setMotivoCancelacionText("");
+        await cargarDatos();
       }
     } catch (ex) {
-      const detail = ex.response?.data?.detail || "No se pudo cancelar el despacho.";
+      const detail = ex.response?.data?.detail || "No se pudo registrar la cancelación.";
       toast.error(`Error: ${detail}`);
+    } finally {
+      setProcesandoCancelacion(false);
     }
   };
 
+  // Helper para verificar URL de ubicación
+  const esUrlValida = (str) => {
+    if (!str) return false;
+    return str.startsWith('http://') || str.startsWith('https://');
+  };
+
+  // Filtrado de items a mostrar según la pestaña activa
+  const obtenerItemsFiltrados = () => {
+    if (tabActiva === 'disponibles') {
+      return envios.filter(env => env.estado_envio === 'Pendiente');
+    }
+    if (tabActiva === 'mi_ruta') {
+      return misEnviosActivos;
+    }
+    if (tabActiva === 'historial') {
+      const hoy = new Date();
+      const hoyDia = hoy.getDate();
+      const hoyMes = hoy.getMonth();
+      const hoyAnio = hoy.getFullYear();
+
+      return envios.filter(env => {
+        const finalizado = env.estado_envio === 'Entregado' || env.estado_envio === 'Cancelado';
+        if (!finalizado) return false;
+
+        // Si es repartidor, solo ve su historial
+        if (usuario?.rol === 'Repartidor' && repartidorId && env.repartidor_id !== repartidorId) {
+          return false;
+        }
+
+        const fActualizacion = new Date(env.fecha_actualizacion);
+        return fActualizacion.getDate() === hoyDia &&
+               fActualizacion.getMonth() === hoyMes &&
+               fActualizacion.getFullYear() === hoyAnio;
+      });
+    }
+    return [];
+  };
+
+  const itemsAMostrar = obtenerItemsFiltrados();
+
+  // Textos para estado vacío
+  const obtenerMensajeVacio = () => {
+    if (tabActiva === 'disponibles') return "No hay envíos pendientes disponibles para autoasignación.";
+    if (tabActiva === 'mi_ruta') return "No tienes envíos activos en tu ruta de entrega.";
+    return "No registras envíos entregados o cancelados durante el día de hoy.";
+  };
+
   return (
-    <div className="max-w-md mx-auto space-y-4 px-2 sm:px-0">
+    <div className="max-w-md mx-auto space-y-4 px-2 sm:px-0 pb-12">
       <Toaster position="top-center" />
       
+      {/* CABECERA */}
       <div className="flex items-center justify-between bg-white rounded-2xl p-4 border border-zinc-200 shadow-sm">
         <h3 className="font-bold text-zinc-900 text-sm flex items-center">
           <Clock className="text-zinc-900 mr-2" size={18} />
-          Hoja de Ruta del Día
+          Logística de Reparto
         </h3>
         <button 
-          onClick={cargarEnvios}
+          onClick={cargarDatos}
           className="text-xs bg-zinc-50 hover:bg-zinc-100 px-3.5 py-2 rounded-xl font-medium text-zinc-700 border border-zinc-200 transition-all"
         >
           Actualizar
         </button>
       </div>
 
+      {/* PESTAÑAS (TABS) */}
+      <div className="flex bg-zinc-100 p-1 rounded-xl border border-zinc-200">
+        <button
+          onClick={() => setTabActiva('disponibles')}
+          className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+            tabActiva === 'disponibles' 
+              ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' 
+              : 'text-zinc-500 hover:text-zinc-950'
+          }`}
+        >
+          Disponibles
+        </button>
+        <button
+          onClick={() => setTabActiva('mi_ruta')}
+          className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+            tabActiva === 'mi_ruta' 
+              ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' 
+              : 'text-zinc-500 hover:text-zinc-950'
+          }`}
+        >
+          Mi Ruta
+        </button>
+        <button
+          onClick={() => setTabActiva('historial')}
+          className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+            tabActiva === 'historial' 
+              ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' 
+              : 'text-zinc-500 hover:text-zinc-950'
+          }`}
+        >
+          Historial de Hoy
+        </button>
+      </div>
+
+      {/* CONTENIDO PRINCIPAL */}
       {cargando ? (
         <div className="text-center py-12 text-zinc-500 font-medium bg-white rounded-2xl border border-zinc-200 shadow-sm">
-          Cargando despachos de la ruta...
+          Sincronizando despachos y ruta...
         </div>
-      ) : envios.length === 0 ? (
-        <div className="text-center py-12 text-zinc-400 bg-white rounded-2xl border border-zinc-200 shadow-sm">
-          No tienes despachos asignados para hoy.
+      ) : itemsAMostrar.length === 0 ? (
+        <div className="text-center py-12 text-zinc-400 bg-white rounded-2xl border border-zinc-200 shadow-sm px-4">
+          {obtenerMensajeVacio()}
         </div>
       ) : (
         <div className="space-y-3">
-          {envios.map((env) => {
+          {itemsAMostrar.map((env) => {
             const abierto = acordeonesAbiertos[env.id];
             const finalizado = env.estado_envio === 'Entregado' || env.estado_envio === 'Cancelado';
             
-            // Enlace dinámico de mapas con fallback a Google Maps web
-            const geoUrl = `geo:0,0?q=${encodeURIComponent(env.direccion_despacho)}`;
-            const mapsFallback = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(env.direccion_despacho)}`;
-
             return (
               <div 
                 key={env.id} 
@@ -160,7 +300,7 @@ export const DeliveryReparto = () => {
                       env.estado_envio === 'Entregado' ? 'bg-emerald-500' : 'bg-rose-500'
                     }`} />
                     <span className="font-semibold text-xs text-zinc-900">
-                      Factura: {env.venta_id.substring(0, 8)}
+                      Venta: {env.venta_id.substring(0, 8)}
                     </span>
                   </div>
                   
@@ -182,46 +322,92 @@ export const DeliveryReparto = () => {
                   <div className="p-5 space-y-4 bg-zinc-50/30 border-t border-zinc-100/50">
                     {/* Detalles del despacho */}
                     <div className="space-y-3 text-sm text-zinc-600">
+                      {env.cliente?.nombre_completo && (
+                        <div className="flex items-center">
+                          <span className="font-semibold text-zinc-900 mr-2">Cliente:</span>
+                          <span className="font-medium text-zinc-700">{env.cliente.nombre_completo}</span>
+                        </div>
+                      )}
+                      
                       <div className="flex items-start">
                         <MapPin className="text-zinc-400 mr-2.5 mt-0.5 flex-shrink-0" size={16} />
-                        <p className="font-medium text-zinc-900 leading-relaxed">{env.direccion_despacho}</p>
+                        <div>
+                          <p className="font-medium text-zinc-900 leading-relaxed">{env.direccion_despacho}</p>
+                          {env.cliente?.direccion && env.cliente.direccion !== env.direccion_despacho && (
+                            <p className="text-[11px] text-zinc-500 mt-0.5">Dirección cliente: {env.cliente.direccion}</p>
+                          )}
+                        </div>
                       </div>
+                      
                       <div className="flex items-center">
                         <FileText className="text-zinc-400 mr-2.5" size={16} />
                         <p className="font-medium">
                           Recargo Delivery: <span className="font-bold text-zinc-900">Bs. {env.costo_envio.toFixed(2)}</span>
                         </p>
                       </div>
+
+                      {/* Motivo de cancelación */}
+                      {env.estado_envio === 'Cancelado' && env.motivo_cancelacion && (
+                        <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 text-xs text-rose-800">
+                          <span className="font-bold">Motivo de Cancelación:</span> {env.motivo_cancelacion}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Botones de Navegación / Contacto */}
+                    {/* Botones de Navegación / Contacto (Solo si no está finalizado) */}
                     {!finalizado && (
-                      <div className="flex gap-2.5 pt-1">
-                        {/* Botón de mapas dinámico */}
-                        <a 
-                          href={geoUrl}
-                          onClick={() => {
-                            // Si falla redirección geo, usar fallback web
-                            setTimeout(() => { window.location.href = mapsFallback; }, 300);
-                          }}
-                          className="flex-1 flex items-center justify-center py-2 px-3.5 bg-zinc-950 text-white rounded-xl text-xs font-semibold hover:bg-zinc-800 transition-colors shadow-sm"
-                        >
-                          <Navigation size={14} className="mr-1.5" />
-                          Ver Mapa
-                        </a>
+                      <div className="space-y-2.5 pt-1">
+                        <div className="flex gap-2.5">
+                          {/* Botón de mapas dinámico (GPS inteligente) */}
+                          {esUrlValida(env.cliente?.enlace_ubicacion) ? (
+                            <button 
+                              onClick={() => window.open(env.cliente.enlace_ubicacion, '_blank')}
+                              className="flex-1 flex items-center justify-center py-2 px-3.5 bg-zinc-950 text-white rounded-xl text-xs font-semibold hover:bg-zinc-800 transition-colors shadow-sm"
+                            >
+                              <Navigation size={14} className="mr-1.5" />
+                              Abrir GPS
+                            </button>
+                          ) : (
+                            <button 
+                              disabled
+                              className="flex-1 flex items-center justify-center py-2 px-3.5 bg-zinc-100 text-zinc-400 rounded-xl text-xs font-semibold border border-zinc-200 cursor-not-allowed"
+                              title="Sin enlace de ubicación válido"
+                            >
+                              <Navigation size={14} className="mr-1.5" />
+                              GPS Deshabilitado
+                            </button>
+                          )}
 
-                        {/* Botón de llamada telefónica */}
-                        <a 
-                          href="tel:987654321" 
-                          className="flex-1 flex items-center justify-center py-2 px-3.5 bg-white text-zinc-700 rounded-xl text-xs font-semibold border border-zinc-200 hover:bg-zinc-50 transition-colors shadow-sm"
-                        >
-                          <Phone size={14} className="mr-1.5" />
-                          Llamar Cliente
-                        </a>
+                          {/* Botón de llamada telefónica */}
+                          {env.cliente?.telefono ? (
+                            <a 
+                              href={`tel:${env.cliente.telefono}`} 
+                              className="flex-1 flex items-center justify-center py-2 px-3.5 bg-white text-zinc-700 rounded-xl text-xs font-semibold border border-zinc-200 hover:bg-zinc-50 transition-colors shadow-sm"
+                            >
+                              <Phone size={14} className="mr-1.5" />
+                              Llamar Cliente
+                            </a>
+                          ) : (
+                            <button
+                              disabled
+                              className="flex-1 flex items-center justify-center py-2 px-3.5 bg-zinc-50 text-zinc-400 rounded-xl text-xs font-semibold border border-zinc-200 cursor-not-allowed"
+                            >
+                              <Phone size={14} className="mr-1.5" />
+                              Sin Teléfono
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Referencia de ubicación si no es URL */}
+                        {env.cliente?.enlace_ubicacion && !esUrlValida(env.cliente?.enlace_ubicacion) && (
+                          <div className="bg-amber-50/50 border border-amber-200/50 rounded-xl p-3 text-xs text-amber-800">
+                            <span className="font-bold">Referencia de Ubicación:</span> {env.cliente.enlace_ubicacion}
+                          </div>
+                        )}
                       </div>
                     )}
 
-                    {/* INTERACCIÓN POR DESLIZAMIENTO */}
+                    {/* ACCIONES Y SLIDERS */}
                     <div className="pt-3 border-t border-zinc-100">
                       {env.estado_envio === 'Pendiente' && (
                         <DeslizadorInteractivo 
@@ -250,8 +436,8 @@ export const DeliveryReparto = () => {
 
                       {finalizado && (
                         <div className="bg-white rounded-xl p-3 border border-zinc-200 flex items-center justify-center text-xs text-zinc-500 font-semibold uppercase tracking-wider">
-                          <CheckCircle2 size={16} className="text-emerald-500 mr-2" />
-                          Servicio Finalizado
+                          <CheckCircle2 size={16} className={`mr-2 ${env.estado_envio === 'Entregado' ? 'text-emerald-500' : 'text-rose-500'}`} />
+                          {env.estado_envio === 'Entregado' ? 'Entregado' : 'Cancelado'}
                         </div>
                       )}
                     </div>
@@ -260,6 +446,47 @@ export const DeliveryReparto = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* MODAL DE CANCELACIÓN PERSONALIZADO */}
+      {mostrarModalCancelacion && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-zinc-200 shadow-xl space-y-4 transform scale-100 transition-all">
+            <div className="space-y-1.5">
+              <h4 className="font-bold text-zinc-900 text-base">Cancelar Entrega</h4>
+              <p className="text-xs text-zinc-500">Por favor, especifica el motivo por el cual no se pudo completar la entrega del pedido.</p>
+            </div>
+            
+            <textarea
+              value={motivoCancelacionText}
+              onChange={(e) => setMotivoCancelacionText(e.target.value)}
+              placeholder="Ej: Cliente ausente, dirección incorrecta, pago rechazado..."
+              className="w-full min-h-[100px] p-3 text-sm bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:border-transparent transition-all placeholder:text-zinc-400"
+              required
+            />
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setMostrarModalCancelacion(false);
+                  setEnvioACancelar(null);
+                  setMotivoCancelacionText("");
+                }}
+                disabled={procesandoCancelacion}
+                className="flex-1 py-2 px-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-semibold border border-zinc-200 transition-colors"
+              >
+                Atrás
+              </button>
+              <button
+                onClick={submitCancelacion}
+                disabled={procesandoCancelacion || !motivoCancelacionText.trim()}
+                className="flex-1 py-2 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors disabled:opacity-50 disabled:hover:bg-rose-600"
+              >
+                {procesandoCancelacion ? 'Cancelando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

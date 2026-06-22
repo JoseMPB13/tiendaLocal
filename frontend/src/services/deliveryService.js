@@ -11,6 +11,14 @@ export const deliveryService = {
   },
 
   /**
+   * Obtiene la lista de envíos activos asignados al repartidor autenticado.
+   */
+  obtenerMisEnviosActivos: async () => {
+    const respuesta = await clienteApi.get('/delivery/mis-envios-activos');
+    return respuesta.data;
+  },
+
+  /**
    * Actualiza los datos o el estado de un envío (despachado, entregado, cancelado).
    */
   actualizarEstadoEnvio: async (envioId, datosActualizar) => {

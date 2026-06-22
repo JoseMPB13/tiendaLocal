@@ -506,14 +506,21 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
     - Desde estado `'Pendiente'`, solo puede transicionar a `'En Camino'` (fase de autoasignación atómica).
     - Desde estado `'En Camino'`, solo puede transicionar a `'Entregado'` o `'Cancelado'` y no puede alterar datos como la dirección, costo de envío o el repartidor asignado.
     - No puede modificar envíos asignados a otros repartidores.
-* **Cuerpo de Petición (JSON):**
+* **Cuerpo de Petición (JSON) para Entregado:**
   ```json
   {
     "estado_envio": "Entregado"
   }
   ```
+* **Cuerpo de Petición (JSON) para Cancelado (Obligatorio enviar `motivo_cancelacion`):**
+  ```json
+  {
+    "estado_envio": "Cancelado",
+    "motivo_cancelacion": "Dirección incorrecta, cliente no responde llamadas"
+  }
+  ```
 * **Códigos de Error Posibles:**
-  - `400 Bad Request`: Si el repartidor intenta una transición de estado inválida, intenta modificar campos restringidos o el envío ya fue cerrado.
+  - `400 Bad Request`: Si el repartidor intenta una transición de estado inválida, intenta modificar campos restringidos, el envío ya fue cerrado, o si se transiciona a `'Cancelado'` sin proporcionar un `motivo_cancelacion` no vacío.
   - `403 Forbidden`: Si el repartidor intenta modificar un envío que le pertenece a otro.
   - `409 Conflict`: Si dos repartidores intentan autoasignarse el mismo envío pendiente simultáneamente.
 * **Respuesta (200 OK):**
@@ -527,6 +534,7 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
       "direccion_despacho": "Calle Los Laureles 456",
       "costo_envio": 5.00,
       "estado_envio": "Entregado",
+      "motivo_cancelacion": null,
       "fecha_despacho": "2026-06-20T13:52:00Z",
       "fecha_entrega": "2026-06-20T14:05:00Z",
       "fecha_creacion": "2026-06-20T13:50:00Z",
@@ -538,7 +546,7 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
 ### Obtener Ruta Activa (Mis Envíos Activos)
 * **Ruta:** `GET /delivery/mis-envios-activos`
 * **Permisos:** Solo `Repartidor`
-* **Descripción:** Devuelve los envíos asignados al repartidor autenticado que están en estado `'En Camino'`. Enriquece cada registro con la información de contacto y dirección registrada del cliente, previniendo fuga de PII ajenos.
+* **Descripción:** Devuelve los envíos asignados al repartidor autenticado que están en estado `'En Camino'`. Enriquece cada registro con la información de contacto y dirección registrada del cliente (incluyendo el enlace de geolocalización), previniendo fuga de PII ajenos.
 * **Respuesta (200 OK):**
   ```json
   {
@@ -551,6 +559,7 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
         "direccion_despacho": "Calle Los Laureles 456",
         "costo_envio": 5.00,
         "estado_envio": "En Camino",
+        "motivo_cancelacion": null,
         "fecha_despacho": "2026-06-20T13:52:00Z",
         "fecha_entrega": null,
         "fecha_creacion": "2026-06-20T13:50:00Z",
@@ -558,7 +567,8 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
         "cliente": {
           "nombre_completo": "Distribuidora H&S",
           "telefono": "987654321",
-          "direccion": "Av. Las Flores 123"
+          "direccion": "Av. Las Flores 123",
+          "enlace_ubicacion": "https://maps.google.com/?q=-16.5001,-68.1502"
         }
       }
     ]

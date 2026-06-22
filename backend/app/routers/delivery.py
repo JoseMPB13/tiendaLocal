@@ -29,7 +29,7 @@ async def registrar_repartidor(
 
 @router.get("/repartidores", response_model=dict)
 async def listar_repartidores(
-    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
 ):
     """
     Obtiene la lista de repartidores.
