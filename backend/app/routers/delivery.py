@@ -82,12 +82,24 @@ async def listar_envios(
 async def actualizar_envio(
     envio_id: UUID,
     datos: EnvioActualizar,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
 ):
     """
     Actualiza la orden de despacho (dirección, costo, repartidor o estado del flujo logístico).
     Si el estado ya es 'Entregado', bloquea cualquier cambio futuro.
     """
-    resultado = DeliveryService.actualizar_envio(envio_id, datos)
+    resultado = DeliveryService.actualizar_envio(envio_id, datos, usuario_actual)
     respuesta = EnvioRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
+
+@router.get("/mis-envios-activos", response_model=dict)
+async def listar_mis_envios_activos(
+    usuario_actual: dict = Depends(verificar_roles(["Repartidor"]))
+):
+    """
+    Obtiene la lista de envíos activos ('En Camino') asignados al repartidor autenticado.
+    Excluye cualquier fuga de datos PII ajenos.
+    """
+    lista = DeliveryService.obtener_envios_activos_repartidor(usuario_actual)
+    return {"ok": True, "data": lista}
+

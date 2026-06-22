@@ -137,36 +137,159 @@ class DeliveryService:
         return resultado.data[0]
 
     @staticmethod
-    def actualizar_envio(envio_id: UUID, datos: EnvioActualizar) -> dict:
+    def actualizar_envio(envio_id: UUID, datos: EnvioActualizar, usuario_actual: dict) -> dict:
         """
-        Actualiza el estado y datos del envío. Bloquea modificaciones si ya figura como Entregado.
+        Actualiza el estado y datos del envío. Bloquea modificaciones si ya figura como Entregado o Cancelado.
+        Aplica control de transiciones y propiedad para Repartidores, y asignación atómica.
         """
         envio_act = DeliveryService.obtener_envio_por_id(envio_id)
-
-        # REGLA DE NEGOCIO: Bloquear modificaciones si ya fue Entregado
-        if envio_act["estado_envio"] == "Entregado":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se permite modificar una orden de envío que ya figura como 'Entregado'."
-            )
-
         datos_up = datos.model_dump(exclude_unset=True)
 
-        # Ajuste de fechas automáticas para el delivery
-        if "estado_envio" in datos_up:
-            if datos_up["estado_envio"] == "En Camino":
+        if usuario_actual["rol"] == "Repartidor":
+            # Buscar perfil de repartidor
+            rep_res = supabase.table("repartidores").select("id").eq("usuario_id", str(usuario_actual["id"])).execute()
+            if not rep_res.data:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="El usuario actual no tiene asignado un perfil de repartidor válido."
+                )
+            repartidor_autenticado_id = rep_res.data[0]["id"]
+
+            if envio_act["estado_envio"] == "Pendiente":
+                # Fase de autoasignación: debe pasar a 'En Camino'
+                if datos_up.get("estado_envio") != "En Camino":
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Un repartidor solo puede cambiar el estado de un envío 'Pendiente' a 'En Camino'."
+                    )
+                
+                # Asignar forzosamente a sí mismo
+                datos_up["repartidor_id"] = str(repartidor_autenticado_id)
                 datos_up["fecha_despacho"] = datetime.utcnow().isoformat()
-            elif datos_up["estado_envio"] == "Entregado":
-                datos_up["fecha_entrega"] = datetime.utcnow().isoformat()
+                
+                # Ejecutar actualización atómica filtrando por repartidor_id IS NULL y estado_envio = 'Pendiente'
+                resultado = supabase.table("envios")\
+                    .update(datos_up)\
+                    .eq("id", str(envio_id))\
+                    .is_("repartidor_id", "null")\
+                    .eq("estado_envio", "Pendiente")\
+                    .execute()
+                
+                if not resultado.data:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Conflicto de asignación: el envío ya ha sido tomado por otro repartidor o ya no está disponible."
+                    )
+                return resultado.data[0]
 
-        # Validar repartidor si se está actualizando
-        if "repartidor_id" in datos_up and datos_up["repartidor_id"]:
-            DeliveryService.obtener_repartidor_por_id(UUID(datos_up["repartidor_id"]))
+            elif envio_act["estado_envio"] == "En Camino":
+                # Fase de entrega: comprobar que sea el repartidor asignado
+                if not envio_act["repartidor_id"] or str(envio_act["repartidor_id"]) != str(repartidor_autenticado_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Acceso denegado: no puedes modificar un envío que está asignado a otro repartidor o no te pertenece."
+                    )
+                
+                nuevo_estado = datos_up.get("estado_envio")
+                if nuevo_estado not in ["Entregado", "Cancelado"]:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Un repartidor en ruta solo puede cambiar el estado a 'Entregado' o 'Cancelado'."
+                    )
+                
+                # Deshabilitar que modifique otros datos que no sean el estado_envio
+                claves_restringidas = ["repartidor_id", "direccion_despacho", "costo_envio"]
+                for clave in claves_restringidas:
+                    if clave in datos_up and datos_up[clave] is not None and str(datos_up[clave]) != str(envio_act.get(clave)):
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"No tienes permitido modificar el campo '{clave}' en ruta activa."
+                        )
+                
+                if nuevo_estado == "Entregado":
+                    datos_up["fecha_entrega"] = datetime.utcnow().isoformat()
 
-        resultado = supabase.table("envios").update(datos_up).eq("id", str(envio_id)).execute()
-        if not resultado.data:
+                resultado = supabase.table("envios").update(datos_up).eq("id", str(envio_id)).execute()
+                if not resultado.data:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="No se pudo actualizar el estado del envío."
+                    )
+                return resultado.data[0]
+
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"No se permite modificar un envío finalizado en estado '{envio_act['estado_envio']}'."
+                )
+        else:
+            # Roles Administrador o Cajero
+            if envio_act["estado_envio"] in ["Entregado", "Cancelado"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"No se permite modificar una orden de envío que ya figura como '{envio_act['estado_envio']}'."
+                )
+            
+            # Ajuste de fechas automáticas para el delivery
+            if "estado_envio" in datos_up:
+                if datos_up["estado_envio"] == "En Camino":
+                    datos_up["fecha_despacho"] = datetime.utcnow().isoformat()
+                elif datos_up["estado_envio"] == "Entregado":
+                    datos_up["fecha_entrega"] = datetime.utcnow().isoformat()
+
+            if "repartidor_id" in datos_up and datos_up["repartidor_id"]:
+                DeliveryService.obtener_repartidor_por_id(UUID(datos_up["repartidor_id"]))
+
+            resultado = supabase.table("envios").update(datos_up).eq("id", str(envio_id)).execute()
+            if not resultado.data:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="No se pudo actualizar la orden de envío."
+                )
+            return resultado.data[0]
+
+    @staticmethod
+    def obtener_envios_activos_repartidor(usuario_actual: dict) -> List[dict]:
+        """
+        Obtiene los envíos con estado 'En Camino' asignados al repartidor autenticado.
+        Enriquece cada registro con la información de contacto del cliente de forma anidada.
+        """
+        rep_res = supabase.table("repartidores").select("id").eq("usuario_id", str(usuario_actual["id"])).execute()
+        if not rep_res.data:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo actualizar la orden de envío."
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="El usuario actual no tiene asignado un perfil de repartidor válido."
             )
-        return resultado.data[0]
+        repartidor_id = rep_res.data[0]["id"]
+
+        query = supabase.table("envios")\
+            .select("*, ventas(id, cliente_id, clientes(nombre, telefono, direccion))")\
+            .eq("repartidor_id", str(repartidor_id))\
+            .eq("estado_envio", "En Camino")\
+            .execute()
+
+        envios_formateados = []
+        for e in (query.data or []):
+            venta = e.get("ventas") or {}
+            cliente_data = venta.get("clientes") or {}
+            
+            e_formateado = {
+                "id": e["id"],
+                "venta_id": e["venta_id"],
+                "repartidor_id": e["repartidor_id"],
+                "direccion_despacho": e["direccion_despacho"],
+                "costo_envio": float(e["costo_envio"]) if e.get("costo_envio") is not None else 0.0,
+                "estado_envio": e["estado_envio"],
+                "fecha_despacho": e["fecha_despacho"],
+                "fecha_entrega": e["fecha_entrega"],
+                "fecha_creacion": e["fecha_creacion"],
+                "fecha_actualizacion": e["fecha_actualizacion"],
+                "cliente": {
+                    "nombre_completo": cliente_data.get("nombre", ""),
+                    "telefono": cliente_data.get("telefono", ""),
+                    "direccion": cliente_data.get("direccion", "")
+                }
+            }
+            envios_formateados.append(e_formateado)
+        return envios_formateados
+

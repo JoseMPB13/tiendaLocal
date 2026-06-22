@@ -22,7 +22,7 @@ async def crear_cliente(
 @router.get("/", response_model=dict)
 async def listar_clientes(
     incluir_inactivos: bool = False,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
+    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Lista todos los clientes. Accesible por todos los roles autorizados.
@@ -34,7 +34,7 @@ async def listar_clientes(
 @router.get("/{cliente_id}", response_model=dict)
 async def obtener_cliente(
     cliente_id: UUID,
-    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
+    rol_operador: str = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Busca un cliente por su ID.

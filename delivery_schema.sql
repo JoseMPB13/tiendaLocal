@@ -37,6 +37,8 @@ create table if not exists envios (
 comment on table envios is 'Información detallada para el reparto a domicilio de las ventas.';
 create index if not exists idx_envios_estado on envios(estado_envio);
 create index if not exists idx_envios_repartidor on envios(repartidor_id);
+create index if not exists idx_envios_repartidor_estado on envios(repartidor_id, estado_envio);
+create index if not exists idx_envios_pendientes_libres on envios(id) where estado_envio = 'Pendiente' and repartidor_id is null;
 
 -- -----------------------------------------------------------------------------
 -- TRIGGERS DE ACTUALIZACIÓN DE FECHA

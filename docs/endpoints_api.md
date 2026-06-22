@@ -278,6 +278,52 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
   }
   ```
 
+### Listar Clientes
+* **Ruta:** `GET /clientes/`
+* **Permisos:** `Administrador`, `Cajero` *(El rol `Repartidor` tiene prohibido el acceso, devolviendo HTTP 403)*
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": [
+      {
+        "id": "b1bcf4d1-c24a-464a-9351-4096bead19e1",
+        "dni_ruc": "10458796541",
+        "nombre": "Distribuidora H&S",
+        "telefono": "987654321",
+        "direccion": "Av. Las Flores 123",
+        "saldo_deudor": 0.00,
+        "limite_credito": 1500.00,
+        "estado": "Activo",
+        "fecha_creacion": "2026-06-20T13:36:00Z",
+        "fecha_actualizacion": "2026-06-20T13:36:00Z"
+      }
+    ]
+  }
+  ```
+
+### Obtener Cliente por ID
+* **Ruta:** `GET /clientes/{cliente_id}`
+* **Permisos:** `Administrador`, `Cajero` *(El rol `Repartidor` tiene prohibido el acceso, devolviendo HTTP 403)*
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "id": "b1bcf4d1-c24a-464a-9351-4096bead19e1",
+      "dni_ruc": "10458796541",
+      "nombre": "Distribuidora H&S",
+      "telefono": "987654321",
+      "direccion": "Av. Las Flores 123",
+      "saldo_deudor": 0.00,
+      "limite_credito": 1500.00,
+      "estado": "Activo",
+      "fecha_creacion": "2026-06-20T13:36:00Z",
+      "fecha_actualizacion": "2026-06-20T13:36:00Z"
+    }
+  }
+  ```
+
 ### Actualizar Cliente (Validación de Crédito)
 * **Ruta:** `PUT /clientes/{cliente_id}`
 * **Permisos:** `Administrador`, `Cajero`
@@ -406,13 +452,22 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
 ### Actualizar Envío (Flujo Logístico)
 * **Ruta:** `PUT /delivery/envios/{envio_id}`
 * **Permisos:** `Administrador`, `Cajero`, `Repartidor`
+* **Gobernanza por Rol:**
+  - `Administrador` y `Cajero`: Exentos de restricciones, pueden realizar cualquier cambio o transición (excepto sobre envíos ya finalizados en estado 'Entregado' o 'Cancelado').
+  - `Repartidor`:
+    - Desde estado `'Pendiente'`, solo puede transicionar a `'En Camino'` (fase de autoasignación atómica).
+    - Desde estado `'En Camino'`, solo puede transicionar a `'Entregado'` o `'Cancelado'` y no puede alterar datos como la dirección, costo de envío o el repartidor asignado.
+    - No puede modificar envíos asignados a otros repartidores.
 * **Cuerpo de Petición (JSON):**
   ```json
   {
     "estado_envio": "Entregado"
   }
   ```
-  *(Nota: Si el estado actual del envío en la BD es 'Entregado', cualquier intento posterior de modificación lanzará un error HTTP 400)*
+* **Códigos de Error Posibles:**
+  - `400 Bad Request`: Si el repartidor intenta una transición de estado inválida, intenta modificar campos restringidos o el envío ya fue cerrado.
+  - `403 Forbidden`: Si el repartidor intenta modificar un envío que le pertenece a otro.
+  - `409 Conflict`: Si dos repartidores intentan autoasignarse el mismo envío pendiente simultáneamente.
 * **Respuesta (200 OK):**
   ```json
   {
@@ -431,6 +486,37 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
     }
   }
   ```
+
+### Obtener Ruta Activa (Mis Envíos Activos)
+* **Ruta:** `GET /delivery/mis-envios-activos`
+* **Permisos:** Solo `Repartidor`
+* **Descripción:** Devuelve los envíos asignados al repartidor autenticado que están en estado `'En Camino'`. Enriquece cada registro con la información de contacto y dirección registrada del cliente, previniendo fuga de PII ajenos.
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": [
+      {
+        "id": "2b9bc88a-d14f-4d6a-bb91-4c6bead98712",
+        "venta_id": "7ac2e19b-a010-449e-8c31-c4f4f3ff5d82",
+        "repartidor_id": "e44d5c9c-5f80-4df2-abcc-189f6bead678",
+        "direccion_despacho": "Calle Los Laureles 456",
+        "costo_envio": 5.00,
+        "estado_envio": "En Camino",
+        "fecha_despacho": "2026-06-20T13:52:00Z",
+        "fecha_entrega": null,
+        "fecha_creacion": "2026-06-20T13:50:00Z",
+        "fecha_actualizacion": "2026-06-20T13:52:00Z",
+        "cliente": {
+          "nombre_completo": "Distribuidora H&S",
+          "telefono": "987654321",
+          "direccion": "Av. Las Flores 123"
+        }
+      }
+    ]
+  }
+  ```
+
 
 ---
 
