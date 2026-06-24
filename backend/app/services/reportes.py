@@ -27,7 +27,9 @@ class ReporteService:
                 "cantidad_transacciones": 0,
                 "deudas_activas_calle": 0.00,
                 "efectividad_delivery_porcentaje": 0.00,
-                "ventas_por_categoria": []
+                "clientes_activos": 0,
+                "ventas_por_categoria": [],
+                "tendencia_ventas": 0.00
             }
         return resultado.data
 

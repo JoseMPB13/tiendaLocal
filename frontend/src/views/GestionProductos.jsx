@@ -498,66 +498,122 @@ export const GestionProductos = () => {
             </div>
 
             <form onSubmit={handleReabastecer}>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {/* Info del producto */}
-                <div style={{ padding: '10px 14px', background: '#ecfdf5', borderRadius: '10px', border: '1px solid #a7f3d0' }}>
-                  <p style={{ fontSize: '0.65rem', color: '#047857', fontWeight: 700, textTransform: 'uppercase', margin: 0 }}>Producto a Reabastecer</p>
-                  <p style={{ fontFamily: 'Outfit', fontWeight: 900, fontSize: '1.1rem', color: '#064e3b', margin: '2px 0 0' }}>
+                <div style={{
+                  padding: '14px',
+                  background: 'linear-gradient(135deg, #ecfdf5, #f0fdf4)',
+                  borderRadius: '12px',
+                  border: '1px solid #a7f3d0',
+                  boxShadow: 'inset 0 1px 2px rgba(4,120,87,0.05)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <p style={{ fontSize: '0.62rem', color: '#047857', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                    Producto a Reabastecer
+                  </p>
+                  <p style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 800, fontSize: '1.15rem', color: '#064e3b', margin: 0, lineHeight: 1.25 }}>
                     {productoReabastecer.nombre}
                   </p>
-                  <p style={{ fontSize: '0.72rem', color: '#047857', marginTop: '4px', margin: 0 }}>
-                    Stock actual: <strong>{productoReabastecer.stock_actual} uds</strong> · Precio venta actual: <strong>Bs. {productoReabastecer.precio_venta.toFixed(2)}</strong>
-                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '6px', fontSize: '0.72rem', color: '#065f46' }}>
+                    <span>Stock actual: <strong style={{ color: '#047857' }}>{productoReabastecer.stock_actual} uds</strong></span>
+                    <span style={{ color: '#cbd5e1' }}>|</span>
+                    <span>Precio Venta: <strong style={{ color: '#047857' }}>Bs. {productoReabastecer.precio_venta.toFixed(2)}</strong></span>
+                  </div>
                 </div>
 
-                {/* Cantidad a Ingresar */}
-                <div style={fieldStyle}>
-                  <label className="form-label">Cantidad a Ingresar *</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    value={reabastecerCantidad}
-                    onChange={(e) => setReabastecerCantidad(e.target.value)}
-                    placeholder="Ej: 10"
-                    className="form-input"
-                  />
-                </div>
+                {/* Fila Cantidad + Costo */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div style={fieldStyle}>
+                    <label className="form-label" style={{ fontWeight: 700, fontSize: '0.72rem', color: '#4b5563' }}>Cantidad a Ingresar *</label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        value={reabastecerCantidad}
+                        onChange={(e) => setReabastecerCantidad(e.target.value)}
+                        placeholder="Ej: 50"
+                        className="form-input"
+                        style={{ fontSize: '0.8rem', paddingRight: '45px' }}
+                      />
+                      <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', pointerEvents: 'none' }}>
+                        uds
+                      </span>
+                    </div>
+                  </div>
 
-                {/* Nuevo Costo de Compra */}
-                <div style={fieldStyle}>
-                  <label className="form-label">Nuevo Costo de Compra Unitario (Bs.) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    min="0"
-                    value={reabastecerCosto}
-                    onChange={(e) => setReabastecerCosto(e.target.value)}
-                    placeholder="0.00"
-                    className="form-input"
-                  />
+                  <div style={fieldStyle}>
+                    <label className="form-label" style={{ fontWeight: 700, fontSize: '0.72rem', color: '#4b5563' }}>Costo Compra Unit. *</label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        min="0"
+                        value={reabastecerCosto}
+                        onChange={(e) => setReabastecerCosto(e.target.value)}
+                        placeholder="0.00"
+                        className="form-input"
+                        style={{ fontSize: '0.8rem', paddingRight: '35px' }}
+                      />
+                      <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', pointerEvents: 'none' }}>
+                        Bs.
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Código de Referencia */}
                 <div style={fieldStyle}>
-                  <label className="form-label">Código de Referencia / Nota (Opcional)</label>
+                  <label className="form-label" style={{ fontWeight: 700, fontSize: '0.72rem', color: '#4b5563' }}>Código de Referencia / Nota (Opcional)</label>
                   <input
                     type="text"
                     value={reabastecerReferencia}
                     onChange={(e) => setReabastecerReferencia(e.target.value)}
                     placeholder="Ej: Factura 4567, Nota de entrega..."
                     className="form-input"
+                    style={{ fontSize: '0.8rem' }}
                   />
                 </div>
+
+                {/* Resumen de Inversión Dinámica */}
+                {reabastecerCantidad && reabastecerCosto && (
+                  <div style={{
+                    padding: '12px',
+                    background: '#f8fafc',
+                    borderRadius: '10px',
+                    border: '1px solid #e2e8f0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '0.75rem'
+                  }}>
+                    <span style={{ fontWeight: 600, color: '#64748b' }}>Total Inversión Estimada:</span>
+                    <span style={{ fontWeight: 800, fontSize: '0.9rem', color: '#0f172a', fontFamily: 'Outfit, sans-serif' }}>
+                      Bs. {(parseInt(reabastecerCantidad) * parseFloat(reabastecerCosto) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
               </div>
 
-              <div className="modal-footer">
-                <button type="button" onClick={() => setMostrarReabastecer(false)} className="btn-secondary">
+              <div className="modal-footer" style={{ borderTop: '1px solid #f1f5f9', paddingTop: '14px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setMostrarReabastecer(false)} className="btn-secondary" style={{ fontSize: '0.78rem' }}>
                   Cancelar
                 </button>
-                <button type="submit" disabled={procesandoReabastecer} className="btn-primary" style={{ background: '#059669', borderColor: '#059669' }}>
-                  {procesandoReabastecer ? 'Registrando...' : 'Registrar Reabastecimiento'}
+                <button
+                  type="submit"
+                  disabled={procesandoReabastecer}
+                  className="btn-primary"
+                  style={{
+                    background: 'linear-gradient(135deg, #059669, #10b981)',
+                    borderColor: '#059669',
+                    fontSize: '0.78rem',
+                    boxShadow: '0 4px 12px rgba(5,150,105,0.2)'
+                  }}
+                >
+                  {procesandoReabastecer ? 'Registrando...' : 'Confirmar Reabastecimiento'}
                 </button>
               </div>
             </form>

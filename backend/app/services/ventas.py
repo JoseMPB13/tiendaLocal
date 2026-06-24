@@ -81,7 +81,7 @@ class VentaService:
                 sp_result = supabase.rpc("registrar_venta_credito", {
                     "p_cliente_id": str(venta.cliente_id),
                     "p_usuario_id": str(usuario_id),
-                    "p_codigo_factura": venta.codigo_factura,
+                    "p_codigo_factura": venta.codigo_factura if (venta.codigo_factura and venta.codigo_factura.strip()) else None,
                     "p_total": total_recalculado,
                     "p_items": items_json,
                     "p_para_delivery": venta.para_delivery,
@@ -129,7 +129,7 @@ class VentaService:
                 sp_result = supabase.rpc("registrar_venta_contado", {
                     "p_cliente_id": str(venta.cliente_id),
                     "p_usuario_id": str(usuario_id),
-                    "p_codigo_factura": venta.codigo_factura,
+                    "p_codigo_factura": venta.codigo_factura if (venta.codigo_factura and venta.codigo_factura.strip()) else None,
                     "p_total": total_recalculado,
                     "p_tipo_pago": venta.tipo_pago,
                     "p_items": items_json,

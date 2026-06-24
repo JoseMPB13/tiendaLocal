@@ -157,7 +157,7 @@ class DetalleVentaRespuesta(DetalleVentaBase):
 class VentaBase(BaseModel):
     cliente_id: UUID
     usuario_id: Optional[UUID] = None
-    codigo_factura: str = Field(..., max_length=50)
+    codigo_factura: Optional[str] = Field(default=None, max_length=50, description="Código de factura de la venta. Si es nulo o vacío se autogenera.")
     tipo_pago: Literal['Efectivo', 'Tarjeta', 'Credito', 'Transferencia', 'QR'] = Field(..., description="Efectivo, Tarjeta, Credito, Transferencia, QR")
 
 class VentaCrear(VentaBase):
@@ -258,6 +258,7 @@ class DashboardMetricas(BaseModel):
     efectividad_delivery_porcentaje: float = Field(..., description="Porcentaje de entregas completadas con éxito")
     clientes_activos: int = Field(default=0, description="Cantidad de clientes activos registrados")
     ventas_por_categoria: list[CategoriaVentas] = Field(default=[], description="Distribución de ventas por categoría")
+    tendencia_ventas: float = Field(default=0.00, description="Porcentaje de crecimiento/tendencia de ventas")
 
 class MovimientoKardex(BaseModel):
     id: UUID

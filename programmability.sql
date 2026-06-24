@@ -387,7 +387,8 @@ execute function fn_revertir_venta_cancelada();
 -- FUNCIÓN: obtener_metricas_dashboard
 -- DESCRIPCIÓN: Consolida en una única consulta de base de datos las métricas
 --              financieras, recuentos de ventas, saldos deudores, efectividad
---              del delivery y distribución de ingresos por categoría del negocio.
+--              del delivery, distribución de ingresos por categoría del negocio
+--              y el porcentaje de crecimiento (tendencia) de ventas.
 -- PARÁMETROS: Ninguno.
 -- RETORNO: jsonb
 -- =============================================================================
@@ -400,6 +401,11 @@ declare
     v_efectividad_delivery_porcentaje numeric(5, 2);
     v_clientes_activos bigint;
     v_ventas_por_categoria jsonb;
+    
+    -- Variables para tendencias
+    v_total_actual numeric(12, 2);
+    v_total_anterior numeric(12, 2);
+    v_tendencia_ventas numeric(5, 2);
 begin
     -- 1. Suma total vendida y conteo (solo ventas Completadas)
     select coalesce(sum(total), 0.00), count(*)
@@ -440,6 +446,32 @@ begin
         group by c.nombre
     ) t;
 
+    -- 6. Ventas del período actual (últimos 30 días)
+    select coalesce(sum(total), 0.00)
+    into v_total_actual
+    from ventas
+    where estado_venta = 'Completada'
+      and fecha_venta >= timezone('utc'::text, now()) - interval '30 days';
+
+    -- 7. Ventas del período anterior (días 31 al 60 hacia atrás)
+    select coalesce(sum(total), 0.00)
+    into v_total_anterior
+    from ventas
+    where estado_venta = 'Completada'
+      and fecha_venta >= timezone('utc'::text, now()) - interval '60 days'
+      and fecha_venta < timezone('utc'::text, now()) - interval '30 days';
+
+    -- 8. Cálculo de tendencia porcentual
+    if v_total_anterior = 0.00 then
+        if v_total_actual > 0.00 then
+            v_tendencia_ventas := 100.00;
+        else
+            v_tendencia_ventas := 0.00;
+        end if;
+    else
+        v_tendencia_ventas := round(((v_total_actual - v_total_anterior) / v_total_anterior * 100.00)::numeric, 2);
+    end if;
+
     -- Retornar el objeto JSON consolidado
     return jsonb_build_object(
         'total_ventas', v_total_ventas,
@@ -447,7 +479,8 @@ begin
         'deudas_activas_calle', v_deudas_activas_calle,
         'efectividad_delivery_porcentaje', v_efectividad_delivery_porcentaje,
         'clientes_activos', v_clientes_activos,
-        'ventas_por_categoria', v_ventas_por_categoria
+        'ventas_por_categoria', v_ventas_por_categoria,
+        'tendencia_ventas', v_tendencia_ventas
     );
 end;
 $$ language plpgsql;
@@ -504,5 +537,28 @@ begin
     return p_producto_id;
 end;
 $$ language plpgsql;
+
+-- -----------------------------------------------------------------------------
+-- 7. SECUENCIA Y TRIGGER PARA AUTOGENERACIÓN DE CÓDIGO DE FACTURA (FAC-YYYYMMDD-XXXXX)
+-- -----------------------------------------------------------------------------
+create sequence if not exists seq_codigo_factura;
+
+create or replace function fn_autogenerar_codigo_factura()
+returns trigger as $$
+declare
+    v_fecha varchar(8);
+begin
+    if new.codigo_factura is null or new.codigo_factura = '' or new.codigo_factura = 'Autogenerado' then
+        v_fecha := to_char(timezone('utc'::text, now()), 'YYYYMMDD');
+        new.codigo_factura := 'FAC-' || v_fecha || '-' || lpad(nextval('seq_codigo_factura')::text, 5, '0');
+    end if;
+    return new;
+end;
+$$ language plpgsql;
+
+create or replace trigger trg_ventas_before_insert
+before insert on ventas
+for each row
+execute function fn_autogenerar_codigo_factura();
 
 

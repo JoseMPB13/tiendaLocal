@@ -58,7 +58,7 @@ export const KardexInventario = () => {
   // Filtrado reactivo en memoria para el buscador de productos, ordenando cronológicamente
   const kardexFiltrado = kardex
     .filter(item => 
-      item.nombre_producto.toLowerCase().includes(productoFiltro.toLowerCase())
+      (item.nombre_producto || '').toLowerCase().includes(productoFiltro.toLowerCase())
     )
     .sort((a, b) => new Date(b.fecha_movimiento) - new Date(a.fecha_movimiento));
 

@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp, Users, Truck, Calendar, Printer, DollarSign,
-  RefreshCw, ArrowUpRight
+  RefreshCw, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 
 /* Componente de Tooltip personalizado para los gráficos */
@@ -121,7 +121,10 @@ export const DashboardAdmin = () => {
       icono: <TrendingUp size={22} />,
       gradient: 'linear-gradient(135deg, #6d28d9, #7c3aed)',
       glow: 'rgba(109,40,217,.3)',
-      tendencia: '+12.5%',
+      tendencia: metricas.tendencia_ventas !== undefined 
+        ? `${metricas.tendencia_ventas >= 0 ? '+' : ''}${metricas.tendencia_ventas.toFixed(1)}%` 
+        : '0.0%',
+      tendenciaValor: metricas.tendencia_ventas || 0,
     },
     {
       label: 'Deudas en la Calle',
@@ -279,10 +282,11 @@ export const DashboardAdmin = () => {
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: '2px',
                     fontSize: '0.7rem', fontWeight: 700,
-                    color: '#059669', background: '#d1fae5',
+                    color: card.tendenciaValor >= 0 ? '#059669' : '#dc2626', 
+                    background: card.tendenciaValor >= 0 ? '#d1fae5' : '#fee2e2',
                     padding: '3px 8px', borderRadius: '9999px',
                   }}>
-                    <ArrowUpRight size={11} />
+                    {card.tendenciaValor >= 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
                     {card.tendencia}
                   </span>
                 )}

@@ -26,6 +26,19 @@ import {
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
+/** Extrae latitud y longitud desde enlaces de Google Maps o Waze */
+const extraerCoordenadas = (url) => {
+  if (!url) return null;
+  const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)|q=(-?\d+\.\d+),(-?\d+\.\d+)|place\/(-?\d+\.\d+),(-?\d+\.\d+)/;
+  const match = url.match(regex);
+  if (match) {
+    const lat = match[1] || match[3] || match[5];
+    const lng = match[2] || match[4] || match[6];
+    return { lat: parseFloat(lat), lng: parseFloat(lng) };
+  }
+  return null;
+};
+
 /** Genera un código de factura único con formato F-YYYYMMDD-XXXXX */
 const generarCodigoFactura = () => {
   const hoy = new Date();
@@ -99,8 +112,8 @@ export const PuntoVenta = () => {
    * Se ejecuta una sola vez al montar el componente (deps vacías).
    * ─────────────────────────────────────────────────────────────────────── */
   useEffect(() => {
-    // Generar código de factura inicial si el carrito está limpio
-    setCodigoFactura(prev => prev || generarCodigoFactura());
+    // El código de factura se autogenera en la base de datos
+    setCodigoFactura('Autogenerado');
 
     const controller = new AbortController();
     const signal = controller.signal;
@@ -180,7 +193,7 @@ export const PuntoVenta = () => {
   const handleBuscarChange = (e) => {
     const valor = e.target.value;
     setBuscarInput(valor);
-    // Emulación de lector de barras: coincidencia exacta instantánea → agregar y limpiar
+    // Coincidencia exacta instantánea al escribir (escáner sin ENTER)
     const coincidencia = productos.find(
       p => p.codigo_barras === valor.trim() && p.estado === 'Activo'
     );
@@ -189,9 +202,38 @@ export const PuntoVenta = () => {
       setBuscarInput('');
       setBuscarDebounced('');
       toast.success(`✓ ${coincidencia.nombre} agregado al carrito`);
+    }
+  };
+
+  // Soporte directo para pistolas lectoras que envían ENTER tras leer
+  const handleBuscarKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const valor = buscarInput.trim();
+      if (!valor) return;
+
+      const coincidencia = productos.find(
+        p => (p.codigo_barras === valor || p.nombre.toLowerCase() === valor.toLowerCase()) && p.estado === 'Activo'
+      );
+
+      if (coincidencia) {
+        agregarProducto(coincidencia);
+        setBuscarInput('');
+        setBuscarDebounced('');
+        toast.success(`✓ ${coincidencia.nombre} agregado al carrito`);
+      } else {
+        toast.error(`Producto con código/nombre "${valor}" no encontrado.`);
+      }
       inputBuscarRef.current?.focus();
     }
   };
+
+  // Mantiene el cursor en el input de búsqueda si no hay modales abiertos
+  useEffect(() => {
+    if (!cargando && !mostrarModalCobro && !mostrarModalCliente) {
+      inputBuscarRef.current?.focus();
+    }
+  }, [cargando, mostrarModalCobro, mostrarModalCliente]);
 
   /* ── Autocomplete de clientes ───────────────────────────────────────────── */
   const clientesFiltrados = clientes.filter(c =>
@@ -382,6 +424,7 @@ export const PuntoVenta = () => {
               type="text"
               value={buscarInput || ''}
               onChange={handleBuscarChange}
+              onKeyDown={handleBuscarKeyDown}
               placeholder="Buscar por nombre o escanear código de barras..."
               className="form-input"
               style={{ paddingLeft: '34px', fontSize: '0.8125rem' }}
@@ -638,27 +681,16 @@ export const PuntoVenta = () => {
               <label style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9ca3af' }}>
                 Código de Factura
               </label>
-              <button
-                onClick={() => setCodigoFactura(generarCodigoFactura())}
-                title="Generar nuevo código"
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: '#8b5cf6', display: 'flex', alignItems: 'center',
-                  gap: '3px', fontSize: '0.6rem', fontWeight: 600,
-                  padding: '2px 4px', borderRadius: '4px', transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = '#f5f3ff'}
-                onMouseLeave={e => e.currentTarget.style.background = 'none'}
-              >
-                <RefreshCw size={10} /> Regenerar
-              </button>
+              <span style={{ fontSize: '0.6rem', color: '#10b981', fontWeight: 600 }}>
+                ⚡ Automático
+              </span>
             </div>
             <input
               type="text"
-              value={codigoFactura || ''}
-              onChange={e => setCodigoFactura(e.target.value)}
+              value="Autogenerado por el Sistema"
+              disabled
               className="form-input"
-              style={{ fontSize: '0.75rem', fontFamily: 'monospace', letterSpacing: '0.02em' }}
+              style={{ fontSize: '0.75rem', fontFamily: 'monospace', letterSpacing: '0.02em', background: '#f3f4f6', cursor: 'not-allowed', color: '#6b7280' }}
             />
           </div>
 
@@ -936,6 +968,61 @@ export const PuntoVenta = () => {
                         style={{ fontSize: '0.75rem', padding: '6px 10px', resize: 'none' }}
                       />
                     </div>
+                    
+                    {/* Visualizador de Mapa Embebido */}
+                    {clienteSeleccionado?.enlace_ubicacion && (() => {
+                      const coords = extraerCoordenadas(clienteSeleccionado.enlace_ubicacion);
+                      if (coords) {
+                        const bboxMinLng = coords.lng - 0.003;
+                        const bboxMinLat = coords.lat - 0.003;
+                        const bboxMaxLng = coords.lng + 0.003;
+                        const bboxMaxLat = coords.lat + 0.003;
+                        return (
+                          <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                            <label className="form-label" style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '2px' }}>
+                              Mapa de Ubicación (OpenStreetMap)
+                            </label>
+                            <div style={{ width: '100%', height: '160px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1' }}>
+                              <iframe
+                                title="Mapa del Cliente"
+                                width="100%"
+                                height="100%"
+                                frameBorder="0"
+                                marginHeight="0"
+                                marginWidth="0"
+                                src={`https://www.openstreetmap.org/export/embed.html?bbox=${bboxMinLng}%2C${bboxMinLat}%2C${bboxMaxLng}%2C${bboxMaxLat}&layer=mapnik&marker=${coords.lat}%2C${coords.lng}`}
+                                style={{ border: 0 }}
+                              />
+                            </div>
+                            <a
+                              href={clienteSeleccionado.enlace_ubicacion}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontSize: '0.65rem', color: '#6d28d9', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}
+                            >
+                              📍 Abrir en mapa externo
+                            </a>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div style={{ marginTop: '4px', padding: '8px 10px', background: '#f5f3ff', borderRadius: '8px', border: '1px dashed #c4b5fd', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <p style={{ fontSize: '0.68rem', color: '#6d28d9', fontWeight: 700, margin: 0 }}>
+                              📍 Ubicación de Referencia:
+                            </p>
+                            <a
+                              href={clienteSeleccionado.enlace_ubicacion}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontSize: '0.68rem', color: '#7c3aed', wordBreak: 'break-all', textDecoration: 'underline', fontWeight: 500 }}
+                            >
+                              {clienteSeleccionado.enlace_ubicacion}
+                            </a>
+                          </div>
+                        );
+                      }
+                    })()}
+
                     <div>
                       <label className="form-label" style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
                         Costo de Envío (Bs.)

@@ -13,6 +13,18 @@ import { Plus, Edit3, Trash2, X, Users } from 'lucide-react';
 
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
 
+const extraerCoordenadas = (url) => {
+  if (!url) return null;
+  const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)|q=(-?\d+\.\d+),(-?\d+\.\d+)|place\/(-?\d+\.\d+),(-?\d+\.\d+)/;
+  const match = url.match(regex);
+  if (match) {
+    const lat = match[1] || match[3] || match[5];
+    const lng = match[2] || match[4] || match[6];
+    return { lat: parseFloat(lat), lng: parseFloat(lng) };
+  }
+  return null;
+};
+
 export const GestionClientes = () => {
   const [clientes, setClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -334,6 +346,32 @@ export const GestionClientes = () => {
                     placeholder="https://maps.google.com/?q=..."
                     className="form-input"
                   />
+                  {enlaceUbicacion && (() => {
+                    const coords = extraerCoordenadas(enlaceUbicacion);
+                    if (coords) {
+                      const bboxMinLng = coords.lng - 0.003;
+                      const bboxMinLat = coords.lat - 0.003;
+                      const bboxMaxLng = coords.lng + 0.003;
+                      const bboxMaxLat = coords.lat + 0.003;
+                      return (
+                        <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <div style={{ width: '100%', height: '160px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1' }}>
+                            <iframe
+                              title="Mapa de Previsualización"
+                              width="100%"
+                              height="100%"
+                              frameBorder="0"
+                              marginHeight="0"
+                              marginWidth="0"
+                              src={`https://www.openstreetmap.org/export/embed.html?bbox=${bboxMinLng}%2C${bboxMinLat}%2C${bboxMaxLng}%2C${bboxMaxLat}&layer=mapnik&marker=${coords.lat}%2C${coords.lng}`}
+                              style={{ border: 0 }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
