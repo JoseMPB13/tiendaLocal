@@ -42,8 +42,18 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **Gobernanza del Servidor en Ventas:** El backend FastAPI valida y gobierna de forma estricta los datos clave de la venta. El campo `usuario_id` es ignorado del payload recibido y sobrescrito con la identidad segura obtenida del token JWT. Asimismo, los precios unitarios de los ítems son validados y recalculados en base al catálogo oficial de la base de datos para productos activos, rechazando transacciones con precios alterados o productos inactivos.
 
 ## 8. Flujo de Confirmación de Pago y Captura de Errores
+- **Consulta Correlativa en Tiempo Real:** El POS realiza llamadas dinámicas a `/api/ventas/proximo-numero-factura` al cargar la vista y limpiar el carrito para desplegar el próximo correlativo de factura y sincronizarlo con el estado del carrito (`setCodigoFactura`), brindando total transparencia al cajero.
 - **Modal de Pago Dinámico:** Al finalizar la compra, se abre un modal de confirmación. En efectivo, requiere ingresar la cantidad recibida y calcula en caliente el vuelto. En ventas a crédito, despliega el estado actual de la deuda y el nuevo saldo proyectado del cliente para aprobación antes de la transacción.
 - **Captura de Excepciones Transaccionales:** Utiliza `react-hot-toast` para desplegar alertas en español si el backend FastAPI o Supabase rechazan la transacción arrojando errores controlados por triggers (como `Stock insuficiente` o `Límite de crédito excedido`).
+
+## 8b. Módulo del Historial de Ventas (CRUD e Integración)
+- **Interfaz de Pestañas Responsivas:** Permite conmutar fluidamente entre "Nueva Venta" (POS) e "Historial de Ventas" con una navegación intuitiva y reactiva.
+- **Diseño Dual y Responsivo (CSS Grid & Flexbox):** El historial de ventas se adapta dinámicamente según el tamaño de la pantalla:
+  - *Vista de Escritorio:* Una tabla estructurada (`hidden lg:block`) que muestra fecha, código de factura, método de pago, monto total y estado.
+  - *Vista Móvil:* Tarjetas de información colapsables (`block lg:hidden`) compactas y fáciles de escanear en pantallas táctiles pequeñas.
+- **Filtros e Historial Paginado:** Implementa filtros reactivos por estado (`Todas`, `Completada`, `Cancelada`, `Pendiente`) y controles de paginación estructurados mediante `ventaService.obtenerVentas(params)`.
+- **Vista Detallada de Comprobantes:** Modal responsivo que carga de forma atómica a través de `obtenerVentaDetalle(id)` la cabecera enriquecida con información del cliente y la lista completa de artículos asociados con su correspondiente subtotal.
+- **Proceso de Anulación / Cancelación Lógica:** Un botón interactivo permite ejecutar `cancelarVenta(id)` (cambiando `estado_venta = 'Cancelada'`). El backend procesa de manera transaccional la reversión del stock de productos y la deudas del cliente. El frontend actualiza los estados en tiempo real sin requerir una recarga completa de la página, refrescando los balances locales del catálogo de productos y clientes.
 
 ## 9. Flujo Móvil del Repartidor (`DeliveryReparto.jsx`)
 - **Organización por Acordeones Colapsables:** Los envíos se agrupan en acordeones según su estado logístico. Aquellos en estado "En Camino" se muestran expandidos por defecto para prioridad táctil, mientras que los "Pendientes" e históricos permanecen contraídos para descongestionar la pantalla.

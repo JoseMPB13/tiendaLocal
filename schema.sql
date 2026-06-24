@@ -204,6 +204,25 @@ comment on table historial_stock is 'Kardex/Historial detallado del flujo y movi
 create index if not exists idx_historial_producto on historial_stock(producto_id);
 
 -- -----------------------------------------------------------------------------
+-- 9.5. TABLA: facturas
+-- -----------------------------------------------------------------------------
+create table if not exists facturas (
+    id uuid default uuid_generate_v4() primary key,
+    venta_id uuid references ventas(id) on delete restrict unique,
+    codigo_factura varchar(50) unique not null,
+    total numeric(12, 2) not null check (total >= 0),
+    fecha_emision timestamp with time zone default timezone('utc'::text, now()) not null,
+    estado varchar(20) default 'Emitida' not null check (estado in ('Emitida', 'Anulada'))
+);
+
+-- Asegurar que RLS esté desactivado para la tabla facturas
+alter table facturas disable row level security;
+
+comment on table facturas is 'Facturas automáticas generadas a partir de ventas completadas.';
+create index if not exists idx_facturas_venta_id on facturas(venta_id);
+create index if not exists idx_facturas_codigo on facturas(codigo_factura);
+
+-- -----------------------------------------------------------------------------
 -- TRIGGERS / PROCEDIMIENTOS ALMACENADOS PARA EL HISTORIAL Y CONTROL DE STOCK
 -- -----------------------------------------------------------------------------
 
@@ -329,6 +348,11 @@ begin
             set saldo_deudor = greatest(0.00, saldo_deudor - new.total)
             where id = new.cliente_id;
         end if;
+
+        -- 3. Asegurar anulación de factura relacionada
+        update facturas
+        set estado = 'Anulada'
+        where venta_id = new.id;
 
     end if;
 
@@ -463,7 +487,7 @@ declare
     v_saldo_deudor numeric(12, 2);
     v_limite_credito numeric(12, 2);
     v_nombre_cliente varchar(150);
-    v_item jsonb;
+    v_item record;
     v_subtotal numeric(12, 2);
 begin
     -- 1. Validar límite de crédito del cliente
@@ -538,7 +562,7 @@ create or replace function registrar_venta_contado(
 returns uuid as $$
 declare
     v_venta_id uuid;
-    v_item jsonb;
+    v_item record;
     v_subtotal numeric(12, 2);
 begin
     -- 1. Insertar cabecera de la venta al contado
@@ -657,6 +681,85 @@ create or replace trigger trg_ventas_before_insert
 before insert on ventas
 for each row
 execute function fn_autogenerar_codigo_factura();
+
+-- -----------------------------------------------------------------------------
+-- FUNCIÓN: obtener_proximo_codigo_factura
+-- -----------------------------------------------------------------------------
+create or replace function obtener_proximo_codigo_factura()
+returns varchar as $$
+declare
+    v_fecha varchar(8);
+    v_next_val bigint;
+begin
+    -- Obtenemos el próximo valor de la secuencia global sin consumirlo
+    select coalesce(last_value, 1) + case when is_called then 1 else 0 end
+    into v_next_val
+    from seq_codigo_factura;
+    
+    v_fecha := to_char(timezone('utc'::text, now()), 'YYYYMMDD');
+    return 'FAC-' || v_fecha || '-' || lpad(v_next_val::text, 5, '0');
+exception when others then
+    return 'FAC-' || to_char(timezone('utc'::text, now()), 'YYYYMMDD') || '-00001';
+end;
+$$ language plpgsql;
+
+comment on function obtener_proximo_codigo_factura is 'Calcula y retorna el número correlativo de factura que corresponderá a la siguiente venta.';
+
+-- -----------------------------------------------------------------------------
+-- FUNCIÓN Y TRIGGER: Facturación Automática
+-- -----------------------------------------------------------------------------
+create or replace function fn_facturar_venta()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+    -- Insertar automáticamente en facturas si la venta se crea como 'Completada' o transiciona a ese estado
+    if (tg_op = 'INSERT' and new.estado_venta = 'Completada') or 
+       (tg_op = 'UPDATE' and old.estado_venta <> 'Completada' and new.estado_venta = 'Completada') then
+        
+        insert into facturas (venta_id, codigo_factura, total, fecha_emision, estado)
+        values (new.id, new.codigo_factura, new.total, timezone('utc'::text, now()), 'Emitida')
+        on conflict (venta_id) do nothing;
+    end if;
+    return new;
+end;
+$$;
+
+comment on function fn_facturar_venta is 'Disparador que crea el registro de facturación de forma automática al completarse una venta.';
+
+create or replace trigger trg_ventas_facturacion_automatica
+after insert or update on ventas
+for each row
+execute function fn_facturar_venta();
+
+-- -----------------------------------------------------------------------------
+-- FUNCIÓN ALMACENADA: cancelar_venta
+-- -----------------------------------------------------------------------------
+create or replace function cancelar_venta(p_venta_id uuid)
+returns uuid as $$
+begin
+    -- Validar existencia
+    if not exists (select 1 from ventas where id = p_venta_id) then
+        raise exception 'La venta especificada no existe.'
+            using errcode = 'P0005';
+    end if;
+
+    -- Actualizar estado. Esto disparará automáticamente trg_revertir_venta_cancelada
+    update ventas
+    set estado_venta = 'Cancelada'
+    where id = p_venta_id and estado_venta <> 'Cancelada';
+
+    -- Cambiar estado de factura si existe
+    update facturas
+    set estado = 'Anulada'
+    where venta_id = p_venta_id;
+
+    return p_venta_id;
+end;
+$$ language plpgsql;
+
+comment on function cancelar_venta is 'Realiza la baja lógica de una venta y actualiza su factura asociada.';
 
 -- -----------------------------------------------------------------------------
 -- 11. POLÍTICAS DE SEGURIDAD (RLS)

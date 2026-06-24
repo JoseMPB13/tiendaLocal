@@ -1,7 +1,15 @@
+# =============================================================================
+# SERVICIO DE NEGOCIO: ventas.py
+# Propósito: Capa de servicio para la gestión de ventas, facturas y control de stock.
+# Dependencias: Supabase client, modelos schemas, postgrest exceptions.
+# Idioma: Español
+# =============================================================================
+
 import json
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from fastapi import HTTPException, status
+from postgrest.exceptions import APIError
 from app.database import supabase
 from app.schemas.modelos import VentaCrear
 
@@ -99,27 +107,31 @@ class VentaService:
                 venta_creada = supabase.table("ventas").select("*").eq("id", sp_result.data).execute()
                 return venta_creada.data[0]
                 
-            except Exception as ex:
-                # Capturar excepciones generadas por RAISE EXCEPTION en PostgreSQL (Stock, Límite de Crédito o Delivery)
-                error_msg = str(ex)
-                if "P0003" in error_msg or "dirección de despacho es obligatoria" in error_msg:
+            except APIError as ex:
+                # Mapeo de errores utilizando SQLSTATE nativos
+                if ex.code == "P0003":
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="La dirección de despacho es obligatoria para pedidos con delivery."
                     )
-                elif "Límite de crédito excedido" in error_msg:
+                elif ex.code == "P0002":
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=error_msg
+                        detail=ex.message
                     )
-                elif "Stock insuficiente" in error_msg:
+                elif ex.code == "P0001":
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=error_msg
+                        detail=ex.message
                     )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Error transaccional en la BD: {error_msg}"
+                    detail=f"Error transaccional en la BD (SQLSTATE {ex.code}): {ex.message}"
+                )
+            except Exception as ex:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error inesperado al registrar venta a crédito: {str(ex)}"
                 )
 
         else:
@@ -148,27 +160,46 @@ class VentaService:
                 venta_creada = supabase.table("ventas").select("*").eq("id", sp_result.data).execute()
                 return venta_creada.data[0]
                 
-            except Exception as ex:
-                error_msg = str(ex)
-                if "P0003" in error_msg or "dirección de despacho es obligatoria" in error_msg:
+            except APIError as ex:
+                # Mapeo de errores utilizando SQLSTATE nativos
+                if ex.code == "P0003":
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="La dirección de despacho es obligatoria para pedidos con delivery."
                     )
-                elif "Stock insuficiente" in error_msg:
+                elif ex.code == "P0001":
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=error_msg
+                        detail=ex.message
                     )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Error transaccional al procesar venta al contado: {error_msg}"
+                    detail=f"Error transaccional en la BD (SQLSTATE {ex.code}): {ex.message}"
                 )
+            except Exception as ex:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error inesperado al registrar venta al contado: {str(ex)}"
+                )
+
+    @staticmethod
+    def listar_ventas(estado_venta: Optional[str] = None, skip: int = 0, limit: int = 100) -> List[dict]:
+        """
+        Lista todas las ventas del sistema, con soporte de filtrado por estado y paginación.
+        """
+        query = supabase.table("ventas").select("*")
+        if estado_venta:
+            query = query.eq("estado_venta", estado_venta)
+        
+        start = skip
+        end = skip + limit - 1
+        resultado = query.order("fecha_venta", desc=True).range(start, end).execute()
+        return resultado.data or []
 
     @staticmethod
     def obtener_por_id(venta_id: UUID) -> dict:
         """
-        Busca una venta por su UUID.
+        Busca una venta básica por su UUID (solo cabecera).
         """
         resultado = supabase.table("ventas").select("*").eq("id", str(venta_id)).execute()
         if not resultado.data:
@@ -179,9 +210,70 @@ class VentaService:
         return resultado.data[0]
 
     @staticmethod
+    def obtener_completa_por_id(venta_id: UUID) -> dict:
+        """
+        Busca una venta y retorna toda su información incluyendo detalles de artículos.
+        """
+        venta = VentaService.obtener_por_id(venta_id)
+        detalles = VentaService.obtener_detalles(venta_id)
+        venta["detalles"] = detalles
+        return venta
+
+    @staticmethod
     def obtener_detalles(venta_id: UUID) -> List[dict]:
         """
         Retorna la lista de productos asociados a una venta.
         """
         resultado = supabase.table("detalles_ventas").select("*").eq("venta_id", str(venta_id)).execute()
         return resultado.data or []
+
+    @staticmethod
+    def obtener_proximo_numero_factura() -> str:
+        """
+        Calcula de manera anticipada el siguiente correlativo de factura a emitir.
+        """
+        try:
+            res = supabase.rpc("obtener_proximo_codigo_factura", {}).execute()
+            if res.data:
+                return res.data
+            return "FAC-00000000-00001"
+        except APIError as ex:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error en BD al calcular correlativo (SQLSTATE {ex.code}): {ex.message}"
+            )
+        except Exception as ex:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error inesperado al obtener próximo código de factura: {str(ex)}"
+            )
+
+    @staticmethod
+    def cancelar_venta(venta_id: UUID) -> UUID:
+        """
+        Realiza la baja lógica de la venta actualizando su estado a 'Cancelada'.
+        Esto revierte de forma automática el stock y deudas asociadas.
+        """
+        try:
+            res = supabase.rpc("cancelar_venta", {"p_venta_id": str(venta_id)}).execute()
+            if not res.data:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="La base de datos no retornó el identificador de la venta cancelada."
+                )
+            return UUID(res.data)
+        except APIError as ex:
+            if ex.code == "P0005":
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="La venta especificada no existe."
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error en BD al cancelar venta (SQLSTATE {ex.code}): {ex.message}"
+            )
+        except Exception as ex:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error inesperado al cancelar la venta: {str(ex)}"
+            )

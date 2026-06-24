@@ -175,6 +175,12 @@ class VentaRespuesta(VentaBase):
     class Config:
         from_attributes = True
 
+class VentaConDetallesRespuesta(VentaRespuesta):
+    detalles: list[DetalleVentaRespuesta]
+
+    class Config:
+        from_attributes = True
+
 
 # -----------------------------------------------------------------------------
 # ESQUEMAS PARA EL MÓDULO DE REPARTIDORES

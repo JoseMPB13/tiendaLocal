@@ -15,7 +15,7 @@ Este documento describe el diccionario de datos, la estructura de las tablas, re
 - **Cómputos e Integridad:** Los cálculos críticos como el stock disponible y los saldos deudores se ejecutan en la propia base de datos mediante triggers y procedimientos almacenados en **PL/pgSQL**.
 
 ## 2. Estructura de Tablas (schema.sql)
-Se definen las siguientes 9 tablas maestras y relacionales en Supabase:
+Se definen las siguientes 10 tablas maestras y relacionales en Supabase:
 1. `categorias`: Agrupación lógica de productos.
 2. `productos`: Catálogo general de artículos, precios y stock.
 3. `usuarios`: Cuentas de acceso del personal (Administrador, Cajero, Repartidor).
@@ -25,6 +25,7 @@ Se definen las siguientes 9 tablas maestras y relacionales en Supabase:
 7. `compras`: Cabecera de reabastecimiento de inventario.
 8. `detalles_compras`: Ítems asociados a cada compra.
 9. `historial_stock`: Kárdex histórico de movimientos de inventario (ventas, compras, ajustes).
+10. `facturas`: Documentos de facturación asociados automáticamente a ventas completadas.
 
 Además, se cuenta con la tabla auxiliar `bitacora` para auditorías.
 
@@ -42,6 +43,8 @@ Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se 
 - `idx_historial_producto` en `historial_stock(producto_id)`
 - `idx_bitacora_tabla` en `bitacora(tabla_afectada)`
 - `idx_bitacora_fecha` en `bitacora(fecha_registro)`
+- `idx_facturas_venta_id` en `facturas(venta_id)`
+- `idx_facturas_codigo` en `facturas(codigo_factura)`
 
 ## 4. Programabilidad y Funciones (programmability.sql)
 
@@ -64,4 +67,18 @@ Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se 
 - **Eventos:** `AFTER INSERT OR UPDATE OR DELETE` sobre las tablas `productos`, `ventas` y `clientes`.
 - **Función:** `fn_auditar_cambios()`
 - **Comportamiento:** Guarda en la tabla `bitacora` el nombre de la tabla afectada, la operación realizada y almacena de forma estructurada en formato JSONB el estado anterior (`old`) y el nuevo estado (`new`) del registro.
+
+### D. Trigger: Facturación Automática (`trg_ventas_facturacion_automatica`)
+- **Evento:** `AFTER INSERT OR UPDATE ON ventas`
+- **Función:** `fn_facturar_venta()`
+- **Comportamiento:** Si la venta se crea como `'Completada'` o transiciona a dicho estado, se inserta de forma automática la factura correspondiente en la tabla `facturas`.
+
+### E. Función Almacenada: Cancelación de Ventas (`cancelar_venta`)
+- **Tipo:** Función PL/pgSQL
+- **Parámetros:** `p_venta_id` (UUID)
+- **Comportamiento:** Valida la existencia de la venta, cambia su estado a `'Cancelada'` y marca su factura relacionada como `'Anulada'`. Esto a su vez dispara `tg_revertir_venta_cancelada` para devolver el stock e historial (Kardex).
+
+### F. Función Almacenada: Obtener Próximo Código de Factura (`obtener_proximo_codigo_factura`)
+- **Tipo:** Función PL/pgSQL
+- **Comportamiento:** Lee el estado de la secuencia `seq_codigo_factura` para calcular el siguiente correlativo asignable, sin consumirlo.
 

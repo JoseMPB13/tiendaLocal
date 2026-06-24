@@ -1,15 +1,19 @@
 /**
  * Vista: PuntoVenta.jsx
- * Módulo POS (Punto de Venta) de Tienda Margarita.
+ * Módulo POS (Punto de Venta) y CRUD/Historial de Ventas de Tienda Margarita.
  *
  * Funcionalidades:
+ *  - Interfaz de pestañas: "Nueva Venta" / "Historial de Ventas"
  *  - Búsqueda de productos por nombre o código de barras
- *  - Filtro por categoría (funcional)
- *  - Código de factura autogenerado (editable)
- *  - Selector de cliente con buscador autocomplete en tiempo real
- *  - Mini-modal de registro rápido de cliente desde el POS
- *  - Métodos de pago: Efectivo (con vuelto), Tarjeta, Crédito (con límite)
+ *  - Filtro por categoría
+ *  - Consulta en tiempo real del próximo número de factura correlativo desde la DB
+ *  - Selector de cliente con buscador autocomplete y registro rápido
+ *  - Métodos de pago: Efectivo (con vuelto), Tarjeta, QR, Crédito (con límite de deuda)
  *  - Carrito con control de stock y confirmación transaccional
+ *  - Historial de ventas paginado con filtros por estado (Completada, Cancelada, Pendiente)
+ *  - Vista detallada de venta (cabecera + productos asociados) en modal responsivo
+ *  - Anulación/cancelación lógica de ventas con reversión automática de stock y deudas en la DB
+ *  - Adaptación 100% responsiva (vista de tarjetas en móvil, tabla en desktop) usando Tailwind CSS
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -21,7 +25,9 @@ import toast, { Toaster } from 'react-hot-toast';
 import {
   Search, Trash2, ShoppingCart, CreditCard,
   DollarSign, X, ChevronDown, UserPlus, Plus,
-  RefreshCw, Package, ArrowRight, Loader2, QrCode
+  RefreshCw, Package, ArrowRight, Loader2, QrCode,
+  Eye, Ban, ChevronLeft, ChevronRight, Calendar,
+  User, FileText, CheckCircle2
 } from 'lucide-react';
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -39,37 +45,24 @@ const extraerCoordenadas = (url) => {
   return null;
 };
 
-/** Genera un código de factura único con formato F-YYYYMMDD-XXXXX */
-const generarCodigoFactura = () => {
-  const hoy = new Date();
-  const yyyy = hoy.getFullYear();
-  const mm = String(hoy.getMonth() + 1).padStart(2, '0');
-  const dd = String(hoy.getDate()).padStart(2, '0');
-  const rand = Math.floor(10000 + Math.random() * 90000);
-  return `F-${yyyy}${mm}${dd}-${rand}`;
-};
-
 /* ── Componente principal ────────────────────────────────────────────────── */
 export const PuntoVenta = () => {
+  // Pestaña activa ('pos' o 'historial')
+  const [activeTab, setActiveTab] = useState('pos');
+
+  // Catálogo de Productos y Clientes
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [categorias, setCategorias] = useState(['Todas']);
   const [cargando, setCargando] = useState(true);
 
-  // Búsqueda y filtros de la rejilla con Debounce inteligente
+  // Búsqueda y filtros del catálogo
   const [buscarInput, setBuscarInput] = useState('');
   const [buscarDebounced, setBuscarDebounced] = useState('');
   const [categoriaSel, setCategoriaSel] = useState('Todas');
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setBuscarDebounced(buscarInput);
-    }, 300);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [buscarInput]);
+  // Próxima factura calculada
+  const [proximoNumeroFactura, setProximoNumeroFactura] = useState('');
 
   // Autocomplete de clientes
   const [buscarCliente, setBuscarCliente] = useState('');
@@ -94,6 +87,20 @@ export const PuntoVenta = () => {
   const [nuevoCliDni, setNuevoCliDni] = useState('');
   const [guardandoCliente, setGuardandoCliente] = useState(false);
 
+  // Estados para el historial de ventas
+  const [ventas, setVentas] = useState([]);
+  const [cargandoVentas, setCargandoVentas] = useState(false);
+  const [filtroEstado, setFiltroEstado] = useState('Todas');
+  const [pagina, setPagina] = useState(1);
+  const [totalVentas, setTotalVentas] = useState(0);
+  const limitVentas = 10;
+
+  // Detalle de venta seleccionada
+  const [ventaSeleccionada, setVentaSeleccionada] = useState(null);
+  const [mostrarModalDetalle, setMostrarModalDetalle] = useState(false);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [procesandoCancelacion, setProcesandoCancelacion] = useState(false);
+
   const inputBuscarRef = useRef(null);
 
   // Zustand stores
@@ -106,74 +113,106 @@ export const PuntoVenta = () => {
   const { usuario } = useAuthStore();
   const total = obtenerTotal();
 
-  /* ── Carga inicial ─────────────────────────────────────────────────────────
-   * La función async se define DENTRO del efecto para evitar el anti-patrón
-   * de llamar setState en cascada desde una función externa al efecto.
-   * Se ejecuta una sola vez al montar el componente (deps vacías).
-   * ─────────────────────────────────────────────────────────────────────── */
+  // Debounce para la búsqueda de productos
   useEffect(() => {
-    // El código de factura se autogenera en la base de datos
-    setCodigoFactura('Autogenerado');
+    const handler = setTimeout(() => {
+      setBuscarDebounced(buscarInput);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [buscarInput]);
 
-    const controller = new AbortController();
-    const signal = controller.signal;
-    let cancelado = false; // Flag para evitar actualizar estado si el componente se desmontó
-
-    const inicializarPOS = async () => {
-      try {
-        setCargando(true);
-        const [resProds, resClis, resCats] = await Promise.all([
-          ventaService.obtenerProductos({ signal }),
-          ventaService.obtenerClientes({ signal }),
-          ventaService.obtenerCategorias({ signal })
-        ]);
-
-        if (cancelado) return;
-
-        if (resProds.ok && resCats.ok) {
-          // Construir mapa id → nombre de categorías para enriquecer productos localmente.
-          const mapaCategorias = {};
-          resCats.data.forEach(c => { mapaCategorias[c.id] = c.nombre; });
-
-          const productosEnriquecidos = resProds.data.map(p => ({
-            ...p,
-            categoria_nombre: p.categoria_nombre || mapaCategorias[p.categoria_id] || null,
-          }));
-          setProductos(productosEnriquecidos);
-          setCategorias(['Todas', ...resCats.data.map(c => c.nombre)]);
-        } else if (resProds.ok) {
-          setProductos(resProds.data);
-        } else if (resCats.ok) {
-          setCategorias(['Todas', ...resCats.data.map(c => c.nombre)]);
-        }
-
-        if (resClis.ok) {
-          setClientes(resClis.data);
-          // Preseleccionar "Cliente General" (DNI 00000000) si existe
-          const cliGeneral = resClis.data.find(c => c.dni_ruc === '00000000') || resClis.data[0];
-          if (cliGeneral) {
-            setCliente(cliGeneral);
-            setBuscarCliente(cliGeneral.nombre);
-          }
-        }
-      } catch (ex) {
-        if (!cancelado && ex.name !== 'CanceledError' && ex.code !== 'ERR_CANCELED') {
-          console.error(ex);
-          toast.error('Error al conectar con el servidor. Revisa la conexión.');
-        }
-      } finally {
-        if (!cancelado) setCargando(false);
+  /** Consulta en tiempo real el próximo número correlativo de factura */
+  const cargarProximoNumero = async () => {
+    try {
+      const res = await ventaService.obtenerProximoNumeroFactura();
+      if (res.ok && res.data) {
+        setProximoNumeroFactura(res.data);
+        setCodigoFactura(res.data);
       }
-    };
+    } catch (err) {
+      console.error("Error al obtener próximo correlativo:", err);
+    }
+  };
 
+  /** Carga inicial del POS */
+  const inicializarPOS = async () => {
+    try {
+      setCargando(true);
+      await cargarProximoNumero();
+      
+      const [resProds, resClis, resCats] = await Promise.all([
+        ventaService.obtenerProductos(),
+        ventaService.obtenerClientes(),
+        ventaService.obtenerCategorias()
+      ]);
+
+      if (resProds.ok && resCats.ok) {
+        const mapaCategorias = {};
+        resCats.data.forEach(c => { mapaCategorias[c.id] = c.nombre; });
+
+        const productosEnriquecidos = resProds.data.map(p => ({
+          ...p,
+          categoria_nombre: p.categoria_nombre || mapaCategorias[p.categoria_id] || null,
+        }));
+        setProductos(productosEnriquecidos);
+        setCategorias(['Todas', ...resCats.data.map(c => c.nombre)]);
+      } else if (resProds.ok) {
+        setProductos(resProds.data);
+      }
+
+      if (resClis.ok) {
+        setClientes(resClis.data);
+        // Preseleccionar "Cliente General" (DNI 00000000) si existe
+        const cliGeneral = resClis.data.find(c => c.dni_ruc === '00000000') || resClis.data[0];
+        if (cliGeneral) {
+          setCliente(cliGeneral);
+          setBuscarCliente(cliGeneral.nombre);
+        }
+      }
+    } catch (ex) {
+      console.error(ex);
+      toast.error('Error al conectar con el servidor. Revisa la conexión.');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
     inicializarPOS();
-
-    // Cleanup: si el componente se desmonta antes de que la promesa resuelva, abortar y cancelar
-    return () => {
-      cancelado = true;
-      controller.abort();
-    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Consulta el historial de ventas paginado con filtros */
+  const obtenerHistorialVentas = async () => {
+    setCargandoVentas(true);
+    try {
+      const skip = (pagina - 1) * limitVentas;
+      const params = {
+        skip,
+        limit: limitVentas + 1 // Pedimos uno más para determinar si hay página siguiente
+      };
+      if (filtroEstado !== 'Todas') {
+        params.estado_venta = filtroEstado;
+      }
+      
+      const res = await ventaService.obtenerVentas(params);
+      if (res.ok && res.data) {
+        setVentas(res.data.slice(0, limitVentas));
+        setTotalVentas(res.data.length); // Usado para determinar paginación simple
+      }
+    } catch (err) {
+      console.error("Error al obtener historial:", err);
+      toast.error("No se pudo cargar el historial de ventas.");
+    } finally {
+      setCargandoVentas(false);
+    }
+  };
+
+  // Cargar historial de ventas cuando cambia el filtro, pestaña o la página
+  useEffect(() => {
+    if (activeTab === 'historial') {
+      obtenerHistorialVentas();
+    }
+  }, [activeTab, filtroEstado, pagina]);
 
   /* ── Cerrar dropdown de clientes al hacer clic fuera ───────────────────── */
   useEffect(() => {
@@ -189,11 +228,10 @@ export const PuntoVenta = () => {
     return () => document.removeEventListener('mousedown', handleClickFuera);
   }, []);
 
-  /* ── Búsqueda de productos (con detección de lector de barras) ──────────── */
+  /* ── Búsqueda de productos con lector de barras ─────────────────────────── */
   const handleBuscarChange = (e) => {
     const valor = e.target.value;
     setBuscarInput(valor);
-    // Coincidencia exacta instantánea al escribir (escáner sin ENTER)
     const coincidencia = productos.find(
       p => p.codigo_barras === valor.trim() && p.estado === 'Activo'
     );
@@ -205,7 +243,6 @@ export const PuntoVenta = () => {
     }
   };
 
-  // Soporte directo para pistolas lectoras que envían ENTER tras leer
   const handleBuscarKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -228,12 +265,12 @@ export const PuntoVenta = () => {
     }
   };
 
-  // Mantiene el cursor en el input de búsqueda si no hay modales abiertos
+  // Mantiene el cursor en el input de búsqueda si está en el POS
   useEffect(() => {
-    if (!cargando && !mostrarModalCobro && !mostrarModalCliente) {
+    if (activeTab === 'pos' && !cargando && !mostrarModalCobro && !mostrarModalCliente) {
       inputBuscarRef.current?.focus();
     }
-  }, [cargando, mostrarModalCobro, mostrarModalCliente]);
+  }, [activeTab, cargando, mostrarModalCobro, mostrarModalCliente]);
 
   /* ── Autocomplete de clientes ───────────────────────────────────────────── */
   const clientesFiltrados = clientes.filter(c =>
@@ -251,13 +288,12 @@ export const PuntoVenta = () => {
   const handleClienteInputChange = (e) => {
     setBuscarCliente(e.target.value);
     setDropdownClienteVisible(true);
-    // Si borra todo, limpiar el cliente seleccionado
     if (!e.target.value) setCliente(null);
   };
 
   /* ── Registro rápido de cliente ─────────────────────────────────────────── */
   const abrirModalCliente = () => {
-    setNuevoCliNombre(buscarCliente); // Pre-llenar con lo que escribió
+    setNuevoCliNombre(buscarCliente);
     setNuevoCliTelefono('');
     setNuevoCliDni('');
     setMostrarModalCliente(true);
@@ -280,7 +316,6 @@ export const PuntoVenta = () => {
         limite_credito: 0.00,
       });
       if (res.ok) {
-        // Recargar lista y seleccionar el nuevo cliente
         const resClis = await ventaService.obtenerClientes();
         if (resClis.ok) {
           setClientes(resClis.data);
@@ -289,7 +324,7 @@ export const PuntoVenta = () => {
             handleSeleccionarCliente(nuevo);
           }
         }
-        toast.success(`✓ Cliente "${nuevoCliNombre}" registrado y seleccionado.`);
+        toast.success(`✓ Cliente "${nuevoCliNombre}" registrado.`);
         setMostrarModalCliente(false);
       }
     } catch (ex) {
@@ -310,11 +345,10 @@ export const PuntoVenta = () => {
       toast.error('Selecciona un cliente antes de proceder.');
       return;
     }
-    if (!codigoFactura.trim()) {
-      toast.error('El código de factura no puede estar vacío.');
+    if (!proximoNumeroFactura.trim()) {
+      toast.error('El número de factura no se ha cargado correctamente.');
       return;
     }
-    // Validar límite de crédito antes de abrir modal
     if (metodoPago === 'Credito' && clienteSeleccionado) {
       const nuevoSaldo = clienteSeleccionado.saldo_deudor + total;
       if (nuevoSaldo > clienteSeleccionado.limite_credito) {
@@ -339,7 +373,7 @@ export const PuntoVenta = () => {
       const payload = {
         cliente_id: clienteSeleccionado.id,
         usuario_id: usuario.id,
-        codigo_factura: codigoFactura,
+        codigo_factura: proximoNumeroFactura,
         tipo_pago: metodoPago,
         detalles: carrito.map(item => ({
           producto_id: item.id,
@@ -350,30 +384,111 @@ export const PuntoVenta = () => {
         direccion_despacho: requiereDelivery ? direccionDespacho : null,
         costo_envio: requiereDelivery ? parseFloat(costoEnvio) || 0.00 : 0.00
       };
+
       const respuesta = await ventaService.registrarVenta(payload);
       if (respuesta.ok) {
-        toast.success(`✓ Venta ${codigoFactura} registrada exitosamente.`);
-        // Vaciar carrito y generar nuevo código para la siguiente venta
+        toast.success(`✓ Venta ${proximoNumeroFactura} registrada exitosamente.`);
         vaciarCarrito();
-        setCodigoFactura(generarCodigoFactura());
+        
+        // Recargar stock, clientes y próximo número
+        await Promise.all([
+          cargarProximoNumero(),
+          ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); }),
+          ventaService.obtenerClientes().then(res => { if (res.ok) setClientes(res.data); })
+        ]);
+
         const cliGeneral = clientes.find(c => c.dni_ruc === '00000000') || clientes[0];
-        if (cliGeneral) { setCliente(cliGeneral); setBuscarCliente(cliGeneral.nombre); }
+        if (cliGeneral) { 
+          setCliente(cliGeneral); 
+          setBuscarCliente(cliGeneral.nombre); 
+        }
+
         setRequiereDelivery(false);
         setDireccionDespacho('');
         setCostoEnvio('0.00');
         setMostrarModalCobro(false);
-        // Recargar productos para reflejar el nuevo stock
-        const resProds = await ventaService.obtenerProductos();
-        if (resProds.ok) setProductos(resProds.data);
       }
     } catch (ex) {
       const errorDetail = ex.response?.data?.detail || 'Error desconocido al procesar la transacción.';
       toast.error(`Error: ${errorDetail}`);
-      // Recargar productos para actualizar stocks obsoletos en pantalla tras el fallo
-      const resProds = await ventaService.obtenerProductos();
-      if (resProds.ok) setProductos(resProds.data);
+      // Actualizar stock en pantalla ante posible desajuste tras el fallo
+      ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); });
     } finally {
       setProcesandoPago(false);
+    }
+  };
+
+  /* ── Visualizar detalle de venta en modal ───────────────────────────────── */
+  const handleVerDetalle = async (ventaId) => {
+    setVentaSeleccionada(null);
+    setMostrarModalDetalle(true);
+    setCandoDetalle(true);
+    try {
+      const res = await ventaService.obtenerVentaDetalle(ventaId);
+      if (res.ok) {
+        // Enriquecer detalle con nombres de productos desde nuestro catálogo local
+        const detallesEnriquecidos = res.data.detalles.map(d => {
+          const prod = productos.find(p => p.id === d.producto_id);
+          return {
+            ...d,
+            nombre_producto: prod ? prod.nombre : 'Producto desconocido',
+            codigo_barras: prod ? prod.codigo_barras : ''
+          };
+        });
+        
+        // Buscar info del cliente
+        const clienteInfo = clientes.find(c => c.id === res.data.cliente_id);
+        
+        setVentaSeleccionada({
+          ...res.data,
+          detalles: detallesEnriquecidos,
+          cliente_nombre: clienteInfo ? clienteInfo.nombre : 'Cliente Desconocido',
+          cliente_dni: clienteInfo ? clienteInfo.dni_ruc : ''
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("No se pudo obtener el detalle de la venta.");
+      setMostrarModalDetalle(false);
+    } finally {
+      setCandoDetalle(false);
+    }
+  };
+
+  const setCandoDetalle = (val) => setCargandoDetalle(val);
+
+  /* ── Cancelación lógica / Anulación de venta ─────────────────────────────── */
+  const handleAnularVenta = async (ventaId) => {
+    if (!window.confirm("¿Está completamente seguro de que desea cancelar y anular esta venta? Esta operación revertirá el stock y deudas en la base de datos de manera definitiva.")) {
+      return;
+    }
+    setProcesandoCancelacion(true);
+    try {
+      const res = await ventaService.cancelarVenta(ventaId);
+      if (res.ok) {
+        toast.success("✓ Venta cancelada y anulada con éxito.");
+        
+        // Actualizar la lista local de ventas
+        setVentas(prev => prev.map(v => v.id === ventaId ? { ...v, estado_venta: 'Cancelada' } : v));
+        if (ventaSeleccionada && ventaSeleccionada.id === ventaId) {
+          setVentaSeleccionada(prev => ({ ...prev, estado_venta: 'Cancelada' }));
+        }
+
+        // Refrescar el stock de productos y deudas de clientes sin recargar la página entera
+        const [resProds, resClis] = await Promise.all([
+          ventaService.obtenerProductos(),
+          ventaService.obtenerClientes(),
+          cargarProximoNumero()
+        ]);
+        if (resProds.ok) setProductos(resProds.data);
+        if (resClis.ok) setClientes(resClis.data);
+      }
+    } catch (err) {
+      console.error(err);
+      const errMsg = err.response?.data?.detail || "Ocurrió un error al intentar anular la venta.";
+      toast.error(errMsg);
+    } finally {
+      setProcesandoCancelacion(false);
     }
   };
 
@@ -388,14 +503,12 @@ export const PuntoVenta = () => {
     return coincideTexto && coincideCategoria && p.estado === 'Activo';
   });
 
-  // Aritmética exacta en centavos para el cálculo de vuelto
   const efectivoCentavos = Math.round((parseFloat(efectivoRecibido) || 0) * 100);
   const totalCentavos = Math.round(total * 100);
   const vuelto = (efectivoCentavos - totalCentavos) / 100;
 
-  /* ─────────────────────────────── RENDER ───────────────────────────────── */
   return (
-    <div style={{ display: 'flex', gap: '20px', height: 'calc(100vh - 108px)', minHeight: '600px' }}>
+    <div className="w-full flex flex-col gap-4 font-sans text-slate-800 antialiased p-2 lg:p-4">
       <Toaster
         position="top-right"
         toastOptions={{
@@ -405,534 +518,531 @@ export const PuntoVenta = () => {
         }}
       />
 
-      {/* ══════════════════ PANEL IZQUIERDO: CATÁLOGO ══════════════════ */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '14px', overflow: 'hidden' }}>
-
-        {/* ─ Barra de búsqueda + filtros ─ */}
-        <div style={{
-          background: 'white', borderRadius: '14px', padding: '14px 16px',
-          border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)',
-        }}>
-          {/* Buscador */}
-          <div style={{ position: 'relative', marginBottom: '12px' }}>
-            <Search size={15} style={{
-              position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)',
-              color: '#9ca3af', pointerEvents: 'none',
-            }} />
-            <input
-              ref={inputBuscarRef}
-              type="text"
-              value={buscarInput || ''}
-              onChange={handleBuscarChange}
-              onKeyDown={handleBuscarKeyDown}
-              placeholder="Buscar por nombre o escanear código de barras..."
-              className="form-input"
-              style={{ paddingLeft: '34px', fontSize: '0.8125rem' }}
-            />
-          </div>
-
-          {/* Filtros de categoría */}
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {categorias.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setCategoriaSel(cat)}
-                style={{
-                  padding: '5px 12px',
-                  borderRadius: '9999px',
-                  fontSize: '0.72rem',
-                  fontWeight: 600,
-                  border: '1px solid',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  whiteSpace: 'nowrap',
-                  background: categoriaSel === cat ? 'var(--color-primary)' : 'white',
-                  color: categoriaSel === cat ? 'white' : '#6b7280',
-                  borderColor: categoriaSel === cat ? 'var(--color-primary)' : 'var(--color-border-strong)',
-                  boxShadow: categoriaSel === cat ? '0 2px 8px rgba(109,40,217,.3)' : 'none',
-                }}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* ─ Rejilla de productos ─ */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {cargando ? (
-            <div style={{
-              textAlign: 'center', padding: '60px 24px',
-              background: 'white', borderRadius: '14px',
-              border: '1px solid var(--color-border)',
-              color: '#9ca3af', fontWeight: 500,
-            }}>
-              <Package size={32} style={{ margin: '0 auto 12px', opacity: .3 }} />
-              <p style={{ fontSize: '0.85rem' }}>Cargando catálogo de productos...</p>
-            </div>
-          ) : productosFiltrados.length === 0 ? (
-            <div style={{
-              textAlign: 'center', padding: '60px 24px',
-              background: 'white', borderRadius: '14px',
-              border: '1px solid var(--color-border)',
-              color: '#9ca3af',
-            }}>
-              <Search size={28} style={{ margin: '0 auto 12px', opacity: .3 }} />
-              <p style={{ fontSize: '0.8rem', fontWeight: 500 }}>Sin resultados para "{buscarInput || categoriaSel}"</p>
-            </div>
-          ) : (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))',
-              gap: '12px',
-            }}>
-              {productosFiltrados.map(prod => {
-                const agotado = prod.stock_actual <= 0;
-                const bajoStock = !agotado && prod.stock_actual <= prod.stock_minimo;
-                return (
-                  <div
-                    key={prod.id}
-                    onClick={() => !agotado && agregarProducto(prod)}
-                    style={{
-                      background: 'white',
-                      borderRadius: '12px',
-                      padding: '14px',
-                      border: agotado ? '1px solid #fee2e2' : '1px solid var(--color-border)',
-                      boxShadow: 'var(--shadow-sm)',
-                      cursor: agotado ? 'not-allowed' : 'pointer',
-                      opacity: agotado ? 0.55 : 1,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
-                    }}
-                    onMouseEnter={e => {
-                      if (!agotado) {
-                        e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-                        e.currentTarget.style.borderColor = 'var(--color-primary)';
-                      }
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-                      e.currentTarget.style.borderColor = agotado ? '#fee2e2' : 'var(--color-border)';
-                    }}
-                  >
-                    <div>
-                      {/* Badge de categoría */}
-                      {prod.categoria_nombre && (
-                        <span style={{
-                          fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase',
-                          letterSpacing: '0.06em', color: '#8b5cf6', background: '#f5f3ff',
-                          padding: '2px 6px', borderRadius: '4px',
-                          display: 'inline-block', marginBottom: '6px',
-                        }}>
-                          {prod.categoria_nombre}
-                        </span>
-                      )}
-                      <h4 style={{
-                        fontFamily: 'Outfit, sans-serif', fontWeight: 700,
-                        fontSize: '0.8rem', color: '#1e1b4b',
-                        lineHeight: 1.3, margin: 0,
-                        display: '-webkit-box', WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                      }}>
-                        {prod.nombre}
-                      </h4>
-                      <p style={{ fontSize: '0.6rem', color: '#d1d5db', fontFamily: 'monospace', marginTop: '3px' }}>
-                        {prod.codigo_barras}
-                      </p>
-                    </div>
-                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 800, fontSize: '0.9rem', color: '#1e1b4b' }}>
-                        Bs. {prod.precio_venta.toFixed(2)}
-                      </span>
-                      <span style={{
-                        fontSize: '0.6rem', fontWeight: 700,
-                        padding: '3px 7px', borderRadius: '9999px',
-                        background: agotado ? '#fee2e2' : bajoStock ? '#fff7ed' : '#f0fdf4',
-                        color: agotado ? '#dc2626' : bajoStock ? '#c2410c' : '#15803d',
-                        border: `1px solid ${agotado ? '#fecaca' : bajoStock ? '#fed7aa' : '#dcfce7'}`,
-                      }}>
-                        {agotado ? 'Sin Stock' : `${prod.stock_actual} uds`}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+      {/* ── Tabs de Navegación ── */}
+      <div className="flex border-b border-slate-200 bg-white rounded-xl p-1.5 shadow-sm">
+        <button
+          onClick={() => setActiveTab('pos')}
+          className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-xs transition-all duration-150 flex items-center justify-center gap-2 ${
+            activeTab === 'pos'
+              ? 'bg-indigo-900 text-white shadow-md'
+              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+          }`}
+        >
+          <ShoppingCart size={15} /> Nueva Venta
+        </button>
+        <button
+          onClick={() => setActiveTab('historial')}
+          className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-xs transition-all duration-150 flex items-center justify-center gap-2 ${
+            activeTab === 'historial'
+              ? 'bg-indigo-900 text-white shadow-md'
+              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+          }`}
+        >
+          <FileText size={15} /> Historial de Ventas (CRUD)
+        </button>
       </div>
 
-      {/* ══════════════════ PANEL DERECHO: CARRITO / POS ══════════════════ */}
-      <div style={{
-        width: '300px', flexShrink: 0,
-        background: 'white', borderRadius: '14px',
-        border: '1px solid var(--color-border)',
-        boxShadow: 'var(--shadow-sm)',
-        display: 'flex', flexDirection: 'column',
-        overflow: 'hidden',
-      }}>
-        {/* Cabecera del carrito */}
-        <div style={{
-          padding: '14px 16px',
-          background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ShoppingCart size={16} style={{ color: '#c4b5fd' }} />
-            <span style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 700, fontSize: '0.875rem', color: 'white' }}>
-              Caja POS
-            </span>
-            {carrito.length > 0 && (
-              <span style={{
-                background: '#6d28d9', color: 'white', fontSize: '0.6rem',
-                fontWeight: 700, padding: '2px 7px', borderRadius: '9999px',
-              }}>
-                {carrito.length}
-              </span>
-            )}
-          </div>
-          {carrito.length > 0 && (
-            <button
-              onClick={() => { vaciarCarrito(); setCodigoFactura(generarCodigoFactura()); const cg = clientes.find(c => c.dni_ruc === '00000000'); if (cg) { setCliente(cg); setBuscarCliente(cg.nombre); } }}
-              title="Vaciar carrito"
-              style={{
-                background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.15)',
-                borderRadius: '7px', padding: '4px 8px',
-                color: '#fca5a5', fontSize: '0.6rem', fontWeight: 600,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-              }}
-            >
-              <Trash2 size={11} /> Vaciar
-            </button>
-          )}
-        </div>
-
-        {/* Lista del carrito */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
-          {carrito.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 16px', color: '#d1d5db' }}>
-              <ShoppingCart size={28} style={{ margin: '0 auto 8px' }} />
-              <p style={{ fontSize: '0.75rem', fontWeight: 500, color: '#9ca3af' }}>
-                El carrito está vacío
-              </p>
-              <p style={{ fontSize: '0.7rem', color: '#d1d5db', marginTop: '4px' }}>
-                Haz clic en un producto o escanea su código
-              </p>
-            </div>
-          ) : (
-            carrito.map(item => (
-              <div
-                key={item.id}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '8px 0', borderBottom: '1px solid #f3f4f6',
-                }}
-              >
-                <div style={{ flex: 1, overflow: 'hidden' }}>
-                  <p style={{
-                    fontSize: '0.75rem', fontWeight: 700, color: '#1e1b4b',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0,
-                  }}>
-                    {item.nombre}
-                  </p>
-                  <p style={{ fontSize: '0.65rem', color: '#9ca3af', margin: '2px 0 0' }}>
-                    Bs. {item.precio_venta.toFixed(2)} × {item.cantidad} = <strong style={{ color: '#6d28d9' }}>Bs. {((Math.round(item.precio_venta * 100) * item.cantidad) / 100).toFixed(2)}</strong>
-                  </p>
-                </div>
+      {/* ════════════════════════ MÓDULO NUEVA VENTA (POS) ════════════════════════ */}
+      {activeTab === 'pos' && (
+        <div className="flex flex-col lg:flex-row gap-6 w-full items-start">
+          
+          {/* ─ CATÁLOGO DE PRODUCTOS (LADO IZQUIERDO) ─ */}
+          <div className="flex-1 w-full flex flex-col gap-4">
+            
+            {/* Filtros y Buscador */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col gap-3">
+              <div className="relative">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input
-                  type="number"
-                  value={item.cantidad || ''}
-                  min={1}
-                  onChange={e => actualizarCantidad(item.id, parseInt(e.target.value) || 0, item.stock_actual)}
-                  style={{
-                    width: '44px', textAlign: 'center', padding: '3px 4px',
-                    border: '1px solid var(--color-border-strong)',
-                    borderRadius: '7px', fontSize: '0.75rem', fontWeight: 700,
-                    color: '#1e1b4b', outline: 'none',
-                  }}
+                  ref={inputBuscarRef}
+                  type="text"
+                  value={buscarInput}
+                  onChange={handleBuscarChange}
+                  onKeyDown={handleBuscarKeyDown}
+                  placeholder="Buscar por nombre o escanear código de barras..."
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-xl py-2 pl-10 pr-4 text-xs font-medium placeholder-slate-400 transition-all duration-150"
                 />
-                <button
-                  onClick={() => { removerProducto(item.id); toast.success('Producto eliminado'); }}
-                  style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: '#fca5a5', padding: '4px', borderRadius: '6px',
-                    display: 'flex', transition: 'all 0.15s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#dc2626'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#fca5a5'; }}
-                >
-                  <Trash2 size={14} />
-                </button>
               </div>
-            ))
-          )}
-        </div>
 
-        {/* ─ Sección inferior: Config de venta ─ */}
-        <div style={{ padding: '12px 14px', borderTop: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-
-          {/* Código de Factura */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
-              <label style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9ca3af' }}>
-                Código de Factura
-              </label>
-              <span style={{ fontSize: '0.6rem', color: '#10b981', fontWeight: 600 }}>
-                ⚡ Automático
-              </span>
+              {/* Categorías */}
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                {categorias.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoriaSel(cat)}
+                    className={`py-1.5 px-4 rounded-full text-[11px] font-bold border transition-all shrink-0 duration-150 ${
+                      categoriaSel === cat
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
-            <input
-              type="text"
-              value="Autogenerado por el Sistema"
-              disabled
-              className="form-input"
-              style={{ fontSize: '0.75rem', fontFamily: 'monospace', letterSpacing: '0.02em', background: '#f3f4f6', cursor: 'not-allowed', color: '#6b7280' }}
-            />
+
+            {/* Rejilla de Productos */}
+            <div className="w-full">
+              {cargando ? (
+                <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 text-slate-400 font-medium shadow-sm">
+                  <Loader2 size={32} className="mx-auto mb-3 animate-spin text-indigo-600" />
+                  <p className="text-xs">Cargando catálogo de productos...</p>
+                </div>
+              ) : productosFiltrados.length === 0 ? (
+                <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 text-slate-400 font-medium shadow-sm">
+                  <Package size={32} className="mx-auto mb-3 opacity-30" />
+                  <p className="text-xs">No se encontraron productos disponibles</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {productosFiltrados.map(prod => {
+                    const agotado = prod.stock_actual <= 0;
+                    const bajoStock = !agotado && prod.stock_actual <= prod.stock_minimo;
+                    return (
+                      <div
+                        key={prod.id}
+                        onClick={() => !agotado && agregarProducto(prod)}
+                        className={`bg-white rounded-xl p-3 border shadow-sm flex flex-col justify-between h-[150px] transition-all duration-200 ${
+                          agotado
+                            ? 'border-red-100 opacity-60 cursor-not-allowed'
+                            : 'border-slate-200 cursor-pointer hover:-translate-y-1 hover:shadow-md hover:border-indigo-500'
+                        }`}
+                      >
+                        <div>
+                          {prod.categoria_nombre && (
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mb-1.5 inline-block">
+                              {prod.categoria_nombre}
+                            </span>
+                          )}
+                          <h4 className="font-bold text-xs text-slate-800 line-clamp-2 leading-tight">
+                            {prod.nombre}
+                          </h4>
+                          <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+                            {prod.codigo_barras}
+                          </span>
+                        </div>
+                        <div className="flex items-end justify-between mt-2">
+                          <span className="font-extrabold text-sm text-slate-900">
+                            Bs. {prod.precio_venta.toFixed(2)}
+                          </span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
+                            agotado
+                              ? 'bg-red-50 text-red-600 border-red-200'
+                              : bajoStock
+                                ? 'bg-orange-50 text-orange-600 border-orange-200'
+                                : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                          }`}>
+                            {agotado ? 'Sin Stock' : `${prod.stock_actual} uds`}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Selector de cliente con Autocomplete */}
-          <div style={{ position: 'relative' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
-              <label style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9ca3af' }}>
-                Cliente
-              </label>
-              <button
-                onClick={abrirModalCliente}
-                title="Registrar nuevo cliente"
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: '#059669', display: 'flex', alignItems: 'center',
-                  gap: '3px', fontSize: '0.6rem', fontWeight: 600,
-                  padding: '2px 4px', borderRadius: '4px', transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
-                onMouseLeave={e => e.currentTarget.style.background = 'none'}
-              >
-                <Plus size={10} /> Nuevo Cliente
-              </button>
-            </div>
-
-            {/* Input de búsqueda */}
-            <div style={{ position: 'relative' }}>
-              <input
-                ref={clienteInputRef}
-                type="text"
-                value={buscarCliente || ''}
-                onChange={handleClienteInputChange}
-                onFocus={() => setDropdownClienteVisible(true)}
-                placeholder="Buscar cliente por nombre o DNI..."
-                className="form-input"
-                style={{ fontSize: '0.75rem', paddingRight: '28px' }}
-              />
-              <ChevronDown size={13} style={{
-                position: 'absolute', right: '9px', top: '50%', transform: 'translateY(-50%)',
-                color: '#9ca3af', pointerEvents: 'none',
-              }} />
-            </div>
-
-            {/* Mostrar cliente seleccionado */}
-            {clienteSeleccionado && clienteSeleccionado.saldo_deudor > 0 && (
-              <p style={{ fontSize: '0.62rem', color: '#dc2626', fontWeight: 600, marginTop: '4px' }}>
-                ⚠ Deuda activa: Bs. {clienteSeleccionado.saldo_deudor.toFixed(2)}
-              </p>
-            )}
-
-            {/* Dropdown autocomplete */}
-            {dropdownClienteVisible && buscarCliente && (
-              <div
-                ref={dropdownRef}
-                style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 4px)',
-                  left: 0, right: 0, zIndex: 200,
-                  background: 'white',
-                  border: '1px solid var(--color-border-strong)',
-                  borderRadius: '10px',
-                  boxShadow: 'var(--shadow-lg)',
-                  maxHeight: '200px',
-                  overflowY: 'auto',
-                }}
-              >
-                {clientesFiltrados.length === 0 ? (
-                  <div style={{ padding: '10px 12px' }}>
-                    <p style={{ fontSize: '0.72rem', color: '#9ca3af', margin: '0 0 8px' }}>
-                      Sin resultados para "{buscarCliente}"
-                    </p>
-                    <button
-                      onClick={abrirModalCliente}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: '6px',
-                        padding: '7px 10px',
-                        background: '#f0fdf4', border: '1px dashed #86efac',
-                        borderRadius: '8px', cursor: 'pointer',
-                        color: '#059669', fontSize: '0.72rem', fontWeight: 700,
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      <Plus size={13} /> Registrar "{buscarCliente}" como nuevo cliente
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    {clientesFiltrados.slice(0, 8).map(cli => (
-                      <button
-                        key={cli.id}
-                        onClick={() => handleSeleccionarCliente(cli)}
-                        style={{
-                          width: '100%', textAlign: 'left', padding: '8px 12px',
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          borderBottom: '1px solid #f9fafb',
-                          transition: 'background 0.1s',
-                          display: 'block',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#f5f3ff'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                      >
-                        <p style={{ fontSize: '0.77rem', fontWeight: 700, color: '#1e1b4b', margin: 0 }}>
-                          {cli.nombre}
-                        </p>
-                        <p style={{ fontSize: '0.65rem', color: '#9ca3af', margin: '1px 0 0' }}>
-                          {cli.dni_ruc ? `DNI: ${cli.dni_ruc}` : ''}
-                          {cli.saldo_deudor > 0 ? ` · Deuda: Bs. ${cli.saldo_deudor.toFixed(2)}` : ''}
-                        </p>
-                      </button>
-                    ))}
-                    {/* Botón de crear cliente al final */}
-                    <button
-                      onClick={abrirModalCliente}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: '6px',
-                        padding: '8px 12px', background: '#fafafa',
-                        border: 'none', borderTop: '1px solid var(--color-border)',
-                        cursor: 'pointer', color: '#059669', fontSize: '0.72rem', fontWeight: 700,
-                      }}
-                    >
-                      <UserPlus size={12} /> Registrar nuevo cliente...
-                    </button>
-                  </>
+          {/* ─ PANEL DEL POS / CHECKOUT (LADO DERECHO) ─ */}
+          <div className="w-full lg:w-[360px] bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden shrink-0">
+            <div className="bg-gradient-to-r from-indigo-950 to-indigo-900 px-4 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-white">
+                <ShoppingCart size={16} className="text-indigo-300" />
+                <span className="font-bold text-xs">Caja POS</span>
+                {carrito.length > 0 && (
+                  <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    {carrito.length}
+                  </span>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Método de pago */}
-          <div>
-            <label style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9ca3af', display: 'block', marginBottom: '6px' }}>
-              Método de Pago
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-              {[
-                { id: 'Efectivo', label: 'Efectivo', icon: <DollarSign size={12} /> },
-                { id: 'Tarjeta',  label: 'Tarjeta',  icon: <CreditCard size={12} /> },
-                { id: 'QR',       label: 'Pago QR',  icon: <QrCode size={12} /> },
-                { id: 'Credito',  label: 'Crédito',  icon: <UserPlus size={12} /> },
-              ].map(m => (
+              {carrito.length > 0 && (
                 <button
-                  key={m.id}
-                  onClick={() => setMetodoPago(m.id)}
-                  style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center',
-                    gap: '3px', padding: '7px 4px',
-                    borderRadius: '8px', border: '1px solid',
-                    cursor: 'pointer', transition: 'all 0.15s',
-                    fontSize: '0.6rem', fontWeight: 700,
-                    background: metodoPago === m.id ? 'var(--color-primary)' : 'white',
-                    color: metodoPago === m.id ? 'white' : '#6b7280',
-                    borderColor: metodoPago === m.id ? 'var(--color-primary)' : 'var(--color-border-strong)',
-                    boxShadow: metodoPago === m.id ? '0 2px 8px rgba(109,40,217,.35)' : 'none',
-                  }}
+                  onClick={() => { vaciarCarrito(); cargarProximoNumero(); }}
+                  className="bg-white/10 hover:bg-white/20 border border-white/15 text-red-300 text-[10px] font-bold px-2.5 py-1 rounded-lg transition duration-150 flex items-center gap-1.5 cursor-pointer"
                 >
-                  {m.icon}
-                  {m.label}
+                  <Trash2 size={12} /> Vaciar
+                </button>
+              )}
+            </div>
+
+            {/* Listado del Carrito */}
+            <div className="flex-1 overflow-y-auto p-4 min-h-[220px] max-h-[350px] divide-y divide-slate-100">
+              {carrito.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-slate-400 py-12 text-center h-full">
+                  <ShoppingCart size={32} className="opacity-20 mb-2" />
+                  <p className="text-xs font-bold">Carrito vacío</p>
+                  <p className="text-[10px] opacity-75 mt-0.5">Haz clic en un producto para agregarlo</p>
+                </div>
+              ) : (
+                carrito.map(item => (
+                  <div key={item.id} className="flex items-center gap-2 py-2.5">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate">{item.nombre}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        Bs. {item.precio_venta.toFixed(2)} × {item.cantidad} = <span className="font-bold text-indigo-600">Bs. {((Math.round(item.precio_venta * 100) * item.cantidad) / 100).toFixed(2)}</span>
+                      </p>
+                    </div>
+                    <input
+                      type="number"
+                      value={item.cantidad || ''}
+                      min={1}
+                      onChange={e => actualizarCantidad(item.id, parseInt(e.target.value) || 0, item.stock_actual)}
+                      className="w-12 text-center border border-slate-200 rounded-lg py-1 text-xs font-bold text-slate-800 focus:outline-indigo-500 focus:ring-0"
+                    />
+                    <button
+                      onClick={() => removerProducto(item.id)}
+                      className="text-red-300 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition duration-150"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Resumen de Facturación y Cobro */}
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-col gap-3">
+              {/* Próxima Factura */}
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold tracking-widest text-slate-400 uppercase mb-1">
+                  Próxima Factura a Emitir
+                </span>
+                <div className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-slate-600 flex justify-between items-center">
+                  <span>#{proximoNumeroFactura || 'Cargando...'}</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                </div>
+              </div>
+
+              {/* Selector de Cliente */}
+              <div className="relative">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[9px] font-bold tracking-widest text-slate-400 uppercase">
+                    Cliente
+                  </span>
+                  <button
+                    onClick={abrirModalCliente}
+                    className="text-[10px] font-bold text-emerald-600 hover:underline flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Plus size={10} /> Nuevo Cliente
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    ref={clienteInputRef}
+                    type="text"
+                    value={buscarCliente}
+                    onChange={handleClienteInputChange}
+                    onFocus={() => setDropdownClienteVisible(true)}
+                    placeholder="Buscar cliente por nombre o DNI..."
+                    className="w-full bg-white border border-slate-200 outline-none rounded-xl py-1.5 pl-3 pr-8 text-xs font-medium focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+
+                {clienteSeleccionado && clienteSeleccionado.saldo_deudor > 0 && (
+                  <span className="text-[10px] text-red-500 font-bold block mt-1">
+                    ⚠ Deuda actual: Bs. {clienteSeleccionado.saldo_deudor.toFixed(2)} / Límite: Bs. {clienteSeleccionado.limite_credito.toFixed(2)}
+                  </span>
+                )}
+
+                {/* Dropdown Autocomplete */}
+                {dropdownClienteVisible && buscarCliente && (
+                  <div ref={dropdownRef} className="absolute bottom-full mb-1 left-0 right-0 z-50 bg-white border border-slate-200 rounded-xl shadow-lg max-h-[160px] overflow-y-auto">
+                    {clientesFiltrados.length === 0 ? (
+                      <div className="p-3 text-center">
+                        <p className="text-[11px] text-slate-400 mb-2">No se encontró "{buscarCliente}"</p>
+                        <button
+                          onClick={abrirModalCliente}
+                          type="button"
+                          className="w-full bg-emerald-50 border border-dashed border-emerald-300 rounded-lg text-emerald-700 font-bold text-xs py-1.5 hover:bg-emerald-100 transition duration-150 cursor-pointer"
+                        >
+                          <Plus size={12} className="inline mr-1" /> Registrar cliente
+                        </button>
+                      </div>
+                    ) : (
+                      clientesFiltrados.slice(0, 5).map(cli => (
+                        <button
+                          key={cli.id}
+                          onClick={() => handleSeleccionarCliente(cli)}
+                          className="w-full text-left px-3 py-2 border-b border-slate-50 hover:bg-indigo-50/50 block transition duration-150"
+                        >
+                          <p className="text-xs font-bold text-slate-800 leading-tight">{cli.nombre}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">DNI: {cli.dni_ruc || 'N/A'} {cli.saldo_deudor > 0 ? `· Deuda: Bs.${cli.saldo_deudor.toFixed(2)}` : ''}</p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Método de Pago */}
+              <div>
+                <span className="text-[9px] font-bold tracking-widest text-slate-400 uppercase block mb-1.5">
+                  Método de Pago
+                </span>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { id: 'Efectivo', label: 'Efectivo', icon: <DollarSign size={13} /> },
+                    { id: 'Tarjeta',  label: 'Tarjeta',  icon: <CreditCard size={13} /> },
+                    { id: 'QR',       label: 'QR',      icon: <QrCode size={13} /> },
+                    { id: 'Credito',  label: 'Crédito',  icon: <UserPlus size={13} /> },
+                  ].map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => setMetodoPago(m.id)}
+                      className={`flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl border text-[10px] font-bold transition-all duration-150 cursor-pointer ${
+                        metodoPago === m.id
+                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                          : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                      }`}
+                    >
+                      {m.icon}
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Botón Cobrar */}
+              <div className="flex items-center justify-between bg-indigo-950 text-white rounded-xl p-3 mt-1 shadow-inner">
+                <div>
+                  <span className="text-[9px] text-indigo-300 font-bold block uppercase tracking-wider">Total</span>
+                  <span className="text-base font-extrabold">Bs. {total.toFixed(2)}</span>
+                </div>
+                <button
+                  onClick={handleAbrirConfirmacion}
+                  className="bg-indigo-600 hover:bg-indigo-500 border border-white/10 text-white px-4 py-2 rounded-xl text-xs font-bold transition duration-150 flex items-center gap-1.5 shadow-md cursor-pointer"
+                >
+                  Cobrar <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════ MÓDULO HISTORIAL DE VENTAS (CRUD) ════════════════════════ */}
+      {activeTab === 'historial' && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 w-full flex flex-col gap-4 animate-fade-in">
+          
+          {/* Barra de Filtros del Historial */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
+            <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+              <FileText size={16} className="text-indigo-600" /> Registro Diario de Ventas
+            </h3>
+            
+            <div className="flex gap-1.5 flex-wrap">
+              {['Todas', 'Completada', 'Cancelada', 'Pendiente'].map(estado => (
+                <button
+                  key={estado}
+                  onClick={() => { setFiltroEstado(estado); setPagina(1); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition duration-150 cursor-pointer ${
+                    filtroEstado === estado
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {estado}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Total + Botón cobrar */}
-          <div style={{
-            background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
-            borderRadius: '10px', padding: '12px 14px',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <div>
-              <p style={{ fontSize: '0.6rem', color: '#a5b4fc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
-                Total a Cobrar
-              </p>
-              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: '1.25rem', fontWeight: 900, color: 'white', margin: '2px 0 0' }}>
-                Bs. {total.toFixed(2)}
-              </p>
+          {/* Listado de Ventas (Mobile Cards y Desktop Table) */}
+          {cargandoVentas ? (
+            <div className="text-center py-16 text-slate-400 font-medium">
+              <Loader2 size={32} className="mx-auto mb-3 animate-spin text-indigo-600" />
+              <p className="text-xs">Cargando historial de ventas...</p>
             </div>
-            <button
-              onClick={handleAbrirConfirmacion}
-              style={{
-                background: '#7c3aed',
-                border: '2px solid rgba(255,255,255,.2)',
-                borderRadius: '10px',
-                color: 'white',
-                padding: '9px 14px',
-                cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: '6px',
-                fontSize: '0.75rem', fontWeight: 700,
-                transition: 'all 0.15s',
-                boxShadow: '0 4px 12px rgba(124,58,237,.5)',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#6d28d9'; e.currentTarget.style.transform = 'scale(1.03)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#7c3aed'; e.currentTarget.style.transform = 'scale(1)'; }}
-            >
-              Cobrar <ArrowRight size={14} />
-            </button>
-          </div>
+          ) : ventas.length === 0 ? (
+            <div className="text-center py-16 text-slate-400">
+              <Package size={32} className="mx-auto mb-3 opacity-20" />
+              <p className="text-xs">No se encontraron registros de venta</p>
+            </div>
+          ) : (
+            <div className="w-full">
+              {/* Vista Desktop (Table) */}
+              <div className="hidden lg:block overflow-x-auto rounded-xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-left text-[11px] font-medium text-slate-600">
+                  <thead className="bg-slate-50 font-bold text-slate-700 uppercase tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3">Fecha y Hora</th>
+                      <th className="px-4 py-3">Código Factura</th>
+                      <th className="px-4 py-3">Método Pago</th>
+                      <th className="px-4 py-3 text-right">Total Cobrado</th>
+                      <th className="px-4 py-3 text-center">Estado</th>
+                      <th className="px-4 py-3 text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {ventas.map(v => (
+                      <tr key={v.id} className="hover:bg-slate-50/50 transition">
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          {new Date(v.fecha_venta).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono font-bold text-slate-700">
+                          {v.codigo_factura}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-full font-bold text-slate-600">{v.tipo_pago}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-extrabold text-slate-900">
+                          Bs. {v.total.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                            v.estado_venta === 'Completada'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : v.estado_venta === 'Cancelada'
+                                ? 'bg-red-50 text-red-700 border-red-200'
+                                : 'bg-orange-50 text-orange-700 border-orange-200'
+                          }`}>
+                            {v.estado_venta}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => handleVerDetalle(v.id)}
+                              className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                              title="Ver detalles"
+                            >
+                              <Eye size={13} />
+                            </button>
+                            {v.estado_venta !== 'Cancelada' && (
+                              <button
+                                onClick={() => handleAnularVenta(v.id)}
+                                className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                                title="Anular venta"
+                              >
+                                <Ban size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Vista Móvil (Cards) */}
+              <div className="block lg:hidden space-y-3">
+                {ventas.map(v => (
+                  <div key={v.id} className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm flex flex-col gap-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-medium">
+                          {new Date(v.fecha_venta).toLocaleString()}
+                        </span>
+                        <h4 className="font-bold text-xs text-slate-800 font-mono mt-0.5">
+                          {v.codigo_factura}
+                        </h4>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                        v.estado_venta === 'Completada'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : v.estado_venta === 'Cancelada'
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : 'bg-orange-50 text-orange-700 border-orange-200'
+                      }`}>
+                        {v.estado_venta}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs border-t border-slate-50 pt-2">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">Pago: {v.tipo_pago}</span>
+                        <span className="font-extrabold text-slate-900">Bs. {v.total.toFixed(2)}</span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => handleVerDetalle(v.id)}
+                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                        >
+                          <Eye size={12} /> Detalles
+                        </button>
+                        {v.estado_venta !== 'Cancelada' && (
+                          <button
+                            onClick={() => handleAnularVenta(v.id)}
+                            className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                          >
+                            <Ban size={12} /> Anular
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Controles de Paginación */}
+              <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-4">
+                <span className="text-xs text-slate-400">Página {pagina}</span>
+                
+                <div className="flex gap-2">
+                  <button
+                    disabled={pagina === 1}
+                    onClick={() => setPagina(p => Math.max(1, p - 1))}
+                    className="border border-slate-200 rounded-lg p-2 hover:bg-slate-50 transition duration-150 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button
+                    disabled={totalVentas <= limitVentas} // Si trajo menos del límite (o exactamente el límite sin más data posterior)
+                    onClick={() => setPagina(p => p + 1)}
+                    className="border border-slate-200 rounded-lg p-2 hover:bg-slate-50 transition duration-150 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* ══════════════════ MODAL DE COBRO ══════════════════ */}
+      {/* ══════════════════ MODAL DE COBRO / CONFIRMACIÓN DE PAGO ══════════════════ */}
       {mostrarModalCobro && (
-        <div className="modal-backdrop">
-          <div className="modal-container animate-fade-in-up" style={{ maxWidth: '380px' }}>
-            <div style={{ height: '4px', background: 'linear-gradient(90deg, #6d28d9, #059669)' }} />
-
-            <div className="modal-header">
-              <span className="modal-title">💳 Confirmación de Cobro — {metodoPago}</span>
-              <button onClick={() => setMostrarModalCobro(false)} style={{
-                background: '#f3f4f6', border: 'none', borderRadius: '8px',
-                width: '28px', height: '28px', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', cursor: 'pointer', color: '#6b7280',
-              }}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-100 animate-scale-up">
+            <div className="h-1 bg-gradient-to-r from-indigo-600 to-emerald-500" />
+            
+            <div className="flex justify-between items-center px-4 py-3.5 border-b border-slate-100">
+              <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                <CreditCard size={15} className="text-indigo-600" /> Confirmar Pago — {metodoPago}
+              </span>
+              <button
+                onClick={() => setMostrarModalCobro(false)}
+                className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-lg p-1 transition cursor-pointer"
+              >
                 <X size={14} />
               </button>
             </div>
 
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* Resumen */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#f5f3ff', borderRadius: '10px', border: '1px solid #e9d5ff' }}>
+            <div className="p-4 flex flex-col gap-3.5">
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 flex justify-between items-center shadow-inner">
                 <div>
-                  <p style={{ fontSize: '0.65rem', color: '#8b5cf6', fontWeight: 700, textTransform: 'uppercase', margin: 0 }}>Total Neto</p>
-                  <p style={{ fontFamily: 'Outfit', fontWeight: 900, fontSize: '1.4rem', color: '#1e1b4b', margin: '2px 0 0' }}>
-                    Bs. {total.toFixed(2)}
-                  </p>
+                  <span className="text-[9px] text-indigo-500 font-extrabold uppercase">Total Neto</span>
+                  <p className="font-extrabold text-base text-slate-900 mt-0.5">Bs. {total.toFixed(2)}</p>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: '0.65rem', color: '#9ca3af', margin: 0 }}>Factura</p>
-                  <p style={{ fontSize: '0.72rem', fontWeight: 700, color: '#374151', fontFamily: 'monospace', margin: '2px 0 0' }}>{codigoFactura}</p>
+                <div className="text-right">
+                  <span className="text-[9px] text-slate-400 block font-bold uppercase">Factura</span>
+                  <span className="font-mono font-bold text-[10px] text-slate-600 block mt-0.5">#{proximoNumeroFactura}</span>
                 </div>
               </div>
 
-              {/* Cliente */}
               {clienteSeleccionado && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#6b7280' }}>
+                <div className="flex justify-between items-center text-xs text-slate-500 border-b border-slate-50 pb-2">
                   <span>Cliente:</span>
-                  <span style={{ fontWeight: 700, color: '#374151' }}>{clienteSeleccionado.nombre}</span>
+                  <span className="font-bold text-slate-700">{clienteSeleccionado.nombre}</span>
                 </div>
               )}
 
-              {/* Delivery / Envío */}
-              <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, color: '#334155', margin: 0 }}>
+              {/* Configuración de Envío / Delivery */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col gap-2.5">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
                   <input
                     type="checkbox"
                     checked={requiereDelivery}
@@ -942,34 +1052,26 @@ export const PuntoVenta = () => {
                         setDireccionDespacho(clienteSeleccionado?.direccion || '');
                       }
                     }}
-                    style={{
-                      width: '15px',
-                      height: '15px',
-                      accentColor: '#6d28d9',
-                      cursor: 'pointer'
-                    }}
+                    className="w-4 h-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer"
                   />
                   ¿Registrar envío para Delivery?
                 </label>
 
                 {requiereDelivery && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+                  <div className="flex flex-col gap-2.5 border-t border-slate-200 pt-2.5 animate-fade-in">
                     <div>
-                      <label className="form-label" style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-1">
                         Dirección de Despacho *
                       </label>
                       <textarea
-                        value={direccionDespacho || ''}
+                        value={direccionDespacho}
                         onChange={(e) => setDireccionDespacho(e.target.value)}
-                        placeholder="Ingrese la ubicación real de entrega..."
-                        required={true}
+                        placeholder="Ingrese la ubicación de entrega..."
                         rows={2}
-                        className="form-input"
-                        style={{ fontSize: '0.75rem', padding: '6px 10px', resize: 'none' }}
+                        className="w-full bg-white border border-slate-200 outline-none rounded-lg p-2 text-xs font-medium focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none"
                       />
                     </div>
-                    
-                    {/* Visualizador de Mapa Embebido */}
+
                     {clienteSeleccionado?.enlace_ubicacion && (() => {
                       const coords = extraerCoordenadas(clienteSeleccionado.enlace_ubicacion);
                       if (coords) {
@@ -978,18 +1080,14 @@ export const PuntoVenta = () => {
                         const bboxMaxLng = coords.lng + 0.003;
                         const bboxMaxLat = coords.lat + 0.003;
                         return (
-                          <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                            <label className="form-label" style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '2px' }}>
-                              Mapa de Ubicación (OpenStreetMap)
-                            </label>
-                            <div style={{ width: '100%', height: '160px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1' }}>
+                          <div className="flex flex-col gap-1.5">
+                            <span className="text-[10px] font-bold text-slate-500">Mapa Georreferencial</span>
+                            <div className="w-full h-32 rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
                               <iframe
-                                title="Mapa del Cliente"
+                                title="Ubicación Cliente"
                                 width="100%"
                                 height="100%"
                                 frameBorder="0"
-                                marginHeight="0"
-                                marginWidth="0"
                                 src={`https://www.openstreetmap.org/export/embed.html?bbox=${bboxMinLng}%2C${bboxMinLat}%2C${bboxMaxLng}%2C${bboxMaxLat}&layer=mapnik&marker=${coords.lat}%2C${coords.lng}`}
                                 style={{ border: 0 }}
                               />
@@ -998,33 +1096,18 @@ export const PuntoVenta = () => {
                               href={clienteSeleccionado.enlace_ubicacion}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{ fontSize: '0.65rem', color: '#6d28d9', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}
+                              className="text-[10px] text-indigo-600 font-bold hover:underline"
                             >
-                              📍 Abrir en mapa externo
-                            </a>
-                          </div>
-                        );
-                      } else {
-                        return (
-                          <div style={{ marginTop: '4px', padding: '8px 10px', background: '#f5f3ff', borderRadius: '8px', border: '1px dashed #c4b5fd', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <p style={{ fontSize: '0.68rem', color: '#6d28d9', fontWeight: 700, margin: 0 }}>
-                              📍 Ubicación de Referencia:
-                            </p>
-                            <a
-                              href={clienteSeleccionado.enlace_ubicacion}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ fontSize: '0.68rem', color: '#7c3aed', wordBreak: 'break-all', textDecoration: 'underline', fontWeight: 500 }}
-                            >
-                              {clienteSeleccionado.enlace_ubicacion}
+                              📍 Abrir enlace de navegación externo
                             </a>
                           </div>
                         );
                       }
+                      return null;
                     })()}
 
                     <div>
-                      <label className="form-label" style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-1">
                         Costo de Envío (Bs.)
                       </label>
                       <input
@@ -1033,79 +1116,77 @@ export const PuntoVenta = () => {
                         min="0"
                         value={costoEnvio}
                         onChange={(e) => setCostoEnvio(e.target.value)}
-                        placeholder="0.00"
-                        className="form-input"
-                        style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                        className="w-full bg-white border border-slate-200 outline-none rounded-lg px-3 py-1.5 text-xs font-medium focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Panel efectivo o QR */}
-              {(metodoPago === 'Efectivo' || metodoPago === 'QR') && (
-                <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
-                  <label className="form-label">
-                    {metodoPago === 'QR' ? 'Monto a transferir por QR (Bs.)' : 'Monto Recibido (Bs.) *'}
+              {/* Entrada de Efectivo */}
+              {metodoPago === 'Efectivo' && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col gap-2">
+                  <label className="text-[10px] font-bold text-slate-500 block">
+                    Monto Recibido (Bs.) *
                   </label>
                   <input
                     type="number"
                     step="0.50"
-                    value={efectivoRecibido || ''}
+                    value={efectivoRecibido}
                     onChange={e => setEfectivoRecibido(e.target.value)}
                     placeholder="0.00"
-                    className="form-input"
-                    disabled={metodoPago === 'QR'}
-                    autoFocus={metodoPago !== 'QR'}
+                    className="w-full bg-white border border-slate-200 outline-none rounded-lg px-3 py-1.5 text-xs font-bold focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    autoFocus
                   />
-                  {metodoPago === 'Efectivo' && parseFloat(efectivoRecibido) >= total && (
-                    <div style={{
-                      marginTop: '10px', display: 'flex', justifyContent: 'space-between',
-                      padding: '8px 12px', background: '#d1fae5', borderRadius: '8px',
-                      border: '1px solid #a7f3d0',
-                    }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>Vuelto a entregar:</span>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 900, color: '#047857', fontFamily: 'Outfit' }}>
+                  {parseFloat(efectivoRecibido) >= total && (
+                    <div className="flex justify-between items-center bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 mt-1">
+                      <span className="text-[10px] text-emerald-700 font-bold">Cambio a devolver:</span>
+                      <span className="text-xs font-extrabold text-emerald-800">
                         Bs. {vuelto.toFixed(2)}
                       </span>
                     </div>
                   )}
-                  {metodoPago === 'QR' && (
-                    <div style={{
-                      marginTop: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
-                      padding: '12px', background: '#f5f3ff', borderRadius: '8px',
-                      border: '1px dashed #c4b5fd',
-                    }}>
-                      <QrCode size={40} style={{ color: '#6d28d9' }} />
-                      <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6d28d9', textAlign: 'center' }}>
-                        Muestre el código QR al cliente para recibir el pago inmediato
-                      </span>
-                    </div>
-                  )}
                 </div>
               )}
 
-              {/* Panel crédito */}
+              {/* Entrada QR */}
+              {metodoPago === 'QR' && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center gap-2 text-center">
+                  <QrCode size={48} className="text-indigo-600 animate-pulse" />
+                  <span className="text-[10px] font-bold text-indigo-700">Muestre el QR al cliente para cobro rápido</span>
+                  <span className="text-[11px] text-slate-500 font-medium leading-snug">Se espera transferencia de Bs. {total.toFixed(2)}</span>
+                </div>
+              )}
+
+              {/* Detalles de Crédito */}
               {metodoPago === 'Credito' && clienteSeleccionado && (
-                <div style={{ background: '#fef9f0', padding: '12px', borderRadius: '10px', border: '1px solid #fed7aa', fontSize: '0.75rem' }}>
-                  {[
-                    ['Saldo deudor actual', `Bs. ${clienteSeleccionado.saldo_deudor.toFixed(2)}`],
-                    ['Esta venta', `+ Bs. ${total.toFixed(2)}`],
-                    ['Nuevo saldo estimado', `Bs. ${((Math.round(clienteSeleccionado.saldo_deudor * 100) + Math.round(total * 100)) / 100).toFixed(2)}`],
-                    ['Límite de crédito', `Bs. ${clienteSeleccionado.limite_credito.toFixed(2)}`],
-                  ].map(([label, value], i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: i < 3 ? '1px solid #fde68a' : 'none' }}>
-                      <span style={{ color: '#92400e' }}>{label}:</span>
-                      <span style={{ fontWeight: 700, color: '#78350f' }}>{value}</span>
-                    </div>
-                  ))}
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[10px] text-amber-800 font-medium flex flex-col gap-1.5">
+                  <div className="flex justify-between border-b border-amber-200 pb-1">
+                    <span>Saldo Deudor Actual:</span>
+                    <span className="font-bold">Bs. {clienteSeleccionado.saldo_deudor.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-amber-200 pb-1">
+                    <span>Esta venta:</span>
+                    <span className="font-bold">+ Bs. {total.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-amber-200 pb-1">
+                    <span>Nuevo saldo estimado:</span>
+                    <span className="font-extrabold text-amber-900">Bs. {((Math.round(clienteSeleccionado.saldo_deudor * 100) + Math.round(total * 100)) / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Límite autorizado:</span>
+                    <span className="font-bold">Bs. {clienteSeleccionado.limite_credito.toFixed(2)}</span>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="modal-footer">
-              <button onClick={() => setMostrarModalCobro(false)} className="btn-secondary">
-                Cancelar
+            <div className="px-4 py-3.5 border-t border-slate-100 flex gap-2 justify-end">
+              <button
+                onClick={() => setMostrarModalCobro(false)}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cerrar
               </button>
               <button
                 onClick={handleConfirmarVenta}
@@ -1114,12 +1195,142 @@ export const PuntoVenta = () => {
                   (metodoPago === 'Efectivo' && (!efectivoRecibido || parseFloat(efectivoRecibido) < total)) ||
                   (requiereDelivery && !direccionDespacho.trim())
                 }
-                className="btn-primary"
-                style={{ minWidth: '130px', justifyContent: 'center' }}
+                className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-500 transition duration-150 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                {procesandoPago
-                  ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Procesando...</>
-                  : <><ArrowRight size={14} /> Confirmar Venta</>}
+                {procesandoPago ? (
+                  <><Loader2 size={12} className="animate-spin" /> Procesando...</>
+                ) : (
+                  <><CheckCircle2 size={12} /> Confirmar Venta</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════ MODAL DE DETALLE DE VENTA COMPLETA ══════════════════ */}
+      {mostrarModalDetalle && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-100 animate-scale-up">
+            <div className="h-1 bg-gradient-to-r from-indigo-600 to-indigo-900" />
+
+            <div className="flex justify-between items-center px-4 py-3.5 border-b border-slate-100">
+              <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                <FileText size={15} className="text-indigo-600" /> Detalle de Venta y Factura
+              </span>
+              <button
+                onClick={() => setMostrarModalDetalle(false)}
+                className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-lg p-1 transition cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="p-4 flex flex-col gap-4 max-h-[420px] overflow-y-auto">
+              {cargandoDetalle ? (
+                <div className="text-center py-12 text-slate-400 font-medium">
+                  <Loader2 size={24} className="mx-auto mb-2 animate-spin text-indigo-600" />
+                  <p className="text-[11px]">Obteniendo desglose de productos...</p>
+                </div>
+              ) : ventaSeleccionada ? (
+                <>
+                  {/* Ficha Cabecera */}
+                  <div className="grid grid-cols-2 gap-3 bg-slate-50 rounded-xl p-3.5 border border-slate-200 text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Factura</span>
+                      <span className="font-mono font-bold text-slate-700 text-sm">#{ventaSeleccionada.codigo_factura}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 block">Fecha y Hora</span>
+                      <span className="font-bold text-slate-600">
+                        {new Date(ventaSeleccionada.fecha_venta).toLocaleString()}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Cliente</span>
+                      <span className="font-bold text-slate-600">
+                        {ventaSeleccionada.cliente_nombre} {ventaSeleccionada.cliente_dni ? `(DNI: ${ventaSeleccionada.cliente_dni})` : ''}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 block">Forma de Pago</span>
+                      <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold inline-block mt-0.5">
+                        {ventaSeleccionada.tipo_pago}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Estado de Venta</span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold border inline-block mt-0.5 ${
+                        ventaSeleccionada.estado_venta === 'Completada'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : ventaSeleccionada.estado_venta === 'Cancelada'
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : 'bg-orange-50 text-orange-700 border-orange-200'
+                      }`}>
+                        {ventaSeleccionada.estado_venta}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 block">Monto Facturado</span>
+                      <span className="font-extrabold text-slate-900 text-sm">Bs. {ventaSeleccionada.total.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* Tabla de Artículos */}
+                  <div>
+                    <h5 className="font-bold text-xs text-slate-700 mb-2">Artículos Vendidos</h5>
+                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                      <table className="min-w-full divide-y divide-slate-200 text-left text-[11px] font-medium text-slate-600">
+                        <thead className="bg-slate-50 font-bold text-slate-700">
+                          <tr>
+                            <th className="px-3 py-2">Producto</th>
+                            <th className="px-3 py-2 text-center">Cant.</th>
+                            <th className="px-3 py-2 text-right">Unitario</th>
+                            <th className="px-3 py-2 text-right">Subtotal</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {ventaSeleccionada.detalles.map(d => (
+                            <tr key={d.id}>
+                              <td className="px-3 py-2 text-slate-800 font-bold">
+                                {d.nombre_producto}
+                                <span className="block font-mono text-[9px] text-slate-400 font-medium">{d.codigo_barras}</span>
+                              </td>
+                              <td className="px-3 py-2 text-center font-bold text-slate-700">{d.cantidad}</td>
+                              <td className="px-3 py-2 text-right">Bs. {d.precio_unitario.toFixed(2)}</td>
+                              <td className="px-3 py-2 text-right font-bold text-indigo-600">Bs. {d.subtotal.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            <div className="px-4 py-3.5 border-t border-slate-100 flex gap-2 justify-between items-center">
+              <div>
+                {ventaSeleccionada && ventaSeleccionada.estado_venta !== 'Cancelada' && (
+                  <button
+                    disabled={procesandoCancelacion}
+                    onClick={() => handleAnularVenta(ventaSeleccionada.id)}
+                    className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {procesandoCancelacion ? (
+                      <><Loader2 size={12} className="animate-spin" /> Anulando...</>
+                    ) : (
+                      <><Ban size={12} /> Anular Venta</>
+                    )}
+                  </button>
+                )}
+              </div>
+              
+              <button
+                onClick={() => setMostrarModalDetalle(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-600 transition cursor-pointer"
+              >
+                Cerrar
               </button>
             </div>
           </div>
@@ -1128,68 +1339,81 @@ export const PuntoVenta = () => {
 
       {/* ══════════════════ MINI-MODAL CLIENTE RÁPIDO ══════════════════ */}
       {mostrarModalCliente && (
-        <div className="modal-backdrop">
-          <div className="modal-container animate-fade-in-up" style={{ maxWidth: '380px' }}>
-            <div style={{ height: '4px', background: 'linear-gradient(90deg, #059669, #10b981)' }} />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-100 animate-scale-up">
+            <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-400" />
 
-            <div className="modal-header">
-              <span className="modal-title">👤 Registro Rápido de Cliente</span>
-              <button onClick={() => setMostrarModalCliente(false)} style={{
-                background: '#f3f4f6', border: 'none', borderRadius: '8px',
-                width: '28px', height: '28px', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', cursor: 'pointer', color: '#6b7280',
-              }}>
+            <div className="flex justify-between items-center px-4 py-3.5 border-b border-slate-100">
+              <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                <User size={15} className="text-emerald-600" /> Registro Rápido de Cliente
+              </span>
+              <button
+                onClick={() => setMostrarModalCliente(false)}
+                className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-lg p-1 transition cursor-pointer"
+              >
                 <X size={14} />
               </button>
             </div>
 
             <form onSubmit={handleGuardarClienteRapido}>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div className="p-4 flex flex-col gap-3">
                 <div>
-                  <label className="form-label">Nombre Completo *</label>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Nombre Completo *</label>
                   <input
-                    type="text" required
-                    value={nuevoCliNombre || ''}
+                    type="text"
+                    required
+                    value={nuevoCliNombre}
                     onChange={e => setNuevoCliNombre(e.target.value)}
                     placeholder="Ej: María García"
-                    className="form-input"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none rounded-xl py-1.5 px-3 text-xs font-medium transition"
                     autoFocus
                   />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="form-label">Teléfono (Opcional)</label>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Teléfono</label>
                     <input
                       type="text"
-                      value={nuevoCliTelefono || ''}
+                      value={nuevoCliTelefono}
                       onChange={e => setNuevoCliTelefono(e.target.value)}
                       placeholder="70012345"
-                      className="form-input"
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none rounded-xl py-1.5 px-3 text-xs font-medium transition"
                     />
                   </div>
                   <div>
-                    <label className="form-label">DNI / CI (Opcional)</label>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">DNI / CI</label>
                     <input
                       type="text"
-                      value={nuevoCliDni || ''}
+                      value={nuevoCliDni}
                       onChange={e => setNuevoCliDni(e.target.value)}
                       placeholder="12345678"
-                      className="form-input"
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none rounded-xl py-1.5 px-3 text-xs font-medium transition"
                     />
                   </div>
                 </div>
-                <p style={{ fontSize: '0.68rem', color: '#9ca3af', background: '#f9fafb', padding: '8px 10px', borderRadius: '8px', margin: 0 }}>
-                  💡 El crédito y dirección se pueden configurar después desde la sección de Clientes.
+                <p className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 rounded-lg p-2.5 mt-1 leading-normal">
+                  💡 El crédito y dirección física del cliente se pueden configurar posteriormente desde el módulo de Clientes.
                 </p>
               </div>
-              <div className="modal-footer">
-                <button type="button" onClick={() => setMostrarModalCliente(false)} className="btn-secondary">
+              
+              <div className="px-4 py-3.5 border-t border-slate-100 flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setMostrarModalCliente(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 transition cursor-pointer"
+                >
                   Cancelar
                 </button>
-                <button type="submit" disabled={guardandoCliente} className="btn-primary" style={{ background: '#059669', minWidth: '130px', justifyContent: 'center' }}>
-                  {guardandoCliente
-                    ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Guardando...</>
-                    : <><UserPlus size={14} /> Crear y Seleccionar</>}
+                <button
+                  type="submit"
+                  disabled={guardandoCliente}
+                  className="px-5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {guardandoCliente ? (
+                    <><Loader2 size={12} className="animate-spin" /> Guardando...</>
+                  ) : (
+                    <><UserPlus size={12} /> Crear y Seleccionar</>
+                  )}
                 </button>
               </div>
             </form>

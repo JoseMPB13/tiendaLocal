@@ -20,7 +20,7 @@ declare
     v_saldo_deudor numeric(12, 2);
     v_limite_credito numeric(12, 2);
     v_nombre_cliente varchar(150);
-    v_item jsonb;
+    v_item record;
     v_subtotal numeric(12, 2);
 begin
     -- 1. Validar límite de crédito del cliente
@@ -96,7 +96,7 @@ create or replace function registrar_venta_contado(
 returns uuid as $$
 declare
     v_venta_id uuid;
-    v_item jsonb;
+    v_item record;
     v_subtotal numeric(12, 2);
 begin
     -- 1. Insertar cabecera de la venta al contado

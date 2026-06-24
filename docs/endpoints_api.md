@@ -435,6 +435,90 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
   }
   ```
 
+### Listar Ventas (Filtros y Paginación)
+* **Ruta:** `GET /ventas/`
+* **Permisos:** `Administrador`, `Cajero`
+* **Parámetros de Consulta (Query):**
+  - `estado_venta` (string, opcional: `'Completada'`, `'Cancelada'`, `'Pendiente'`)
+  - `skip` (integer, opcional, por defecto `0`)
+  - `limit` (integer, opcional, por defecto `100`)
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": [
+      {
+        "id": "7ac2e19b-a010-449e-8c31-c4f4f3ff5d82",
+        "cliente_id": "b1bcf4d1-c24a-464a-9351-4096bead19e1",
+        "usuario_id": "a933f2bd-1fb7-4e78-becc-82f5d918b958",
+        "codigo_factura": "F001-000001",
+        "tipo_pago": "Credito",
+        "total": 7.00,
+        "estado_venta": "Completada",
+        "fecha_venta": "2026-06-20T13:50:00Z"
+      }
+    ]
+  }
+  ```
+
+### Obtener Próximo Número de Factura
+* **Ruta:** `GET /ventas/proximo-numero-factura`
+* **Permisos:** `Administrador`, `Cajero`
+* **Descripción:** Calcula y retorna el correlativo de factura que corresponderá a la siguiente venta en tiempo real para mostrarlo en el POS antes de consolidar la venta.
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": "FAC-20260624-00001"
+  }
+  ```
+
+### Obtener Detalle de Venta Completa
+* **Ruta:** `GET /ventas/{venta_id}`
+* **Permisos:** `Administrador`, `Cajero`, `Repartidor`
+* **Descripción:** Obtiene los datos de cabecera de la venta junto con el detalle completo de los artículos/productos asociados.
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "id": "7ac2e19b-a010-449e-8c31-c4f4f3ff5d82",
+      "cliente_id": "b1bcf4d1-c24a-464a-9351-4096bead19e1",
+      "usuario_id": "a933f2bd-1fb7-4e78-becc-82f5d918b958",
+      "codigo_factura": "F001-000001",
+      "tipo_pago": "Credito",
+      "total": 7.00,
+      "estado_venta": "Completada",
+      "fecha_venta": "2026-06-20T13:50:00Z",
+      "detalles": [
+        {
+          "id": "1ab2e34c-d56f-478a-b89c-c0f1f2e3d4b5",
+          "venta_id": "7ac2e19b-a010-449e-8c31-c4f4f3ff5d82",
+          "producto_id": "c86a60db-bcf5-48fa-bb4e-7b7ab9344445",
+          "cantidad": 2,
+          "precio_unitario": 3.50,
+          "subtotal": 7.00
+        }
+      ]
+    }
+  }
+  ```
+
+### Cancelar Venta (Baja Lógica y Reversión)
+* **Ruta:** `PUT /ventas/{venta_id}/cancelar`
+* **Permisos:** `Administrador`, `Cajero`
+* **Descripción:** Realiza la baja lógica de una venta (`estado_venta = 'Cancelada'`). Reaviva el stock en inventario de los productos y revierte deudas de crédito del cliente. La factura asociada también cambia a `'Anulada'`.
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "id": "7ac2e19b-a010-449e-8c31-c4f4f3ff5d82",
+      "estado_venta": "Cancelada"
+    }
+  }
+  ```
+
 ---
 
 ## 7. Módulo de Delivery & Reparto
