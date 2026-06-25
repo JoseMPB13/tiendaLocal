@@ -14,7 +14,6 @@ import GestionProductos from './views/GestionProductos';
 import GestionClientes from './views/GestionClientes';
 import GestionUsuarios from './views/GestionUsuarios';
 import GestionEnvios from './views/GestionEnvios';
-import GestionCompras from './views/GestionCompras';
 
 export const RutasApp = () => {
   return (
@@ -32,7 +31,6 @@ export const RutasApp = () => {
             <Route path="/categorias" element={<GestionCategorias />} />
             <Route path="/clientes" element={<GestionClientes />} />
             <Route path="/envios" element={<GestionEnvios />} />
-            <Route path="/compras" element={<GestionCompras />} />
           </Route>
         </Route>
 
