@@ -10,7 +10,7 @@ import useAuthStore from '../store/authStore';
 import {
   LayoutDashboard, Package, Users, Tag,
   ShoppingCart, Truck, LogOut, Menu, ChevronLeft, Database,
-  UserCog, ChevronRight,
+  UserCog, ChevronRight, ClipboardList,
 } from 'lucide-react';
 
 export const LayoutEscritorio = () => {
@@ -32,6 +32,7 @@ export const LayoutEscritorio = () => {
     { ruta: '/categorias',   etiqueta: 'Categorías',       icono: <Tag size={19} />,             color: '#f59e0b' },
     { ruta: '/clientes',     etiqueta: 'Clientes',         icono: <Users size={19} />,           color: '#f472b6' },
     { ruta: '/envios',       etiqueta: 'Envíos & Reparto', icono: <Truck size={19} />,           color: '#2dd4bf' },
+    { ruta: '/compras',      etiqueta: 'Reabastecimiento', icono: <ClipboardList size={19} />,   color: '#a78bfa' },
     ...(usuario?.rol === 'Administrador'
       ? [
           { ruta: '/kardex',     etiqueta: 'Kárdex de Stock',  icono: <Database size={19} />,        color: '#fb923c' },

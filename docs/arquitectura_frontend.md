@@ -83,6 +83,18 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **AbortController en Peticiones Asíncronas:** El efecto de carga de inventario inicial (`useEffect`) integra la API nativa de `AbortController`. Si el componente se desmonta porque el cajero navega hacia otra sección antes de que resuelvan las promesas de la API, las llamadas Axios HTTP pendientes son canceladas de forma segura (`controller.abort()`), evitando fugas de memoria y actualizaciones de estado sobre componentes desmontados.
 - **Resiliencia ante Datos Obsoletos:** El sistema confía en la validación atómica del Backend. Si al presionar "Confirmar Venta" la API de ventas retorna una falla de stock o precio obsoleto (HTTP 400), el frontend captura el error de forma controlado en un bloque `try/catch`, muestra el detalle descriptivo con un toast y recarga inmediatamente el catálogo local para refrescar los stocks en pantalla.
 
+## 13. Módulo de Reabastecimiento y Compras a Proveedores (`GestionCompras.jsx`)
+- **Interfaz de Doble Pestaña Interactiva:** Conmuta limpiamente entre el "Historial de Reabastecimiento" y "Nueva Compra" a través de un control de pestañas premium con efectos hover y estados activos estilizados en Tailwind CSS.
+- **Formulario de Registro Seguro:**
+  - *Control de Roles:* El botón de envío y el formulario de ingreso de compras se deshabilitan y muestran un banner informativo en rojo si el usuario actual posee rol de `Cajero`. Solo el rol `Administrador` cuenta con privilegios para registrar o anular compras.
+  - *Carrito Local:* Permite seleccionar productos activos del catálogo, especificar la cantidad y el costo de compra unitario, sumando los productos en una grilla interactiva y calculando el total de la compra en tiempo real.
+  - *Validación Temprana de Costo:* Compara en caliente el costo unitario de compra ingresado contra el precio de venta actual del producto en el catálogo. Si el costo de compra es superior al precio de venta, despliega un banner de alerta amarillo advirtiendo al usuario que la transacción fallará en base de datos para prevenir pérdidas operativas.
+- **Historial de Compras Adaptable (Responsive):**
+  - *Diseño de Escritorio:* Una tabla completa que detalla fecha, proveedor, código de referencia, total y un badge de estado ('Completada' en verde, 'Cancelada' en rojo).
+  - *Diseño Móvil:* Transforma de forma adaptiva las filas de la tabla en tarjetas de información legibles y compactas, ideales para dispositivos móviles.
+- **Modal de Desglose de Artículos:** Al presionar "Ver Detalles" sobre una compra, recupera mediante `obtenerCompraDetalle(id)` la cabecera completa y el desglose detallado de ítems, incluyendo el nombre del producto resuelto por el backend.
+- **Lógica de Anulación con Reversión de Stock:** El botón de "Anular Compra" solicita confirmación a través de un modal de advertencia indicando que se restará el stock comprado. Al confirmar, ejecuta `cancelarCompra(id)` en el backend, el cual revierte el stock de forma atómica. Si la anulación provoca un stock negativo de algún producto, el backend rechaza la transacción y el frontend muestra el error descriptivo a través de un toast de alerta.
+
 
 
 
