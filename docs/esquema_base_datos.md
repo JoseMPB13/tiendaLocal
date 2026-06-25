@@ -22,7 +22,7 @@ Se definen las siguientes 10 tablas maestras y relacionales en Supabase:
 4. `clientes`: Información de contacto, saldo deudor y límites de crédito asignados.
 5. `ventas`: Cabecera de transacciones comerciales.
 6. `detalles_ventas`: Ítems asociados a cada comprobante de venta.
-7. `compras`: Cabecera de reabastecimiento de inventario.
+7. `compras`: Cabecera de reabastecimiento de inventario. Contiene el campo `proveedor_nombre` para el registro del proveedor.
 8. `detalles_compras`: Ítems asociados a cada compra.
 9. `historial_stock`: Kárdex histórico de movimientos de inventario (ventas, compras, ajustes).
 10. `facturas`: Documentos de facturación asociados automáticamente a ventas completadas.
@@ -81,4 +81,19 @@ Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se 
 ### F. Función Almacenada: Obtener Próximo Código de Factura (`obtener_proximo_codigo_factura`)
 - **Tipo:** Función PL/pgSQL
 - **Comportamiento:** Lee el estado de la secuencia `seq_codigo_factura` para calcular el siguiente correlativo asignable, sin consumirlo.
+
+### G. Función Almacenada Sobrecargada: registrar_reabastecimiento
+- **Tipo:** Función PL/pgSQL
+- **Parámetros:**
+  - `p_usuario_id` (UUID)
+  - `p_proveedor_nombre` (Varchar)
+  - `p_codigo_referencia` (Varchar)
+  - `p_total` (Numeric)
+  - `p_items` (JSONB) - Arreglo JSON de ítems a reabastecer.
+- **Comportamiento:** Registra de forma transaccional una compra a proveedores. Itera sobre los detalles de la compra, bloquea los productos involucrados en el catálogo para evitar condiciones de carrera, valida que el costo de compra unitario no sea superior al precio de venta del catálogo (código de error `P0004`), inserta en `detalles_compras` (disparando el trigger `tg_controlar_stock_compra` para incrementar el stock), y finalmente actualiza el `precio_compra` del producto en la tabla `productos`.
+
+### H. Función Almacenada: cancelar_compra
+- **Tipo:** Función PL/pgSQL
+- **Parámetros:** `p_compra_id` (UUID)
+- **Comportamiento:** Cambia el estado de una compra a `'Cancelada'`. Itera sobre sus detalles de compra, bloquea cada producto y valida que el stock disponible no sea menor a la cantidad a restar (evitando stock negativo con código de error `P0007`). Resta del stock la cantidad comprada y registra el movimiento de tipo `'Cancelacion Compra'` en `historial_stock`.
 

@@ -161,6 +161,7 @@ create index if not exists idx_detalles_ventas_producto_id on detalles_ventas(pr
 create table if not exists compras (
     id uuid default uuid_generate_v4() primary key,
     usuario_id uuid references usuarios(id) on delete restrict,
+    proveedor_nombre varchar(150),
     codigo_referencia varchar(100),
     total numeric(12, 2) default 0.00 not null check (total >= 0),
     estado_compra varchar(30) default 'Completada' not null check (estado_compra in ('Completada', 'Cancelada')),

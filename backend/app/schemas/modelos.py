@@ -290,6 +290,7 @@ class DetalleCompraCrear(BaseModel):
     costo_unitario: Decimal = Field(..., ge=0)
 
 class CompraCrear(BaseModel):
+    proveedor_nombre: Optional[str] = Field(default=None, max_length=150)
     codigo_referencia: Optional[str] = Field(default=None, max_length=100)
     detalles: list[DetalleCompraCrear] = Field(..., min_items=1)
 
@@ -300,13 +301,15 @@ class DetalleCompraRespuesta(BaseModel):
     cantidad: int
     costo_unitario: Decimal
     subtotal: Decimal
+    producto_nombre: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 class CompraRespuesta(BaseModel):
     id: UUID
     usuario_id: UUID
-    codigo_referencia: Optional[str]
+    proveedor_nombre: Optional[str] = None
+    codigo_referencia: Optional[str] = None
     total: Decimal
     estado_compra: str
     fecha_compra: datetime
@@ -318,6 +321,12 @@ class ProductoReabastecer(BaseModel):
     cantidad: int = Field(..., gt=0, description="Cantidad a ingresar")
     costo_compra: Decimal = Field(..., ge=0, description="Nuevo costo de compra unitario")
     codigo_referencia: Optional[str] = Field(default=None, max_length=100, description="Código de factura o nota de referencia")
+
+
+class CompraConDetallesRespuesta(CompraRespuesta):
+    detalles: list[DetalleCompraRespuesta]
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 
