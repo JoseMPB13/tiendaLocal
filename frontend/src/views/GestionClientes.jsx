@@ -116,13 +116,70 @@ export const GestionClientes = () => {
     setMostrarVerMapa(true);
   };
 
+  const obtenerDireccionDesdeCoordenadas = async (lat, lng) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+        {
+          headers: {
+            'Accept-Language': 'es',
+            'User-Agent': 'TiendaMargarita/1.0 (josem@tienda.local)'
+          }
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.address) {
+          const addr = data.address;
+          const calle = addr.road || addr.pedestrian || addr.construction || '';
+          const barrio = addr.suburb || addr.neighbourhood || addr.city_district || '';
+          const ciudad = addr.city || addr.town || addr.village || '';
+          
+          let direccionFormateada = '';
+          if (calle) {
+            direccionFormateada += calle;
+          }
+          if (barrio) {
+            direccionFormateada += (direccionFormateada ? ', ' : '') + barrio;
+          }
+          if (ciudad && !barrio) {
+            direccionFormateada += (direccionFormateada ? ', ' : '') + ciudad;
+          }
+          
+          if (!direccionFormateada && data.display_name) {
+            direccionFormateada = data.display_name.split(',').slice(0, 3).join(',').trim();
+          }
+          
+          return direccionFormateada;
+        }
+      }
+    } catch (error) {
+      console.error('Error al realizar geocodificación inversa:', error);
+    }
+    return '';
+  };
+
+  const handleUbicacionCambiada = async (newLat, newLng, skipGeocoding = false) => {
+    setLatitud(newLat);
+    setLongitud(newLng);
+    
+    if (!skipGeocoding && newLat && newLng) {
+      const loadToast = toast.loading('Obteniendo dirección por geocodificación inversa...');
+      const dir = await obtenerDireccionDesdeCoordenadas(newLat, newLng);
+      toast.dismiss(loadToast);
+      if (dir) {
+        setDireccion(dir);
+        toast.success(`Dirección sugerida: ${dir}`);
+      }
+    }
+  };
+
   const handleEnlaceBlur = () => {
     if (!enlaceUbicacion) return;
     const coords = extraerCoordenadas(enlaceUbicacion);
     if (coords) {
-      setLatitud(coords.lat);
-      setLongitud(coords.lng);
-      toast.success('Coordenadas extraídas del enlace de mapa.');
+      toast.success('Coordenadas extraídas del enlace en caliente.');
+      handleUbicacionCambiada(coords.lat, coords.lng, false);
     }
   };
 
@@ -495,8 +552,7 @@ export const GestionClientes = () => {
                       lat={latitud}
                       lng={longitud}
                       onChange={(newLat, newLng) => {
-                        setLatitud(newLat);
-                        setLongitud(newLng);
+                        handleUbicacionCambiada(newLat, newLng);
                       }}
                     />
                   </div>

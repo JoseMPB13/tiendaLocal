@@ -27,9 +27,9 @@ export const MapaInteractivo = ({ lat, lng, onChange, soloLectura = false }) => 
   const mapInstanceRef = useRef(null);
   const markerInstanceRef = useRef(null);
 
-  // Ubicación inicial por defecto: Centro de La Paz, Bolivia
-  const defaultLat = -16.5000;
-  const defaultLng = -68.1500;
+  // Ubicación inicial por defecto: Centro de Santa Cruz de la Sierra, Bolivia
+  const defaultLat = -17.7833;
+  const defaultLng = -63.1667;
 
   useEffect(() => {
     if (!mapContainerRef.current) return;
