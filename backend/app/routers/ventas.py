@@ -78,6 +78,20 @@ async def cancelar_venta(
     resultado_id = VentaService.cancelar_venta(venta_id)
     return {"ok": True, "data": {"id": resultado_id, "estado_venta": "Cancelada"}}
 
+@router.put("/{venta_id}", response_model=dict)
+async def actualizar_venta(
+    venta_id: UUID,
+    venta: VentaCrear,
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
+):
+    """
+    Actualiza una venta existente (cabecera, artículos y delivery) de forma atómica.
+    Realiza validaciones de stock y reajustes del balance del cliente.
+    """
+    resultado = VentaService.actualizar_venta(venta_id, venta)
+    respuesta = VentaRespuesta.model_validate(resultado)
+    return {"ok": True, "data": respuesta}
+
 @router.get("/{venta_id}/detalles", response_model=dict)
 async def obtener_detalles_venta(
     venta_id: UUID,

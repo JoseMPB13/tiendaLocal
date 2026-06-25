@@ -646,3 +646,185 @@ $$ language plpgsql;
 comment on function cancelar_venta is 'Realiza la baja lógica de una venta y actualiza su factura asociada.';
 
 
+-- -----------------------------------------------------------------------------
+-- FUNCIÓN: actualizar_venta
+-- -----------------------------------------------------------------------------
+create or replace function actualizar_venta(
+    p_venta_id uuid,
+    p_cliente_id uuid,
+    p_tipo_pago varchar(30),
+    p_items jsonb,
+    p_para_delivery boolean default false,
+    p_direccion_despacho text default null,
+    p_costo_envio numeric default 0.00
+)
+returns uuid as $$
+declare
+    v_old_cliente_id uuid;
+    v_old_tipo_pago varchar(30);
+    v_old_total numeric(12, 2);
+    v_old_estado_venta varchar(30);
+    v_new_total numeric(12, 2) := 0.00;
+    v_item jsonb;
+    v_detail record;
+    v_stock_actual integer;
+    v_stock_minimo integer;
+    v_nombre_prod varchar(150);
+    v_precio_oficial numeric(12, 2);
+    v_subtotal numeric(12, 2);
+begin
+    -- 1. Obtener datos actuales de la venta
+    select cliente_id, tipo_pago, total, estado_venta
+    into v_old_cliente_id, v_old_tipo_pago, v_old_total, v_old_estado_venta
+    from ventas
+    where id = p_venta_id
+    for update;
+
+    if not found then
+        raise exception 'La venta especificada no existe.' using errcode = 'P0005';
+    end if;
+
+    if v_old_estado_venta = 'Cancelada' then
+        raise exception 'No se puede modificar una venta cancelada.' using errcode = 'P0006';
+    end if;
+
+    -- 2. Revertir deudas y stock de la venta anterior
+    -- Revertir stock
+    for v_detail in 
+        select producto_id, cantidad 
+        from detalles_ventas 
+        where venta_id = p_venta_id
+    loop
+        update productos 
+        set stock_actual = stock_actual + v_detail.cantidad
+        where id = v_detail.producto_id;
+
+        -- Registrar contra-movimiento de stock temporal (descuento revertido por ajuste)
+        insert into historial_stock (producto_id, cantidad_cambio, tipo_movimiento, referencia_id, motivo)
+        values (v_detail.producto_id, v_detail.cantidad, 'Ajuste', p_venta_id, 'Reversión por ajuste de venta');
+    end loop;
+
+    -- Revertir deuda del cliente anterior
+    if v_old_tipo_pago = 'Credito' then
+        update clientes 
+        set saldo_deudor = greatest(0.00, saldo_deudor - v_old_total)
+        where id = v_old_cliente_id;
+    end if;
+
+    -- 3. Calcular el nuevo total y validar stock/precios
+    for v_item in select jsonb_array_elements(p_items)
+    loop
+        select precio_venta, stock_actual, stock_minimo, nombre
+        into v_precio_oficial, v_stock_actual, v_stock_minimo, v_nombre_prod
+        from productos
+        where id = (v_item.value->>'producto_id')::uuid
+        for update;
+
+        if not found then
+            raise exception 'Producto no existe en catálogo.' using errcode = 'P0001';
+        end if;
+
+        -- Validar stock (recordando que acabamos de sumarle la cantidad anterior)
+        if v_stock_actual < (v_item.value->>'cantidad')::integer then
+            raise exception 'Stock insuficiente para el producto "%". Stock disponible: %, solicitado: %', 
+                v_nombre_prod, v_stock_actual, (v_item.value->>'cantidad')::integer
+                using errcode = 'P0001';
+        end if;
+
+        v_new_total := v_new_total + ((v_item.value->>'cantidad')::integer * v_precio_oficial);
+    end loop;
+
+    -- 4. Validar límite de crédito del nuevo cliente si el pago es a crédito
+    if p_tipo_pago = 'Credito' then
+        declare
+            v_saldo_deudor numeric(12, 2);
+            v_limite_credito numeric(12, 2);
+            v_nombre_cliente varchar(150);
+        begin
+            select saldo_deudor, limite_credito, nombre
+            into v_saldo_deudor, v_limite_credito, v_nombre_cliente
+            from clientes
+            where id = p_cliente_id
+            for update;
+
+            if (v_saldo_deudor + v_new_total) > v_limite_credito then
+                raise exception 'Límite de crédito excedido para el cliente %. Saldo actual: %, Venta solicitada: %, Límite máximo: %',
+                    v_nombre_cliente, v_saldo_deudor, v_new_total, v_limite_credito
+                    using errcode = 'P0002';
+            end if;
+        end;
+    end if;
+
+    -- 5. Eliminar detalles viejos
+    delete from detalles_ventas where venta_id = p_venta_id;
+
+    -- 6. Insertar nuevos detalles y descontar stock
+    for v_item in select jsonb_array_elements(p_items)
+    loop
+        v_subtotal := (v_item.value->>'cantidad')::integer * (v_item.value->>'precio_unitario')::numeric;
+        
+        insert into detalles_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal)
+        values (
+            p_venta_id, 
+            (v_item.value->>'producto_id')::uuid, 
+            (v_item.value->>'cantidad')::integer, 
+            (v_item.value->>'precio_unitario')::numeric,
+            v_subtotal
+        );
+
+        update productos
+        set stock_actual = stock_actual - (v_item.value->>'cantidad')::integer
+        where id = (v_item.value->>'producto_id')::uuid;
+
+        insert into historial_stock (producto_id, cantidad_cambio, tipo_movimiento, referencia_id, motivo)
+        values ((v_item.value->>'producto_id')::uuid, -(v_item.value->>'cantidad')::integer, 'Venta', p_venta_id, 'Ajuste de cantidad en venta');
+    end loop;
+
+    -- 7. Actualizar cabecera de la venta
+    update ventas
+    set cliente_id = p_cliente_id,
+        tipo_pago = p_tipo_pago,
+        total = v_new_total
+    where id = p_venta_id;
+
+    -- 8. Aplicar la deuda al nuevo cliente si es Crédito
+    if p_tipo_pago = 'Credito' then
+        update clientes
+        set saldo_deudor = saldo_deudor + v_new_total
+        where id = p_cliente_id;
+    end if;
+
+    -- 9. Actualizar factura asociada si existe
+    update facturas
+    set total = v_new_total
+    where venta_id = p_venta_id;
+
+    -- 10. Actualizar envío de delivery si aplica
+    if p_para_delivery then
+        if p_direccion_despacho is null or p_direccion_despacho = '' then
+            raise exception 'La dirección de despacho es obligatoria para pedidos con delivery.'
+                using errcode = 'P0003';
+        end if;
+        
+        -- Si ya existe envío, lo actualizamos. Si no, lo insertamos
+        if exists (select 1 from envios where venta_id = p_venta_id) then
+            update envios 
+            set direccion_despacho = p_direccion_despacho,
+                costo_envio = p_costo_envio
+            where venta_id = p_venta_id;
+        else
+            insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio)
+            values (p_venta_id, p_direccion_despacho, p_costo_envio, 'Pendiente');
+        end if;
+    else
+        -- Si ya no requiere delivery, eliminamos el registro si estaba en estado Pendiente
+        delete from envios where venta_id = p_venta_id and estado_envio = 'Pendiente';
+    end if;
+
+    return p_venta_id;
+end;
+$$ language plpgsql;
+
+comment on function actualizar_venta is 'Actualiza una venta y sus detalles reajustando stock y deudas (atómico).';
+
+

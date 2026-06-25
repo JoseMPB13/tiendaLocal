@@ -63,6 +63,14 @@ export const ventaService = {
   cancelarVenta: async (ventaId) => {
     const respuesta = await clienteApi.put(`/ventas/${ventaId}/cancelar`);
     return respuesta.data;
+  },
+
+  /**
+   * Actualiza los datos y detalles de una venta existente por su UUID.
+   */
+  actualizarVenta: async (ventaId, datosVenta) => {
+    const respuesta = await clienteApi.put(`/ventas/${ventaId}`, datosVenta);
+    return respuesta.data;
   }
 };
 

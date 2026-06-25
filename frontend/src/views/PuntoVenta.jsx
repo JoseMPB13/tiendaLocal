@@ -27,7 +27,7 @@ import {
   DollarSign, X, ChevronDown, UserPlus, Plus,
   RefreshCw, Package, ArrowRight, Loader2, QrCode,
   Eye, Ban, ChevronLeft, ChevronRight, Calendar,
-  User, FileText, CheckCircle2
+  User, FileText, CheckCircle2, Edit2, Printer
 } from 'lucide-react';
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -101,13 +101,18 @@ export const PuntoVenta = () => {
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [procesandoCancelacion, setProcesandoCancelacion] = useState(false);
 
+  // Estados para el modo de edición de comprobante y reajustes
+  const [editandoVentaId, setEditandoVentaId] = useState(null);
+  const [itemsEditadosOriginales, setItemsEditadosOriginales] = useState([]);
+  const [origenRecibo, setOrigenRecibo] = useState('historial');
+
   const inputBuscarRef = useRef(null);
 
   // Zustand stores
   const {
     carrito, clienteSeleccionado, metodoPago, codigoFactura,
     agregarProducto, actualizarCantidad, removerProducto, vaciarCarrito,
-    setCliente, setMetodoPago, setCodigoFactura, obtenerTotal
+    setCliente, setMetodoPago, setCodigoFactura, obtenerTotal, cargarCarrito
   } = useCartStore();
 
   const { usuario } = useAuthStore();
@@ -236,10 +241,9 @@ export const PuntoVenta = () => {
       p => p.codigo_barras === valor.trim() && p.estado === 'Activo'
     );
     if (coincidencia) {
-      agregarProducto(coincidencia);
+      handleAgregarProductoPOS(coincidencia);
       setBuscarInput('');
       setBuscarDebounced('');
-      toast.success(`✓ ${coincidencia.nombre} agregado al carrito`);
     }
   };
 
@@ -254,10 +258,9 @@ export const PuntoVenta = () => {
       );
 
       if (coincidencia) {
-        agregarProducto(coincidencia);
+        handleAgregarProductoPOS(coincidencia);
         setBuscarInput('');
         setBuscarDebounced('');
-        toast.success(`✓ ${coincidencia.nombre} agregado al carrito`);
       } else {
         toast.error(`Producto con código/nombre "${valor}" no encontrado.`);
       }
@@ -367,6 +370,44 @@ export const PuntoVenta = () => {
     setMostrarModalCobro(true);
   };
 
+  /** Obtiene el stock disponible real de un producto (reajustando con la cantidad original si se está en modo edición) */
+  const obtenerStockDisponible = (producto) => {
+    if (!editandoVentaId) return producto.stock_actual;
+    const itemOriginal = itemsEditadosOriginales.find(item => item.producto_id === producto.id);
+    const cantOriginal = itemOriginal ? itemOriginal.cantidad : 0;
+    return producto.stock_actual + cantOriginal;
+  };
+
+  /** Compara el carrito actual con los ítems originales de la venta en edición para alertar si hay cambios en stock */
+  const hanCambiadoItems = () => {
+    if (!editandoVentaId) return false;
+    if (carrito.length !== itemsEditadosOriginales.length) return true;
+    for (const item of carrito) {
+      const orig = itemsEditadosOriginales.find(o => o.producto_id === item.id);
+      if (!orig) return true;
+      if (orig.cantidad !== item.cantidad) return true;
+    }
+    return false;
+  };
+
+  /** Agrega productos al carrito validando el stock disponible real (ajustado por modo edición) */
+  const handleAgregarProductoPOS = (prod) => {
+    const stockDisp = obtenerStockDisponible(prod);
+    const existe = carrito.find(item => item.id === prod.id);
+    const cantEnCarrito = existe ? existe.cantidad : 0;
+    if (cantEnCarrito + 1 > stockDisp) {
+      toast.error(`No hay stock suficiente. Stock disponible: ${stockDisp}`);
+      return;
+    }
+    const prodAjustado = {
+      ...prod,
+      stock_actual: stockDisp
+    };
+    agregarProducto(prodAjustado);
+    toast.success(`✓ ${prod.nombre} agregado al carrito`);
+  };
+
+  /** Confirma y registra una venta nueva (flujo tradicional POST) */
   const handleConfirmarVenta = async () => {
     setProcesandoPago(true);
     try {
@@ -388,9 +429,21 @@ export const PuntoVenta = () => {
       const respuesta = await ventaService.registrarVenta(payload);
       if (respuesta.ok) {
         toast.success(`✓ Venta ${proximoNumeroFactura} registrada exitosamente.`);
-        vaciarCarrito();
         
-        // Recargar stock, clientes y próximo número
+        const ventaId = respuesta.data.id;
+
+        // Limpiar el carrito y reiniciar formulario
+        vaciarCarrito();
+        setRequiereDelivery(false);
+        setDireccionDespacho('');
+        setCostoEnvio('0.00');
+        setMostrarModalCobro(false);
+
+        // Abrir automáticamente el modal de la factura en origen POS
+        setOrigenRecibo('pos');
+        await handleVerDetalle(ventaId);
+        
+        // Recargar catálogos y próximo correlativo
         await Promise.all([
           cargarProximoNumero(),
           ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); }),
@@ -402,31 +455,137 @@ export const PuntoVenta = () => {
           setCliente(cliGeneral); 
           setBuscarCliente(cliGeneral.nombre); 
         }
-
-        setRequiereDelivery(false);
-        setDireccionDespacho('');
-        setCostoEnvio('0.00');
-        setMostrarModalCobro(false);
       }
     } catch (ex) {
       const errorDetail = ex.response?.data?.detail || 'Error desconocido al procesar la transacción.';
       toast.error(`Error: ${errorDetail}`);
-      // Actualizar stock en pantalla ante posible desajuste tras el fallo
       ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); });
     } finally {
       setProcesandoPago(false);
     }
   };
 
-  /* ── Visualizar detalle de venta en modal ───────────────────────────────── */
+  /** Confirma y actualiza una venta en edición (flujo PUT) */
+  const handleActualizarVenta = async () => {
+    setProcesandoPago(true);
+    try {
+      const payload = {
+        cliente_id: clienteSeleccionado.id,
+        usuario_id: usuario.id,
+        codigo_factura: proximoNumeroFactura,
+        tipo_pago: metodoPago,
+        detalles: carrito.map(item => ({
+          producto_id: item.id,
+          cantidad: item.cantidad,
+          precio_unitario: item.precio_venta
+        })),
+        para_delivery: requiereDelivery,
+        direccion_despacho: requiereDelivery ? direccionDespacho : null,
+        costo_envio: requiereDelivery ? parseFloat(costoEnvio) || 0.00 : 0.00
+      };
+
+      const respuesta = await ventaService.actualizarVenta(editandoVentaId, payload);
+      if (respuesta.ok) {
+        toast.success(`✓ Venta ${respuesta.data.codigo_factura} actualizada exitosamente.`);
+        
+        const ventaId = editandoVentaId;
+
+        // Salir del modo edición y vaciar carrito
+        setEditandoVentaId(null);
+        setItemsEditadosOriginales([]);
+        vaciarCarrito();
+        setRequiereDelivery(false);
+        setDireccionDespacho('');
+        setCostoEnvio('0.00');
+        setMostrarModalCobro(false);
+
+        // Abrir automáticamente el modal del recibo en modo POS
+        setOrigenRecibo('pos');
+        await handleVerDetalle(ventaId);
+        
+        // Recargar catálogos y próximo correlativo
+        await Promise.all([
+          cargarProximoNumero(),
+          ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); }),
+          ventaService.obtenerClientes().then(res => { if (res.ok) setClientes(res.data); })
+        ]);
+      }
+    } catch (ex) {
+      const errorDetail = ex.response?.data?.detail || 'Error al actualizar la venta.';
+      toast.error(`Error: ${errorDetail}`);
+      ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); });
+    } finally {
+      setProcesandoPago(false);
+    }
+  };
+
+  /** Carga los datos de una venta existente en el carrito del POS para editarla */
+  const handleCargarEdicion = async (ventaId) => {
+    try {
+      toast.loading("Cargando datos para edición...", { id: "carga-edicion" });
+      const res = await ventaService.obtenerVentaDetalle(ventaId);
+      if (res.ok) {
+        toast.dismiss("carga-edicion");
+        
+        // Establecer el cliente original de la venta
+        const cli = clientes.find(c => c.id === res.data.cliente_id);
+        if (cli) {
+          setCliente(cli);
+          setBuscarCliente(cli.nombre);
+        } else {
+          setCliente(null);
+          setBuscarCliente('');
+        }
+        
+        setMetodoPago(res.data.tipo_pago);
+        
+        // Cargar los productos a la interfaz del carrito
+        const itemsParaCarrito = res.data.detalles.map(d => {
+          const prod = productos.find(p => p.id === d.producto_id);
+          return {
+            id: d.producto_id,
+            nombre: prod ? prod.nombre : 'Producto desconocido',
+            codigo_barras: prod ? prod.codigo_barras : '',
+            precio_venta: d.precio_unitario,
+            cantidad: d.cantidad,
+            stock_actual: prod ? prod.stock_actual : 999,
+            stock_minimo: prod ? prod.stock_minimo : 0,
+            categoria_id: prod ? prod.categoria_id : null
+          };
+        });
+        
+        cargarCarrito(itemsParaCarrito);
+        setItemsEditadosOriginales(res.data.detalles);
+        setEditandoVentaId(ventaId);
+        setProximoNumeroFactura(res.data.codigo_factura);
+        
+        setActiveTab('pos');
+        toast.success("Venta cargada en el Punto de Venta.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.dismiss("carga-edicion");
+      toast.error("Error al cargar la venta para edición.");
+    }
+  };
+
+  /** Cancela el proceso de edición activo limpiando el POS */
+  const handleCancelarEdicion = () => {
+    setEditandoVentaId(null);
+    setItemsEditadosOriginales([]);
+    vaciarCarrito();
+    cargarProximoNumero();
+    toast.success("Edición cancelada. Volviendo a modo Nueva Venta.");
+  };
+
+  /** Visualizar detalle de venta en modal */
   const handleVerDetalle = async (ventaId) => {
     setVentaSeleccionada(null);
     setMostrarModalDetalle(true);
-    setCandoDetalle(true);
+    setCargandoDetalle(true);
     try {
       const res = await ventaService.obtenerVentaDetalle(ventaId);
       if (res.ok) {
-        // Enriquecer detalle con nombres de productos desde nuestro catálogo local
         const detallesEnriquecidos = res.data.detalles.map(d => {
           const prod = productos.find(p => p.id === d.producto_id);
           return {
@@ -436,7 +595,6 @@ export const PuntoVenta = () => {
           };
         });
         
-        // Buscar info del cliente
         const clienteInfo = clientes.find(c => c.id === res.data.cliente_id);
         
         setVentaSeleccionada({
@@ -451,13 +609,11 @@ export const PuntoVenta = () => {
       toast.error("No se pudo obtener el detalle de la venta.");
       setMostrarModalDetalle(false);
     } finally {
-      setCandoDetalle(false);
+      setCargandoDetalle(false);
     }
   };
 
-  const setCandoDetalle = (val) => setCargandoDetalle(val);
-
-  /* ── Cancelación lógica / Anulación de venta ─────────────────────────────── */
+  /** Cancelación lógica / Anulación de venta */
   const handleAnularVenta = async (ventaId) => {
     if (!window.confirm("¿Está completamente seguro de que desea cancelar y anular esta venta? Esta operación revertirá el stock y deudas en la base de datos de manera definitiva.")) {
       return;
@@ -468,16 +624,14 @@ export const PuntoVenta = () => {
       if (res.ok) {
         toast.success("✓ Venta cancelada y anulada con éxito.");
         
-        // Actualizar la lista local de ventas
         setVentas(prev => prev.map(v => v.id === ventaId ? { ...v, estado_venta: 'Cancelada' } : v));
         if (ventaSeleccionada && ventaSeleccionada.id === ventaId) {
           setVentaSeleccionada(prev => ({ ...prev, estado_venta: 'Cancelada' }));
         }
 
-        // Refrescar el stock de productos y deudas de clientes sin recargar la página entera
         const [resProds, resClis] = await Promise.all([
-          ventaService.obtenerProductos(),
-          ventaService.obtenerClientes(),
+          ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); }),
+          ventaService.obtenerClientes().then(res => { if (res.ok) setClientes(res.data); }),
           cargarProximoNumero()
         ]);
         if (resProds.ok) setProductos(resProds.data);
@@ -544,7 +698,29 @@ export const PuntoVenta = () => {
 
       {/* ════════════════════════ MÓDULO NUEVA VENTA (POS) ════════════════════════ */}
       {activeTab === 'pos' && (
-        <div className="flex flex-col lg:flex-row gap-6 w-full items-start">
+        <div className="w-full flex flex-col gap-4">
+          {editandoVentaId && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex justify-between items-center shadow-sm animate-fade-in">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-600 animate-pulse" />
+                <div>
+                  <h4 className="text-xs font-bold text-amber-950">MODO EDICIÓN ACTIVO</h4>
+                  <p className="text-[10px] text-amber-700">
+                    Editando venta: <span className="font-mono font-bold text-amber-900">{proximoNumeroFactura}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelarEdicion}
+                className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 text-[10px] font-bold px-3 py-1.5 rounded-lg transition shadow-sm cursor-pointer"
+              >
+                Cancelar Edición
+              </button>
+            </div>
+          )}
+          
+          <div className="flex flex-col lg:flex-row gap-6 w-full items-start">
           
           {/* ─ CATÁLOGO DE PRODUCTOS (LADO IZQUIERDO) ─ */}
           <div className="flex-1 w-full flex flex-col gap-4">
@@ -597,12 +773,13 @@ export const PuntoVenta = () => {
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {productosFiltrados.map(prod => {
-                    const agotado = prod.stock_actual <= 0;
-                    const bajoStock = !agotado && prod.stock_actual <= prod.stock_minimo;
+                    const stockDisp = obtenerStockDisponible(prod);
+                    const agotado = stockDisp <= 0;
+                    const bajoStock = !agotado && stockDisp <= prod.stock_minimo;
                     return (
                       <div
                         key={prod.id}
-                        onClick={() => !agotado && agregarProducto(prod)}
+                        onClick={() => !agotado && handleAgregarProductoPOS(prod)}
                         className={`bg-white rounded-xl p-3 border shadow-sm flex flex-col justify-between h-[150px] transition-all duration-200 ${
                           agotado
                             ? 'border-red-100 opacity-60 cursor-not-allowed'
@@ -633,7 +810,7 @@ export const PuntoVenta = () => {
                                 ? 'bg-orange-50 text-orange-600 border-orange-200'
                                 : 'bg-emerald-50 text-emerald-600 border-emerald-200'
                           }`}>
-                            {agotado ? 'Sin Stock' : `${prod.stock_actual} uds`}
+                            {agotado ? 'Sin Stock' : `${stockDisp} uds`}
                           </span>
                         </div>
                       </div>
@@ -687,7 +864,7 @@ export const PuntoVenta = () => {
                       type="number"
                       value={item.cantidad || ''}
                       min={1}
-                      onChange={e => actualizarCantidad(item.id, parseInt(e.target.value) || 0, item.stock_actual)}
+                      onChange={e => actualizarCantidad(item.id, parseInt(e.target.value) || 0, obtenerStockDisponible(item))}
                       className="w-12 text-center border border-slate-200 rounded-lg py-1 text-xs font-bold text-slate-800 focus:outline-indigo-500 focus:ring-0"
                     />
                     <button
@@ -703,6 +880,16 @@ export const PuntoVenta = () => {
 
             {/* Resumen de Facturación y Cobro */}
             <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-col gap-3">
+              {hanCambiadoItems() && (
+                <div className="bg-orange-50 border border-orange-200 text-orange-800 text-[10px] p-2.5 rounded-xl flex gap-1.5 items-start animate-fade-in shadow-sm leading-normal">
+                  <span className="text-xs">⚠</span>
+                  <div>
+                    <p className="font-bold">Reajuste de Stock</p>
+                    <p>Ha modificado los artículos o cantidades originales de la venta. Al guardar se realizará un reajuste de stock en el inventario.</p>
+                  </div>
+                </div>
+              )}
+
               {/* Próxima Factura */}
               <div className="flex flex-col">
                 <span className="text-[9px] font-bold tracking-widest text-slate-400 uppercase mb-1">
@@ -820,6 +1007,7 @@ export const PuntoVenta = () => {
             </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* ════════════════════════ MÓDULO HISTORIAL DE VENTAS (CRUD) ════════════════════════ */}
@@ -904,20 +1092,29 @@ export const PuntoVenta = () => {
                         <td className="px-4 py-2.5 text-center">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
-                              onClick={() => handleVerDetalle(v.id)}
+                              onClick={() => { setOrigenRecibo('historial'); handleVerDetalle(v.id); }}
                               className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
                               title="Ver detalles"
                             >
                               <Eye size={13} />
                             </button>
                             {v.estado_venta !== 'Cancelada' && (
-                              <button
-                                onClick={() => handleAnularVenta(v.id)}
-                                className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
-                                title="Anular venta"
-                              >
-                                <Ban size={13} />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleCargarEdicion(v.id)}
+                                  className="text-amber-600 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                                  title="Editar venta"
+                                >
+                                  <Edit2 size={13} />
+                                </button>
+                                <button
+                                  onClick={() => handleAnularVenta(v.id)}
+                                  className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                                  title="Anular venta"
+                                >
+                                  <Ban size={13} />
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -958,18 +1155,26 @@ export const PuntoVenta = () => {
                       </div>
                       <div className="flex gap-1.5">
                         <button
-                          onClick={() => handleVerDetalle(v.id)}
+                          onClick={() => { setOrigenRecibo('historial'); handleVerDetalle(v.id); }}
                           className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
                         >
                           <Eye size={12} /> Detalles
                         </button>
                         {v.estado_venta !== 'Cancelada' && (
-                          <button
-                            onClick={() => handleAnularVenta(v.id)}
-                            className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
-                          >
-                            <Ban size={12} /> Anular
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleCargarEdicion(v.id)}
+                              className="bg-amber-50 hover:bg-amber-100 text-amber-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                            >
+                              <Edit2 size={12} /> Editar
+                            </button>
+                            <button
+                              onClick={() => handleAnularVenta(v.id)}
+                              className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                            >
+                              <Ban size={12} /> Anular
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -1183,13 +1388,14 @@ export const PuntoVenta = () => {
 
             <div className="px-4 py-3.5 border-t border-slate-100 flex gap-2 justify-end">
               <button
+                type="button"
                 onClick={() => setMostrarModalCobro(false)}
                 className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 transition cursor-pointer"
               >
                 Cerrar
               </button>
               <button
-                onClick={handleConfirmarVenta}
+                onClick={editandoVentaId ? handleActualizarVenta : handleConfirmarVenta}
                 disabled={
                   procesandoPago ||
                   (metodoPago === 'Efectivo' && (!efectivoRecibido || parseFloat(efectivoRecibido) < total)) ||
@@ -1198,9 +1404,9 @@ export const PuntoVenta = () => {
                 className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-500 transition duration-150 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 {procesandoPago ? (
-                  <><Loader2 size={12} className="animate-spin" /> Procesando...</>
+                  <><Loader2 size={12} className="animate-spin" /> {editandoVentaId ? 'Guardando...' : 'Procesando...'}</>
                 ) : (
-                  <><CheckCircle2 size={12} /> Confirmar Venta</>
+                  <><CheckCircle2 size={12} /> {editandoVentaId ? 'Guardar Cambios' : 'Confirmar Venta'}</>
                 )}
               </button>
             </div>
@@ -1208,131 +1414,189 @@ export const PuntoVenta = () => {
         </div>
       )}
 
-      {/* ══════════════════ MODAL DE DETALLE DE VENTA COMPLETA ══════════════════ */}
+      {/* ══════════════════ MODAL DE DETALLE DE VENTA / TICKET DE FACTURA ══════════════════ */}
       {mostrarModalDetalle && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-100 animate-scale-up">
-            <div className="h-1 bg-gradient-to-r from-indigo-600 to-indigo-900" />
-
-            <div className="flex justify-between items-center px-4 py-3.5 border-b border-slate-100">
-              <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
-                <FileText size={15} className="text-indigo-600" /> Detalle de Venta y Factura
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in modal-backdrop receipt-backdrop">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[90vh] animate-scale-up">
+            
+            {/* Cabecera del Modal (No se imprime) */}
+            <div className="flex justify-between items-center px-4 py-3 border-b border-slate-100 bg-slate-50 no-print receipt-actions">
+              <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5 font-display">
+                <FileText size={15} className="text-indigo-600" />
+                {origenRecibo === 'pos' ? 'Comprobante de Venta Emitido' : 'Consulta de Comprobante / Factura'}
               </span>
               <button
                 onClick={() => setMostrarModalDetalle(false)}
-                className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-lg p-1 transition cursor-pointer"
+                className="bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-lg p-1 border border-slate-200 transition cursor-pointer"
               >
                 <X size={14} />
               </button>
             </div>
 
-            <div className="p-4 flex flex-col gap-4 max-h-[420px] overflow-y-auto">
+            {/* Contenedor Scrollable del Recibo */}
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-100/50 flex justify-center items-start">
+              
+              {/* DISEÑO DEL TICKET TÉRMICO (80mm Simulado y Real en Impresión) */}
               {cargandoDetalle ? (
-                <div className="text-center py-12 text-slate-400 font-medium">
-                  <Loader2 size={24} className="mx-auto mb-2 animate-spin text-indigo-600" />
-                  <p className="text-[11px]">Obteniendo desglose de productos...</p>
+                <div className="text-center py-12 text-slate-400 font-medium w-full">
+                  <Loader2 size={28} className="mx-auto mb-2 animate-spin text-indigo-600" />
+                  <p className="text-xs">Obteniendo datos de facturación...</p>
                 </div>
               ) : ventaSeleccionada ? (
-                <>
-                  {/* Ficha Cabecera */}
-                  <div className="grid grid-cols-2 gap-3 bg-slate-50 rounded-xl p-3.5 border border-slate-200 text-xs">
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">Factura</span>
-                      <span className="font-mono font-bold text-slate-700 text-sm">#{ventaSeleccionada.codigo_factura}</span>
+                <div className="printable-receipt w-[80mm] max-w-full bg-white p-4 shadow-md rounded-lg border border-slate-200 font-mono text-[11px] text-black leading-snug">
+                  
+                  {/* Encabezado Corporativo */}
+                  <div className="text-center flex flex-col items-center mb-3">
+                    <span className="font-sans font-black text-sm tracking-wider uppercase">TIENDA MARGARITA</span>
+                    <span className="text-[10px]">NIT: 1020304050</span>
+                    <span className="text-[9px] text-center mt-1">Calle Bolívar #123, Zona Central</span>
+                    <span className="text-[9px]">Santa Cruz - Bolivia</span>
+                    <span className="text-[9px]">Telf: +591 70012345</span>
+                  </div>
+
+                  {/* Línea Divisoria */}
+                  <div className="border-t border-dashed border-black my-2.5" />
+
+                  {/* Detalles del Comprobante */}
+                  <div className="space-y-1 text-[10px]">
+                    <div className="flex justify-between">
+                      <span className="font-bold">FACTURA Nº:</span>
+                      <span className="font-bold">{ventaSeleccionada.codigo_factura}</span>
                     </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-400 block">Fecha y Hora</span>
-                      <span className="font-bold text-slate-600">
-                        {new Date(ventaSeleccionada.fecha_venta).toLocaleString()}
-                      </span>
+                    <div className="flex justify-between">
+                      <span>FECHA/HORA:</span>
+                      <span>{new Date(ventaSeleccionada.fecha_venta).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'medium' })}</span>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">Cliente</span>
-                      <span className="font-bold text-slate-600">
-                        {ventaSeleccionada.cliente_nombre} {ventaSeleccionada.cliente_dni ? `(DNI: ${ventaSeleccionada.cliente_dni})` : ''}
-                      </span>
+                    <div className="flex justify-between">
+                      <span>CLIENTE:</span>
+                      <span className="text-right truncate max-w-[180px]">{ventaSeleccionada.cliente_nombre}</span>
                     </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-400 block">Forma de Pago</span>
-                      <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold inline-block mt-0.5">
-                        {ventaSeleccionada.tipo_pago}
-                      </span>
+                    {ventaSeleccionada.cliente_dni && (
+                      <div className="flex justify-between">
+                        <span>NIT/CI:</span>
+                        <span>{ventaSeleccionada.cliente_dni}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span>METODO PAGO:</span>
+                      <span className="font-bold uppercase">{ventaSeleccionada.tipo_pago}</span>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">Estado de Venta</span>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold border inline-block mt-0.5 ${
-                        ventaSeleccionada.estado_venta === 'Completada'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : ventaSeleccionada.estado_venta === 'Cancelada'
-                            ? 'bg-red-50 text-red-700 border-red-200'
-                            : 'bg-orange-50 text-orange-700 border-orange-200'
-                      }`}>
-                        {ventaSeleccionada.estado_venta}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-400 block">Monto Facturado</span>
-                      <span className="font-extrabold text-slate-900 text-sm">Bs. {ventaSeleccionada.total.toFixed(2)}</span>
+                    <div className="flex justify-between">
+                      <span>ESTADO:</span>
+                      <span className="font-bold uppercase">{ventaSeleccionada.estado_venta}</span>
                     </div>
                   </div>
 
+                  {/* Línea Divisoria */}
+                  <div className="border-t border-dashed border-black my-2.5" />
+
                   {/* Tabla de Artículos */}
-                  <div>
-                    <h5 className="font-bold text-xs text-slate-700 mb-2">Artículos Vendidos</h5>
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                      <table className="min-w-full divide-y divide-slate-200 text-left text-[11px] font-medium text-slate-600">
-                        <thead className="bg-slate-50 font-bold text-slate-700">
-                          <tr>
-                            <th className="px-3 py-2">Producto</th>
-                            <th className="px-3 py-2 text-center">Cant.</th>
-                            <th className="px-3 py-2 text-right">Unitario</th>
-                            <th className="px-3 py-2 text-right">Subtotal</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 bg-white">
-                          {ventaSeleccionada.detalles.map(d => (
-                            <tr key={d.id}>
-                              <td className="px-3 py-2 text-slate-800 font-bold">
-                                {d.nombre_producto}
-                                <span className="block font-mono text-[9px] text-slate-400 font-medium">{d.codigo_barras}</span>
-                              </td>
-                              <td className="px-3 py-2 text-center font-bold text-slate-700">{d.cantidad}</td>
-                              <td className="px-3 py-2 text-right">Bs. {d.precio_unitario.toFixed(2)}</td>
-                              <td className="px-3 py-2 text-right font-bold text-indigo-600">Bs. {d.subtotal.toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-12 font-bold text-[10px] border-b border-black pb-1">
+                      <span className="col-span-6">CONCEPTO</span>
+                      <span className="col-span-2 text-center">CANT</span>
+                      <span className="col-span-2 text-right">P.U.</span>
+                      <span className="col-span-2 text-right">SUB</span>
+                    </div>
+
+                    {ventaSeleccionada.detalles.map((d, index) => (
+                      <div key={index} className="grid grid-cols-12 text-[10px] items-start">
+                        <div className="col-span-6 flex flex-col">
+                          <span className="font-sans font-bold leading-tight">{d.nombre_producto}</span>
+                          {d.codigo_barras && <span className="text-[8px] opacity-75">{d.codigo_barras}</span>}
+                        </div>
+                        <span className="col-span-2 text-center font-bold">{d.cantidad}</span>
+                        <span className="col-span-2 text-right">{d.precio_unitario.toFixed(2)}</span>
+                        <span className="col-span-2 text-right font-bold">{d.subtotal.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Línea Divisoria */}
+                  <div className="border-t border-dashed border-black my-2.5" />
+
+                  {/* Resumen de Importes */}
+                  <div className="space-y-1 text-[10px]">
+                    <div className="flex justify-between text-xs font-extrabold border-b border-black pb-1">
+                      <span>TOTAL NETO:</span>
+                      <span>Bs. {ventaSeleccionada.total.toFixed(2)}</span>
                     </div>
                   </div>
-                </>
+
+                  {/* Si es delivery, mostrar datos de despacho */}
+                  {ventaSeleccionada.para_delivery && (
+                    <>
+                      <div className="border-t border-dashed border-black my-2.5" />
+                      <div className="space-y-1 text-[9px]">
+                        <span className="font-bold block text-[10px] mb-0.5">DATOS DE DESPACHO (DELIVERY)</span>
+                        <p className="leading-tight"><span className="font-bold">Dirección:</span> {ventaSeleccionada.direccion_despacho || 'No especificada'}</p>
+                        {ventaSeleccionada.costo_envio > 0 && (
+                          <div className="flex justify-between">
+                            <span>COSTO ENVÍO:</span>
+                            <span className="font-bold">Bs. {parseFloat(ventaSeleccionada.costo_envio).toFixed(2)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Pie de Recibo */}
+                  <div className="text-center flex flex-col items-center mt-5 gap-1">
+                    <span className="font-bold text-[10px]">¡GRACIAS POR SU COMPRA!</span>
+                    <span className="text-[9px]">Conserve su recibo para cualquier reclamo</span>
+                    <span className="text-[8px] opacity-75 mt-1 font-sans">Desarrollado por Tienda Margarita POS</span>
+                  </div>
+
+                </div>
               ) : null}
             </div>
 
-            <div className="px-4 py-3.5 border-t border-slate-100 flex gap-2 justify-between items-center">
-              <div>
-                {ventaSeleccionada && ventaSeleccionada.estado_venta !== 'Cancelada' && (
+            {/* Acciones del Recibo (No se imprimen) */}
+            <div className="px-4 py-3.5 border-t border-slate-100 bg-slate-50 flex justify-between gap-2 no-print receipt-actions">
+              <button
+                onClick={() => window.print()}
+                className="px-4 py-2 bg-indigo-900 hover:bg-indigo-950 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Printer size={14} /> Imprimir Comprobante
+              </button>
+
+              <div className="flex gap-2">
+                {origenRecibo === 'pos' ? (
                   <button
-                    disabled={procesandoCancelacion}
-                    onClick={() => handleAnularVenta(ventaSeleccionada.id)}
-                    className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    onClick={() => {
+                      setMostrarModalDetalle(false);
+                      inputBuscarRef.current?.focus();
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
                   >
-                    {procesandoCancelacion ? (
-                      <><Loader2 size={12} className="animate-spin" /> Anulando...</>
-                    ) : (
-                      <><Ban size={12} /> Anular Venta</>
-                    )}
+                    Nueva Venta
                   </button>
+                ) : (
+                  <>
+                    {ventaSeleccionada && ventaSeleccionada.estado_venta !== 'Cancelada' && (
+                      <button
+                        disabled={procesandoCancelacion}
+                        onClick={() => handleAnularVenta(ventaSeleccionada.id)}
+                        className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {procesandoCancelacion ? (
+                          <><Loader2 size={12} className="animate-spin" /> Anulando...</>
+                        ) : (
+                          <><Ban size={12} /> Anular Venta</>
+                        )}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setMostrarModalDetalle(false)}
+                      className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                    >
+                      Cerrar
+                    </button>
+                  </>
                 )}
               </div>
-              
-              <button
-                onClick={() => setMostrarModalDetalle(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-600 transition cursor-pointer"
-              >
-                Cerrar
-              </button>
             </div>
+
           </div>
         </div>
       )}

@@ -46,13 +46,19 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **Modal de Pago Dinámico:** Al finalizar la compra, se abre un modal de confirmación. En efectivo, requiere ingresar la cantidad recibida y calcula en caliente el vuelto. En ventas a crédito, despliega el estado actual de la deuda y el nuevo saldo proyectado del cliente para aprobación antes de la transacción.
 - **Captura de Excepciones Transaccionales:** Utiliza `react-hot-toast` para desplegar alertas en español si el backend FastAPI o Supabase rechazan la transacción arrojando errores controlados por triggers (como `Stock insuficiente` o `Límite de crédito excedido`).
 
-## 8b. Módulo del Historial de Ventas (CRUD e Integración)
+## 8b. Módulo del Historial de Ventas, Edición e Impresión de Facturas
 - **Interfaz de Pestañas Responsivas:** Permite conmutar fluidamente entre "Nueva Venta" (POS) e "Historial de Ventas" con una navegación intuitiva y reactiva.
 - **Diseño Dual y Responsivo (CSS Grid & Flexbox):** El historial de ventas se adapta dinámicamente según el tamaño de la pantalla:
   - *Vista de Escritorio:* Una tabla estructurada (`hidden lg:block`) que muestra fecha, código de factura, método de pago, monto total y estado.
   - *Vista Móvil:* Tarjetas de información colapsables (`block lg:hidden`) compactas y fáciles de escanear en pantallas táctiles pequeñas.
 - **Filtros e Historial Paginado:** Implementa filtros reactivos por estado (`Todas`, `Completada`, `Cancelada`, `Pendiente`) y controles de paginación estructurados mediante `ventaService.obtenerVentas(params)`.
-- **Vista Detallada de Comprobantes:** Modal responsivo que carga de forma atómica a través de `obtenerVentaDetalle(id)` la cabecera enriquecida con información del cliente y la lista completa de artículos asociados con su correspondiente subtotal.
+- **Vista Detallada y Comprobante Térmico:** Modal interactivo responsivo (scrolleable en móviles) que carga de forma atómica mediante `obtenerVentaDetalle(id)` la información de la factura. Emula la visualización de un tique térmico corporativo de 80mm. Se levanta de forma automática inmediatamente después de completar con éxito una venta en el POS.
+- **Flujo de Impresión Físico Optimizado:** El modal del recibo integra un botón de "Imprimir Comprobante" que dispara `window.print()`. Utiliza una directiva `@media print` en [index.css](file:///c:/Users/josem/Desktop/tienda/frontend/src/index.css) que oculta toda la interfaz de la aplicación React y expone únicamente el tique escalado para ticketeras y terminales POS de 80mm con máxima nitidez.
+- **Operación de Edición / Ajuste de Venta:**
+  - El usuario puede presionar el botón de editar (`Edit2` de Lucide) en el historial de ventas. Esto carga la venta completa de regreso al carrito del POS (incluyendo cliente, método de pago y productos).
+  - **Stock Dinámico Ajustado:** Durante la edición, el stock de productos disponible en el catálogo del cajero se incrementa de forma dinámica sumando las cantidades originales vendidas en esa transacción, permitiendo reajustes lógicos consistentes.
+  - **Advertencia Visual de Reajuste:** Si el usuario altera el carrito original (agrega productos, elimina o cambia cantidades), la interfaz del POS despliega inmediatamente una alerta de advertencia en color ámbar/naranja sobre el reajuste físico del stock que se ejecutará en la base de datos.
+  - **Actualización Transaccional Atómica:** Al guardar los cambios, el POS despacha los datos al backend FastAPI que los procesa en la base de datos a través de la función `actualizar_venta(uuid, uuid, varchar, jsonb, boolean, text, numeric)`. Esto revierte de forma transaccional el stock y deudas previas y aplica las nuevas especificaciones de forma atómica en un único bloque transaccional seguro.
 - **Proceso de Anulación / Cancelación Lógica:** Un botón interactivo permite ejecutar `cancelarVenta(id)` (cambiando `estado_venta = 'Cancelada'`). El backend procesa de manera transaccional la reversión del stock de productos y la deudas del cliente. El frontend actualiza los estados en tiempo real sin requerir una recarga completa de la página, refrescando los balances locales del catálogo de productos y clientes.
 
 ## 9. Flujo Móvil del Repartidor (`DeliveryReparto.jsx`)

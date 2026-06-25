@@ -277,3 +277,101 @@ class VentaService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error inesperado al cancelar la venta: {str(ex)}"
             )
+
+    @staticmethod
+    def actualizar_venta(venta_id: UUID, venta: VentaCrear) -> dict:
+        """
+        Actualiza una venta existente (cabecera y detalles) de forma atómica en la BD mediante RPC.
+        """
+        # 1. Validar existencia del cliente
+        cli_check = supabase.table("clientes").select("id").eq("id", str(venta.cliente_id)).execute()
+        if not cli_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El cliente especificado no existe."
+            )
+
+        # 2. Validar productos: existencia, estado activo y precios oficiales
+        prod_ids = [str(item.producto_id) for item in venta.detalles]
+        res_prods = supabase.table("productos").select("id, nombre, precio_venta, estado").in_("id", prod_ids).execute()
+        prods_dict = {p["id"]: p for p in res_prods.data} if res_prods.data else {}
+
+        items_json = []
+
+        for item in venta.detalles:
+            prod_id_str = str(item.producto_id)
+            if prod_id_str not in prods_dict:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El producto con ID {prod_id_str} no existe en el catálogo."
+                )
+            
+            db_prod = prods_dict[prod_id_str]
+            if db_prod["estado"] != "Activo":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El producto '{db_prod['nombre']}' no está activo."
+                )
+
+            precio_oficial = float(db_prod["precio_venta"])
+            precio_enviado = float(item.precio_unitario)
+            if abs(precio_enviado - precio_oficial) > 0.001:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El precio enviado para '{db_prod['nombre']}' no coincide con el oficial de inventario."
+                )
+
+            items_json.append({
+                "producto_id": prod_id_str,
+                "cantidad": item.cantidad,
+                "precio_unitario": precio_oficial
+            })
+
+        # 3. Invocar RPC para actualizar
+        try:
+            sp_result = supabase.rpc("actualizar_venta", {
+                "p_venta_id": str(venta_id),
+                "p_cliente_id": str(venta.cliente_id),
+                "p_tipo_pago": venta.tipo_pago,
+                "p_items": items_json,
+                "p_para_delivery": venta.para_delivery,
+                "p_direccion_despacho": venta.direccion_despacho,
+                "p_costo_envio": float(venta.costo_envio) if venta.costo_envio is not None else 0.0
+            }).execute()
+
+            if not sp_result.data:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="La base de datos no retornó el identificador de la venta modificada."
+                )
+
+            # Obtener cabecera actualizada para retornar
+            venta_modificada = supabase.table("ventas").select("*").eq("id", sp_result.data).execute()
+            return venta_modificada.data[0]
+
+        except APIError as ex:
+            if ex.code == "P0003":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="La dirección de despacho es obligatoria para pedidos con delivery."
+                )
+            elif ex.code == "P0002":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ex.message
+                )
+            elif ex.code == "P0001":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ex.message
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error transaccional en la BD (SQLSTATE {ex.code}): {ex.message}"
+            )
+        except Exception as ex:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error inesperado al actualizar venta: {str(ex)}"
+            )
+

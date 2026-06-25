@@ -87,6 +87,7 @@ export const useCartStore = create((set, get) => ({
   setCliente: (cliente) => set({ clienteSeleccionado: cliente }),
   setMetodoPago: (metodo) => set({ metodoPago: metodo }),
   setCodigoFactura: (codigo) => set({ codigoFactura: codigo }),
+  cargarCarrito: (items) => set({ carrito: items }),
 
   /**
    * Retorna el monto total calculado de forma precisa usando aritmética de centavos (enteros)
