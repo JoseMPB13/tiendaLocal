@@ -31,7 +31,9 @@ export const MapaInteractivo = ({ lat, lng, onChange, soloLectura = false }) => 
   const defaultLat = -17.7833;
   const defaultLng = -63.1667;
 
-  // Unificamos el ciclo de vida del mapa en un único efecto reactivo a lat, lng y soloLectura
+  // Unificamos el ciclo de vida del mapa en un único efecto reactivo a lat, lng y soloLectura.
+  // Este efecto escucha los cambios de latitud y longitud gatillados tras el evento onBlur
+  // del extractor universal de coordenadas (soportando dominios como googleusercontent.com).
   useEffect(() => {
     if (!mapContainerRef.current) return;
 

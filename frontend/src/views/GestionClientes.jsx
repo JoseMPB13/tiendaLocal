@@ -19,8 +19,8 @@ const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
 
 /**
  * Extrae coordenadas geográficas (latitud, longitud) desde una URL de mapa
- * (Google Maps, OpenStreetMap) o directamente desde una cadena de coordenadas.
- * Soporta múltiples formatos de enlace en caliente y coordenadas en bruto.
+ * de forma universal (independiente del dominio, ej: googleusercontent.com o google.com)
+ * o de coordenadas en bruto. Valida geográficamente que estén dentro de los límites reales.
  * Idioma: Español
  */
 const extraerCoordenadas = (url) => {
@@ -28,45 +28,69 @@ const extraerCoordenadas = (url) => {
   const texto = url.trim();
 
   // 1. Verificar si son coordenadas puras separadas por coma, ej: "-17.7833, -63.1667"
-  const rawRegex = /^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$/;
+  const rawRegex = /^\s*(-?\d+\.\d+)\s*(?:,|\/)\s*(-?\d+\.\d+)\s*$/;
   const rawMatch = texto.match(rawRegex);
   if (rawMatch) {
-    return { lat: parseFloat(rawMatch[1]), lng: parseFloat(rawMatch[2]) };
+    const lat = parseFloat(rawMatch[1]);
+    const lng = parseFloat(rawMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
   }
 
-  // 2. OpenStreetMap con parámetros mlat y mlon (en cualquier orden)
+  // 2. Parámetros mlat y mlon (común en OSM/enlaces genéricos, en cualquier orden)
   const mlatMatch = texto.match(/[?&]mlat=(-?\d+\.\d+)/);
   const mlonMatch = texto.match(/[?&]mlon=(-?\d+\.\d+)/);
   if (mlatMatch && mlonMatch) {
-    return { lat: parseFloat(mlatMatch[1]), lng: parseFloat(mlonMatch[1]) };
+    const lat = parseFloat(mlatMatch[1]);
+    const lng = parseFloat(mlonMatch[1]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
   }
 
-  // 3. OpenStreetMap con patrón de hash de mapa (#map=zoom/lat/lng)
-  const osmRegex = /#map=\d+\/(-?\d+\.\d+)\/(-?\d+\.\d+)/;
+  // 3. Patrón de hash de mapa (#map=zoom/lat/lng o similar)
+  const osmRegex = /map=\d+(?:\.\d+)?\/(-?\d+\.\d+)\/(-?\d+\.\d+)/;
   const osmMatch = texto.match(osmRegex);
   if (osmMatch) {
-    return { lat: parseFloat(osmMatch[1]), lng: parseFloat(osmMatch[2]) };
+    const lat = parseFloat(osmMatch[1]);
+    const lng = parseFloat(osmMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
   }
 
-  // 4. Parámetros de consulta estándar como q=lat,lng o query=lat,lng o ll=lat,lng
-  const qRegex = /[?&](?:q|query|ll)=(-?\d+\.\d+),(-?\d+\.\d+)/;
+  // 4. Parámetros de consulta estándar como q=lat,lng, query=lat,lng, ll=lat,lng
+  const qRegex = /[?&](?:q|query|ll|center)=(-?\d+\.\d+)(?:\s*,\s*|%2C|\s*\/|%2F)\s*(-?\d+\.\d+)/i;
   const qMatch = texto.match(qRegex);
   if (qMatch) {
-    return { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+    const lat = parseFloat(qMatch[1]);
+    const lng = parseFloat(qMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
   }
 
-  // 5. Google Maps con patrón de ruta de lugar (/place/lat,lng)
-  const placeRegex = /\/place\/(-?\d+\.\d+),(-?\d+\.\d+)/;
+  // 5. Patrón path común: /place/lat,lng o /@lat,lng o /place/lat/lng o /@lat/lng
+  const placeRegex = /(?:place|@)(-?\d+\.\d+)(?:\s*,\s*|%2C|\s*\/|%2F)\s*(-?\d+\.\d+)/i;
   const placeMatch = texto.match(placeRegex);
   if (placeMatch) {
-    return { lat: parseFloat(placeMatch[1]), lng: parseFloat(placeMatch[2]) };
+    const lat = parseFloat(placeMatch[1]);
+    const lng = parseFloat(placeMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
   }
 
-  // 6. Google Maps con arroba (@lat,lng)
-  const atRegex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
-  const atMatch = texto.match(atRegex);
-  if (atMatch) {
-    return { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+  // 6. Búsqueda agresiva/universal de cualquier par de floats consecutivos separados por coma o barra
+  const fallbackRegex = /(-?\d+\.\d+)(?:\s*,\s*|%2C|\s*\/|%2F)\s*(-?\d+\.\d+)/g;
+  let fallbackMatch;
+  while ((fallbackMatch = fallbackRegex.exec(texto)) !== null) {
+    const lat = parseFloat(fallbackMatch[1]);
+    const lng = parseFloat(fallbackMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
   }
 
   return null;
@@ -90,8 +114,8 @@ export const GestionClientes = () => {
   const [telefono, setTelefono] = useState('');
   const [direccion, setDireccion] = useState('');
   const [enlaceUbicacion, setEnlaceUbicacion] = useState('');
-  const [latitud, setLatitud] = useState(null);
-  const [longitud, setLongitud] = useState(null);
+  const [latitud, setLatitud] = useState(-17.7833);
+  const [longitud, setLongitud] = useState(-63.1667);
   const [saldoDeudor, setSaldoDeudor] = useState('');
   const [limiteCredito, setLimiteCredito] = useState('');
   const [procesandoForm, setProcesandoForm] = useState(false);
@@ -136,8 +160,8 @@ export const GestionClientes = () => {
     setTelefono('');
     setDireccion('');
     setEnlaceUbicacion('');
-    setLatitud(null);
-    setLongitud(null);
+    setLatitud(-17.7833);
+    setLongitud(-63.1667);
     setSaldoDeudor(0.00);
     setLimiteCredito(0.00);
     setMostrarForm(true);
@@ -150,8 +174,8 @@ export const GestionClientes = () => {
     setTelefono(cli.telefono || '');
     setDireccion(cli.direccion || '');
     setEnlaceUbicacion(cli.enlace_mapa || cli.enlace_ubicacion || '');
-    setLatitud(cli.latitud !== undefined && cli.latitud !== null ? cli.latitud : null);
-    setLongitud(cli.longitud !== undefined && cli.longitud !== null ? cli.longitud : null);
+    setLatitud(cli.latitud !== undefined && cli.latitud !== null ? cli.latitud : -17.7833);
+    setLongitud(cli.longitud !== undefined && cli.longitud !== null ? cli.longitud : -63.1667);
     setSaldoDeudor(cli.saldo_deudor);
     setLimiteCredito(cli.limite_credito);
     setMostrarForm(true);
