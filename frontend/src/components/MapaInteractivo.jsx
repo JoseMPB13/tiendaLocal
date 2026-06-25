@@ -31,67 +31,82 @@ export const MapaInteractivo = ({ lat, lng, onChange, soloLectura = false }) => 
   const defaultLat = -17.7833;
   const defaultLng = -63.1667;
 
+  // Unificamos el ciclo de vida del mapa en un único efecto reactivo a lat, lng y soloLectura
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
-    const latVal = lat !== null && lat !== undefined ? parseFloat(lat) : defaultLat;
-    const lngVal = lng !== null && lng !== undefined ? parseFloat(lng) : defaultLng;
-
-    // Inicializar mapa
-    const map = L.map(mapContainerRef.current).setView([latVal, lngVal], 15);
-    mapInstanceRef.current = map;
-
-    // Capa de mosaicos libres de OpenStreetMap
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
-    }).addTo(map);
-
-    // Pintar marcador
-    const marker = L.marker([latVal, lngVal], { draggable: !soloLectura }).addTo(map);
-    markerInstanceRef.current = marker;
-
-    if (!soloLectura && onChange) {
-      // Evento al terminar de arrastrar el marcador
-      marker.on('dragend', (e) => {
-        const coords = e.target.getLatLng();
-        onChange(coords.lat, coords.lng);
-      });
-
-      // Evento al hacer clic en cualquier punto del mapa
-      map.on('click', (e) => {
-        const { lat, lng } = e.latlng;
-        marker.setLatLng([lat, lng]);
-        onChange(lat, lng);
-      });
-    }
-
-    // Limpieza al desmontar el componente para evitar duplicidad de contenedores Leaflet
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, []);
-
-  // Escuchar actualizaciones externas de coordenadas (ej. al pegar enlace en input)
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    const marker = markerInstanceRef.current;
-
-    if (!map || !marker) return;
-
+    // Resolver coordenadas actuales válidas
     const tieneCoordenadasValidas = lat !== null && lat !== undefined && lng !== null && lng !== undefined;
     const latVal = tieneCoordenadasValidas ? parseFloat(lat) : defaultLat;
     const lngVal = tieneCoordenadasValidas ? parseFloat(lng) : defaultLng;
 
-    // Evitar bucles infinitos si la posición ya es la misma
-    const actualLatLng = marker.getLatLng();
-    if (actualLatLng.lat !== latVal || actualLatLng.lng !== lngVal) {
-      marker.setLatLng([latVal, lngVal]);
-      map.setView([latVal, lngVal], map.getZoom());
+    // Si el mapa no ha sido inicializado aún, procedemos con su creación
+    if (!mapInstanceRef.current) {
+      // Inicializar instancia de Leaflet
+      const map = L.map(mapContainerRef.current).setView([latVal, lngVal], 15);
+      mapInstanceRef.current = map;
+
+      // Capa de mosaicos libres de OpenStreetMap
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
+      }).addTo(map);
+
+      // Pintar y configurar el marcador
+      const marker = L.marker([latVal, lngVal], { draggable: !soloLectura }).addTo(map);
+      markerInstanceRef.current = marker;
+
+      // Escuchar eventos en modo de edición/captura
+      if (!soloLectura && onChange) {
+        // Evento al arrastrar el marcador por el mapa
+        marker.on('dragend', (e) => {
+          const coords = e.target.getLatLng();
+          onChange(coords.lat, coords.lng);
+        });
+
+        // Evento al hacer clic en cualquier punto libre del mapa
+        map.on('click', (e) => {
+          const { lat, lng } = e.latlng;
+          marker.setLatLng([lat, lng]);
+          onChange(lat, lng);
+        });
+      }
+
+      // Corrección de renderizado incompleto de Leaflet (problemas de tamaño de contenedor en modales React)
+      setTimeout(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+        }
+      }, 100);
+    } else {
+      // Si el mapa ya existe, actualizamos su vista e indicador únicamente si cambiaron externamente
+      const map = mapInstanceRef.current;
+      const marker = markerInstanceRef.current;
+
+      if (map && marker) {
+        const actualLatLng = marker.getLatLng();
+        
+        // Usamos una tolerancia para evitar problemas con precisión decimal (punto flotante de JS)
+        const diffLat = Math.abs(actualLatLng.lat - latVal);
+        const diffLng = Math.abs(actualLatLng.lng - lngVal);
+
+        if (diffLat > 0.00001 || diffLng > 0.00001) {
+          marker.setLatLng([latVal, lngVal]);
+          map.setView([latVal, lngVal], map.getZoom());
+        }
+      }
     }
-  }, [lat, lng]);
+  }, [lat, lng, soloLectura]);
+
+  // Efecto independiente para la limpieza atómica al desmontar el componente
+  useEffect(() => {
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markerInstanceRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div 

@@ -99,23 +99,20 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 ## 14. Integración del Mapa Interactivo y Geolocalización de Clientes (`GestionClientes.jsx`, `MapaInteractivo.jsx`)
 - **Controlador del Mapa Wrapper de Leaflet (`MapaInteractivo.jsx`):**
   - Implementado mediante la biblioteca principal `leaflet` directamente asociada al DOM con React refs (`useRef`) y hooks de ciclo de vida (`useEffect`). Esto asegura total compatibilidad con **React 19** y evita peer dependencies obsoletas que podrían causar fallos en la compilación de Vite.
+  - **Corrección de Reactividad Unificada:** Para resolver condiciones de carrera y des-sincronizaciones (donde el mapa no se actualizaba al pegar enlaces), se consolidó la inicialización y actualización reactiva en un único efecto `useEffect` dependiente de `[lat, lng, soloLectura]`. Si la instancia del mapa es nula, se crea; de lo contrario, se actualiza la posición del marcador y la vista del mapa de forma imperativa.
+  - **Evitar Bucles con Tolerancia:** Se implementó una tolerancia absoluta de `0.00001` al comparar la posición del marcador actual y las coordenadas entrantes para evitar rebotes infinitos y re-renderizados innecesarios.
+  - **Carga de Contenedor en Modales:** Ejecuta `map.invalidateSize()` con un pequeño retardo de `100ms` tras la creación para corregir fallos visuales donde el mapa renderizaba gris o incompleto dentro de contenedores modal de React.
   - Se configuró el centro de inicio operativo por defecto en **Santa Cruz de la Sierra, Bolivia** (Latitud `-17.7833`, Longitud `-63.1667`) si el cliente no cuenta con coordenadas guardadas.
   - Resuelve las imágenes de marcadores Leaflet por defecto en la compilación estática de Vite (`marker-icon.png`, `marker-shadow.png`).
 - **Captura Bidireccional de Coordenadas:**
   - El modal de creación/edición de clientes incluye el mapa interactivo. Si el cliente cuenta con coordenadas previas, el mapa centra el marcador automáticamente.
   - El usuario puede hacer clic en cualquier punto del mapa o arrastrar el marcador para actualizar los inputs numéricos de latitud y longitud en tiempo real.
-  - Al pegar un enlace de Google Maps u OpenStreetMap en el campo "Enlace de Ubicación GPS", al perder el foco (`onBlur`), se ejecuta un parser local con expresiones regulares en javascript que extrae e inyecta latitud y longitud, posicionando de inmediato el marcador en el mapa interactivo.
+  - **Parser Robustecido de Enlaces:** Al perder el foco el input del enlace (`onBlur`), se ejecuta la función `extraerCoordenadas` utilizando un motor regex multi-patrón robusto que soporta URLs de Google Maps (query, place, at), OpenStreetMap (#map, mlat/mlon), así como coordenadas en bruto pegadas directamente (ej. `-17.78, -63.16`). Esto actualiza los estados locales y gatilla la sincronización imperativa hacia el mapa.
 - **Geocodificación Inversa con OpenStreetMap Nominatim:**
   - Al interactuar con el mapa (hacer clic o terminar de arrastrar el marcador) o al resolver un enlace pegado (`onBlur`), se dispara una consulta asíncrona a la API gratuita de geocodificación inversa de Nominatim.
   - Extrae el nombre de la calle, avenida, barrio o localidad del JSON de respuesta y lo inyecta automáticamente en el input de **"Dirección"** del cliente.
-  - Se implementó un control de llamadas discretas (únicamente en eventos finalizados como `dragend` y `click`) para no violar el límite de uso de la API Nominatim (máximo 1 petición/segundo) ni saturar la conexión mientras el usuario arrastra dinámicamente el marcador.
+  - Se implementó un control de llamadas discretas (únicamente en eventos finalizados como `dragend`, `click` y `onBlur` del enlace) para no violar el límite de uso de la API Nominatim (máximo 1 petición/segundo) ni saturar la conexión mientras el usuario arrastra dinámicamente el marcador.
 - **Acceso Rápido y Modal de Vista Previa:**
   - Si un cliente cuenta con coordenadas, se muestra un icono `MapPin` de color fucsia en la tabla de escritorio o en la tarjeta móvil.
-  - Al hacer clic en el pin, se abre un modal responsivo de solo lectura centrado en las coordenadas del cliente, facilitando a cajeros y repartidores la visualización rápida de la dirección del cliente.
-
-
-
-
-
 
 

@@ -2,6 +2,9 @@
  * Vista: GestionClientes.jsx
  * Módulo de gestión de clientes con control de crédito y saldo deudor.
  * Diseño premium con tabla, badges de estado y formulario modal.
+ * Integra geolocalización bidireccional mediante MapaInteractivo con Leaflet,
+ * soporte de extracción de coordenadas a través de enlaces en el evento onBlur,
+ * y auto-rellenado de dirección en tiempo real vía geocodificación de Nominatim.
  */
 
 import { useState, useEffect } from 'react';
@@ -14,15 +17,58 @@ import MapaInteractivo from '../components/MapaInteractivo';
 
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
 
+/**
+ * Extrae coordenadas geográficas (latitud, longitud) desde una URL de mapa
+ * (Google Maps, OpenStreetMap) o directamente desde una cadena de coordenadas.
+ * Soporta múltiples formatos de enlace en caliente y coordenadas en bruto.
+ * Idioma: Español
+ */
 const extraerCoordenadas = (url) => {
   if (!url) return null;
-  const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)|q=(-?\d+\.\d+),(-?\d+\.\d+)|place\/(-?\d+\.\d+),(-?\d+\.\d+)/;
-  const match = url.match(regex);
-  if (match) {
-    const lat = match[1] || match[3] || match[5];
-    const lng = match[2] || match[4] || match[6];
-    return { lat: parseFloat(lat), lng: parseFloat(lng) };
+  const texto = url.trim();
+
+  // 1. Verificar si son coordenadas puras separadas por coma, ej: "-17.7833, -63.1667"
+  const rawRegex = /^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$/;
+  const rawMatch = texto.match(rawRegex);
+  if (rawMatch) {
+    return { lat: parseFloat(rawMatch[1]), lng: parseFloat(rawMatch[2]) };
   }
+
+  // 2. OpenStreetMap con parámetros mlat y mlon (en cualquier orden)
+  const mlatMatch = texto.match(/[?&]mlat=(-?\d+\.\d+)/);
+  const mlonMatch = texto.match(/[?&]mlon=(-?\d+\.\d+)/);
+  if (mlatMatch && mlonMatch) {
+    return { lat: parseFloat(mlatMatch[1]), lng: parseFloat(mlonMatch[1]) };
+  }
+
+  // 3. OpenStreetMap con patrón de hash de mapa (#map=zoom/lat/lng)
+  const osmRegex = /#map=\d+\/(-?\d+\.\d+)\/(-?\d+\.\d+)/;
+  const osmMatch = texto.match(osmRegex);
+  if (osmMatch) {
+    return { lat: parseFloat(osmMatch[1]), lng: parseFloat(osmMatch[2]) };
+  }
+
+  // 4. Parámetros de consulta estándar como q=lat,lng o query=lat,lng o ll=lat,lng
+  const qRegex = /[?&](?:q|query|ll)=(-?\d+\.\d+),(-?\d+\.\d+)/;
+  const qMatch = texto.match(qRegex);
+  if (qMatch) {
+    return { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+  }
+
+  // 5. Google Maps con patrón de ruta de lugar (/place/lat,lng)
+  const placeRegex = /\/place\/(-?\d+\.\d+),(-?\d+\.\d+)/;
+  const placeMatch = texto.match(placeRegex);
+  if (placeMatch) {
+    return { lat: parseFloat(placeMatch[1]), lng: parseFloat(placeMatch[2]) };
+  }
+
+  // 6. Google Maps con arroba (@lat,lng)
+  const atRegex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
+  const atMatch = texto.match(atRegex);
+  if (atMatch) {
+    return { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+  }
+
   return null;
 };
 
