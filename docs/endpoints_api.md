@@ -287,17 +287,20 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
 * **Ruta:** `POST /clientes/`
 * **Permisos:** `Administrador`, `Cajero`
 * **Cuerpo de Petición (JSON):**
+  *(Nota: Los campos `latitud` y `longitud` son opcionales. Si se envía un `enlace_mapa` o `enlace_ubicacion` válido de Google Maps u OpenStreetMap y no se especifican coordenadas de latitud/longitud, el servidor extraerá automáticamente las coordenadas mediante expresiones regulares. `limite_credito` debe ser mayor o igual al `saldo_deudor`).*
   ```json
   {
     "dni_ruc": "10458796541",
     "nombre": "Distribuidora H&S",
     "telefono": "987654321",
     "direccion": "Av. Las Flores 123",
+    "enlace_mapa": "https://www.google.com/maps/place/-16.4839,-68.1302",
+    "latitud": null,
+    "longitud": null,
     "saldo_deudor": 0.00,
     "limite_credito": 1500.00
   }
   ```
-  *(Nota: Se valida que `limite_credito` sea mayor o igual al `saldo_deudor`)*
 * **Respuesta (201 Created):**
   ```json
   {
@@ -308,6 +311,10 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
       "nombre": "Distribuidora H&S",
       "telefono": "987654321",
       "direccion": "Av. Las Flores 123",
+      "enlace_ubicacion": "https://www.google.com/maps/place/-16.4839,-68.1302",
+      "enlace_mapa": "https://www.google.com/maps/place/-16.4839,-68.1302",
+      "latitud": -16.48390000,
+      "longitud": -68.13020000,
       "saldo_deudor": 0.00,
       "limite_credito": 1500.00,
       "estado": "Activo",
@@ -331,6 +338,10 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
         "nombre": "Distribuidora H&S",
         "telefono": "987654321",
         "direccion": "Av. Las Flores 123",
+        "enlace_ubicacion": "https://www.google.com/maps/place/-16.4839,-68.1302",
+        "enlace_mapa": "https://www.google.com/maps/place/-16.4839,-68.1302",
+        "latitud": -16.48390000,
+        "longitud": -68.13020000,
         "saldo_deudor": 0.00,
         "limite_credito": 1500.00,
         "estado": "Activo",
@@ -354,6 +365,10 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
       "nombre": "Distribuidora H&S",
       "telefono": "987654321",
       "direccion": "Av. Las Flores 123",
+      "enlace_ubicacion": "https://www.google.com/maps/place/-16.4839,-68.1302",
+      "enlace_mapa": "https://www.google.com/maps/place/-16.4839,-68.1302",
+      "latitud": -16.48390000,
+      "longitud": -68.13020000,
       "saldo_deudor": 0.00,
       "limite_credito": 1500.00,
       "estado": "Activo",
@@ -363,19 +378,48 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
   }
   ```
 
-### Actualizar Cliente (Validación de Crédito)
+### Actualizar Cliente (Validación de Crédito e Integración de Mapas)
 * **Ruta:** `PUT /clientes/{cliente_id}`
 * **Permisos:** `Administrador`, `Cajero`
 * **Cuerpo de Petición (JSON):**
   ```json
   {
+    "enlace_mapa": "https://www.google.com/maps/@-16.5000,-68.1500,17z",
     "limite_credito": 500.00
   }
   ```
-* **Respuesta (400 Bad Request en caso de error):**
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "id": "b1bcf4d1-c24a-464a-9351-4096bead19e1",
+      "dni_ruc": "10458796541",
+      "nombre": "Distribuidora H&S",
+      "telefono": "987654321",
+      "direccion": "Av. Las Flores 123",
+      "enlace_ubicacion": "https://www.google.com/maps/@-16.5000,-68.1500,17z",
+      "enlace_mapa": "https://www.google.com/maps/@-16.5000,-68.1500,17z",
+      "latitud": -16.50000000,
+      "longitud": -68.15000000,
+      "saldo_deudor": 0.00,
+      "limite_credito": 500.00,
+      "estado": "Activo",
+      "fecha_creacion": "2026-06-20T13:36:00Z",
+      "fecha_actualizacion": "2026-06-25T18:55:00Z"
+    }
+  }
+  ```
+* **Respuesta (400 Bad Request en caso de error de crédito):**
   ```json
   {
     "detail": "El límite de crédito (500.0) no puede ser menor al saldo deudor actual (800.0)."
+  }
+  ```
+* **Respuesta (400 Bad Request en caso de coordenadas fuera de rango):**
+  ```json
+  {
+    "detail": "La latitud ingresada no es válida. Debe estar entre -90 y 90."
   }
   ```
 

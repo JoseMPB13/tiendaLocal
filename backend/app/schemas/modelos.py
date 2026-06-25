@@ -108,6 +108,9 @@ class ClienteBase(BaseModel):
     telefono: Optional[str] = Field(None, max_length=20)
     direccion: Optional[str] = None
     enlace_ubicacion: Optional[str] = None
+    enlace_mapa: Optional[str] = None
+    latitud: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitud: Optional[float] = Field(None, ge=-180.0, le=180.0)
     saldo_deudor: float = Field(0.00, ge=0)
     limite_credito: float = Field(0.00, ge=0)
 
@@ -120,6 +123,9 @@ class ClienteActualizar(BaseModel):
     telefono: Optional[str] = Field(None, max_length=20)
     direccion: Optional[str] = None
     enlace_ubicacion: Optional[str] = None
+    enlace_mapa: Optional[str] = None
+    latitud: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitud: Optional[float] = Field(None, ge=-180.0, le=180.0)
     saldo_deudor: Optional[float] = Field(None, ge=0)
     limite_credito: Optional[float] = Field(None, ge=0)
     estado: Optional[str] = Field(None, description="Estados válidos: Activo, Inactivo")
@@ -224,6 +230,9 @@ class ClienteContacto(BaseModel):
     telefono: Optional[str] = None
     direccion: Optional[str] = None
     enlace_ubicacion: Optional[str] = None
+    enlace_mapa: Optional[str] = None
+    latitud: Optional[float] = None
+    longitud: Optional[float] = None
 
 class EnvioCrear(EnvioBase):
     pass

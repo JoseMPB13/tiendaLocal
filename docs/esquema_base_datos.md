@@ -19,7 +19,7 @@ Se definen las siguientes 10 tablas maestras y relacionales en Supabase:
 1. `categorias`: Agrupación lógica de productos.
 2. `productos`: Catálogo general de artículos, precios y stock.
 3. `usuarios`: Cuentas de acceso del personal (Administrador, Cajero, Repartidor).
-4. `clientes`: Información de contacto, saldo deudor y límites de crédito asignados.
+4. `clientes`: Información de contacto, saldo deudor, límites de crédito asignados y coordenadas geográficas (`latitud`, `longitud`, `enlace_mapa`) para envíos.
 5. `ventas`: Cabecera de transacciones comerciales.
 6. `detalles_ventas`: Ítems asociados a cada comprobante de venta.
 7. `compras`: Cabecera de reabastecimiento de inventario. Contiene el campo `proveedor_nombre` para el registro del proveedor.
@@ -37,6 +37,7 @@ Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se 
 - `idx_usuarios_email` en `usuarios(email)`
 - `idx_clientes_dni_ruc` en `clientes(dni_ruc)`
 - `idx_clientes_nombre` en `clientes(nombre)`
+- `idx_clientes_coordenadas` en `clientes(latitud, longitud)`
 - `idx_ventas_codigo_factura` en `ventas(codigo_factura)`
 - `idx_ventas_fecha` en `ventas(fecha_venta)`
 - `idx_compras_fecha` en `compras(fecha_compra)`

@@ -108,6 +108,9 @@ create table if not exists clientes (
     telefono varchar(20),
     direccion text,
     enlace_ubicacion text,
+    latitud numeric(10, 8) default null check (latitud is null or (latitud >= -90.00000000 and latitud <= 90.00000000)),
+    longitud numeric(11, 8) default null check (longitud is null or (longitud >= -180.00000000 and longitud <= 180.00000000)),
+    enlace_mapa text default null,
     saldo_deudor numeric(12, 2) default 0.00 not null check (saldo_deudor >= 0),
     limite_credito numeric(12, 2) default 0.00 not null check (limite_credito >= 0),
     estado varchar(20) default 'Activo' not null check (estado in ('Activo', 'Inactivo')),
@@ -115,9 +118,10 @@ create table if not exists clientes (
     fecha_actualizacion timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
-comment on table clientes is 'Clientes registrados en la tienda con soporte para saldo deudor.';
+comment on table clientes is 'Clientes registrados en la tienda con soporte para saldo deudor y ubicación geográfica.';
 create index if not exists idx_clientes_dni_ruc on clientes(dni_ruc);
 create index if not exists idx_clientes_nombre on clientes(nombre);
+create index if not exists idx_clientes_coordenadas on clientes(latitud, longitud);
 
 -- -----------------------------------------------------------------------------
 -- 5. TABLA: ventas

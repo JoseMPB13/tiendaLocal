@@ -967,4 +967,13 @@ END;
 $$;
 
 
+-- -----------------------------------------------------------------------------
+-- NOTA DE INTEGRACIÓN GEOGRÁFICA DE CLIENTES
+-- Los campos latitud, longitud y enlace_mapa fueron agregados a la tabla clientes.
+-- La auditoría automática (fn_auditar_cambios) registra estos campos de forma 
+-- nativa al serializar el registro a JSONB en el trigger trg_auditar_clientes.
+-- -----------------------------------------------------------------------------
+
+
+
 
