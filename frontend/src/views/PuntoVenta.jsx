@@ -6,7 +6,7 @@
  *  - Interfaz de pestañas: "Nueva Venta" / "Historial de Ventas"
  *  - Búsqueda de productos por nombre o código de barras
  *  - Filtro por categoría
- *  - Consulta en tiempo real del próximo número de factura correlativo desde la DB
+ *  - Consulta en tiempo real del próximo número de factura correlativo desde la DB (sincronizarProximoCodigoFactura)
  *  - Selector de cliente con buscador autocomplete y registro rápido
  *  - Métodos de pago: Efectivo (con vuelto), Tarjeta, QR, Crédito (con límite de deuda)
  *  - Carrito con control de stock y confirmación transaccional
@@ -14,6 +14,7 @@
  *  - Vista detallada de venta (cabecera + productos asociados) en modal responsivo
  *  - Anulación/cancelación lógica de ventas con reversión automática de stock y deudas en la DB
  *  - Adaptación 100% responsiva (vista de tarjetas en móvil, tabla en desktop) usando Tailwind CSS
+ *  - Integración de MapaInteractivo para despacho de delivery con geocodificación de Nominatim en caliente
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -29,19 +30,86 @@ import {
   Eye, Ban, ChevronLeft, ChevronRight, Calendar,
   User, FileText, CheckCircle2, Edit2, Printer
 } from 'lucide-react';
+import MapaInteractivo from '../components/MapaInteractivo';
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
-/** Extrae latitud y longitud desde enlaces de Google Maps o Waze */
+/**
+ * Extrae coordenadas geográficas (latitud, longitud) desde una URL de mapa
+ * de forma universal (independiente del dominio, ej: googleusercontent.com o google.com)
+ * o de coordenadas en bruto. Valida geográficamente que estén dentro de los límites reales.
+ * Idioma: Español
+ */
 const extraerCoordenadas = (url) => {
   if (!url) return null;
-  const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)|q=(-?\d+\.\d+),(-?\d+\.\d+)|place\/(-?\d+\.\d+),(-?\d+\.\d+)/;
-  const match = url.match(regex);
-  if (match) {
-    const lat = match[1] || match[3] || match[5];
-    const lng = match[2] || match[4] || match[6];
-    return { lat: parseFloat(lat), lng: parseFloat(lng) };
+  const texto = url.trim();
+
+  // 1. Verificar si son coordenadas puras separadas por coma, ej: "-17.7833, -63.1667"
+  const rawRegex = /^\s*(-?\d+\.\d+)\s*(?:,|\/)\s*(-?\d+\.\d+)\s*$/;
+  const rawMatch = texto.match(rawRegex);
+  if (rawMatch) {
+    const lat = parseFloat(rawMatch[1]);
+    const lng = parseFloat(rawMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
   }
+
+  // 2. Parámetros mlat y mlon (común en OSM/enlaces genéricos, en cualquier orden)
+  const mlatMatch = texto.match(/[?&]mlat=(-?\d+\.\d+)/);
+  const mlonMatch = texto.match(/[?&]mlon=(-?\d+\.\d+)/);
+  if (mlatMatch && mlonMatch) {
+    const lat = parseFloat(mlatMatch[1]);
+    const lng = parseFloat(mlonMatch[1]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
+  }
+
+  // 3. Patrón de hash de mapa (#map=zoom/lat/lng o similar)
+  const osmRegex = /map=\d+(?:\.\d+)?\/(-?\d+\.\d+)\/(-?\d+\.\d+)/;
+  const osmMatch = texto.match(osmRegex);
+  if (osmMatch) {
+    const lat = parseFloat(osmMatch[1]);
+    const lng = parseFloat(osmMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
+  }
+
+  // 4. Parámetros de consulta estándar como q=lat,lng, query=lat,lng, ll=lat,lng
+  const qRegex = /[?&](?:q|query|ll|center)=(-?\d+\.\d+)(?:\s*,\s*|%2C|\s*\/|%2F)\s*(-?\d+\.\d+)/i;
+  const qMatch = texto.match(qRegex);
+  if (qMatch) {
+    const lat = parseFloat(qMatch[1]);
+    const lng = parseFloat(qMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
+  }
+
+  // 5. Patrón path común: /place/lat,lng o /@lat,lng o /place/lat/lng o /@lat/lng
+  const placeRegex = /(?:place|@)(-?\d+\.\d+)(?:\s*,\s*|%2C|\s*\/|%2F)\s*(-?\d+\.\d+)/i;
+  const placeMatch = texto.match(placeRegex);
+  if (placeMatch) {
+    const lat = parseFloat(placeMatch[1]);
+    const lng = parseFloat(placeMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
+  }
+
+  // 6. Búsqueda agresiva/universal de cualquier par de floats consecutivos separados por coma o barra
+  const fallbackRegex = /(-?\d+\.\d+)(?:\s*,\s*|%2C|\s*\/|%2F)\s*(-?\d+\.\d+)/g;
+  let fallbackMatch;
+  while ((fallbackMatch = fallbackRegex.exec(texto)) !== null) {
+    const lat = parseFloat(fallbackMatch[1]);
+    const lng = parseFloat(fallbackMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
+  }
+
   return null;
 };
 
@@ -79,6 +147,8 @@ export const PuntoVenta = () => {
   const [requiereDelivery, setRequiereDelivery] = useState(false);
   const [direccionDespacho, setDireccionDespacho] = useState('');
   const [costoEnvio, setCostoEnvio] = useState('0.00');
+  const [deliveryLat, setDeliveryLat] = useState(-17.7833);
+  const [deliveryLng, setDeliveryLng] = useState(-63.1667);
 
   // Mini-modal de registro rápido de cliente
   const [mostrarModalCliente, setMostrarModalCliente] = useState(false);
@@ -126,8 +196,12 @@ export const PuntoVenta = () => {
     return () => clearTimeout(handler);
   }, [buscarInput]);
 
-  /** Consulta en tiempo real el próximo número correlativo de factura */
-  const cargarProximoNumero = async () => {
+  /**
+   * Sincroniza en tiempo real el próximo código de factura correlativo desde la base de datos.
+   * Evita problemas de duplicidad de claves primarias.
+   * Idioma: Español
+   */
+  const sincronizarProximoCodigoFactura = async () => {
     try {
       const res = await ventaService.obtenerProximoNumeroFactura();
       if (res.ok && res.data) {
@@ -135,7 +209,7 @@ export const PuntoVenta = () => {
         setCodigoFactura(res.data);
       }
     } catch (err) {
-      console.error("Error al obtener próximo correlativo:", err);
+      console.error("Error al obtener el próximo correlativo de factura:", err);
     }
   };
 
@@ -143,7 +217,7 @@ export const PuntoVenta = () => {
   const inicializarPOS = async () => {
     try {
       setCargando(true);
-      await cargarProximoNumero();
+      await sincronizarProximoCodigoFactura();
       
       const [resProds, resClis, resCats] = await Promise.all([
         ventaService.obtenerProductos(),
@@ -367,7 +441,71 @@ export const PuntoVenta = () => {
     setRequiereDelivery(false);
     setDireccionDespacho(clienteSeleccionado?.direccion || '');
     setCostoEnvio('0.00');
+
+    // Inicializar coordenadas del delivery en base a los datos maestros del cliente seleccionado
+    const initLat = clienteSeleccionado?.latitud !== undefined && clienteSeleccionado?.latitud !== null
+      ? parseFloat(clienteSeleccionado.latitud)
+      : -17.7833;
+    const initLng = clienteSeleccionado?.longitud !== undefined && clienteSeleccionado?.longitud !== null
+      ? parseFloat(clienteSeleccionado.longitud)
+      : -63.1667;
+    setDeliveryLat(initLat);
+    setDeliveryLng(initLng);
+
     setMostrarModalCobro(true);
+  };
+
+  /**
+   * Actualiza el estado local de coordenadas de delivery y realiza geocodificación inversa
+   * para rellenar de forma exclusiva el input de dirección de despacho, sin alterar
+   * los datos maestros del cliente.
+   * Idioma: Español
+   */
+  const handleDeliveryMapChange = async (newLat, newLng) => {
+    setDeliveryLat(newLat);
+    setDeliveryLng(newLng);
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${newLat}&lon=${newLng}`,
+        {
+          headers: {
+            'Accept-Language': 'es',
+            'User-Agent': 'TiendaMargarita/1.0 (josem@tienda.local)'
+          }
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.address) {
+          const addr = data.address;
+          const calle = addr.road || addr.pedestrian || addr.construction || '';
+          const barrio = addr.suburb || addr.neighbourhood || addr.city_district || '';
+          const ciudad = addr.city || addr.town || addr.village || '';
+          
+          let direccionFormateada = '';
+          if (calle) {
+            direccionFormateada += calle;
+          }
+          if (barrio) {
+            direccionFormateada += (direccionFormateada ? ', ' : '') + barrio;
+          }
+          if (ciudad && !barrio) {
+            direccionFormateada += (direccionFormateada ? ', ' : '') + ciudad;
+          }
+          
+          if (!direccionFormateada && data.display_name) {
+            direccionFormateada = data.display_name.split(',').slice(0, 3).join(',').trim();
+          }
+
+          if (direccionFormateada) {
+            setDireccionDespacho(direccionFormateada);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error al realizar geocodificación inversa para delivery:', error);
+    }
   };
 
   /** Obtiene el stock disponible real de un producto (reajustando con la cantidad original si se está en modo edición) */
@@ -443,9 +581,9 @@ export const PuntoVenta = () => {
         setOrigenRecibo('pos');
         await handleVerDetalle(ventaId);
         
-        // Recargar catálogos y próximo correlativo
+        // Recargar catálogos y próximo correlativo limpio
         await Promise.all([
-          cargarProximoNumero(),
+          sincronizarProximoCodigoFactura(),
           ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); }),
           ventaService.obtenerClientes().then(res => { if (res.ok) setClientes(res.data); })
         ]);
@@ -503,9 +641,9 @@ export const PuntoVenta = () => {
         setOrigenRecibo('pos');
         await handleVerDetalle(ventaId);
         
-        // Recargar catálogos y próximo correlativo
+        // Recargar catálogos y próximo correlativo limpio
         await Promise.all([
-          cargarProximoNumero(),
+          sincronizarProximoCodigoFactura(),
           ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); }),
           ventaService.obtenerClientes().then(res => { if (res.ok) setClientes(res.data); })
         ]);
@@ -574,7 +712,7 @@ export const PuntoVenta = () => {
     setEditandoVentaId(null);
     setItemsEditadosOriginales([]);
     vaciarCarrito();
-    cargarProximoNumero();
+    sincronizarProximoCodigoFactura();
     toast.success("Edición cancelada. Volviendo a modo Nueva Venta.");
   };
 
@@ -1277,39 +1415,29 @@ export const PuntoVenta = () => {
                       />
                     </div>
 
-                    {clienteSeleccionado?.enlace_ubicacion && (() => {
-                      const coords = extraerCoordenadas(clienteSeleccionado.enlace_ubicacion);
-                      if (coords) {
-                        const bboxMinLng = coords.lng - 0.003;
-                        const bboxMinLat = coords.lat - 0.003;
-                        const bboxMaxLng = coords.lng + 0.003;
-                        const bboxMaxLat = coords.lat + 0.003;
-                        return (
-                          <div className="flex flex-col gap-1.5">
-                            <span className="text-[10px] font-bold text-slate-500">Mapa Georreferencial</span>
-                            <div className="w-full h-32 rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
-                              <iframe
-                                title="Ubicación Cliente"
-                                width="100%"
-                                height="100%"
-                                frameBorder="0"
-                                src={`https://www.openstreetmap.org/export/embed.html?bbox=${bboxMinLng}%2C${bboxMinLat}%2C${bboxMaxLng}%2C${bboxMaxLat}&layer=mapnik&marker=${coords.lat}%2C${coords.lng}`}
-                                style={{ border: 0 }}
-                              />
-                            </div>
-                            <a
-                              href={clienteSeleccionado.enlace_ubicacion}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[10px] text-indigo-600 font-bold hover:underline"
-                            >
-                              📍 Abrir enlace de navegación externo
-                            </a>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold text-slate-500">Mapa Georreferencial de Delivery</span>
+                      <div className="w-full h-48 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-inner">
+                        <MapaInteractivo
+                          lat={deliveryLat}
+                          lng={deliveryLng}
+                          onChange={handleDeliveryMapChange}
+                        />
+                      </div>
+                      <span className="text-[9px] text-slate-400">
+                        * Arrastre el marcador o haga clic en el mapa para ajustar la dirección de despacho de este pedido.
+                      </span>
+                      {clienteSeleccionado?.enlace_ubicacion && (
+                        <a
+                          href={clienteSeleccionado.enlace_ubicacion}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-indigo-600 font-bold hover:underline mt-0.5 flex items-center gap-0.5"
+                        >
+                          📍 Abrir enlace de navegación externo
+                        </a>
+                      )}
+                    </div>
 
                     <div>
                       <label className="text-[10px] font-bold text-slate-500 block mb-1">
