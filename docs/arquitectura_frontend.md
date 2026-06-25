@@ -96,6 +96,19 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **Modal de Detalle del Reabastecimiento:** Muestra el desglose de productos adquiridos con sus nombres enriquecidos, cantidades, costos y subtotales.
 - **Anulación Lógica de Compras:** Admite la cancelación mediante el procedimiento `cancelarCompra(id)` en la base de datos (restringido a administradores), revirtiendo el stock de productos de forma segura y controlando que no resulte en inventario negativo.
 
+## 14. Integración del Mapa Interactivo y Geolocalización de Clientes (`GestionClientes.jsx`, `MapaInteractivo.jsx`)
+- **Controlador del Mapa Wrapper de Leaflet (`MapaInteractivo.jsx`):**
+  - Implementado mediante la biblioteca principal `leaflet` directamente asociada al DOM con React refs (`useRef`) y hooks de ciclo de vida (`useEffect`). Esto asegura total compatibilidad con **React 19** y evita peer dependencies obsoletas que podrían causar fallos en la compilación de Vite.
+  - Resuelve las imágenes de marcadores Leaflet por defecto en la compilación estática de Vite (`marker-icon.png`, `marker-shadow.png`).
+- **Captura Bidireccional de Coordenadas:**
+  - El modal de creación/edición de clientes incluye el mapa interactivo. Si el cliente cuenta con coordenadas previas, el mapa centra el marcador automáticamente.
+  - El usuario puede hacer clic en cualquier punto del mapa o arrastrar el marcador para actualizar los inputs numéricos de latitud y longitud en tiempo real.
+  - Al pegar un enlace de Google Maps u OpenStreetMap en el campo "Enlace de Ubicación GPS", al perder el foco (`onBlur`), se ejecuta un parser local con expresiones regulares en javascript que extrae e inyecta latitud y longitud, posicionando de inmediato el marcador en el mapa interactivo.
+- **Acceso Rápido y Modal de Vista Previa:**
+  - Si un cliente cuenta con coordenadas, se muestra un icono `MapPin` de color fucsia en la tabla de escritorio o en la tarjeta móvil.
+  - Al hacer clic en el pin, se abre un modal responsivo de solo lectura centrado en las coordenadas del cliente, facilitando a cajeros y repartidores la visualización rápida de la dirección del cliente.
+
+
 
 
 
