@@ -794,11 +794,14 @@ create index if not exists idx_bitacora_usuarios_fecha on bitacora_usuarios(fech
 
 alter table bitacora_usuarios enable row level security;
 
+drop policy if exists "Permitir select de bitacora_usuarios a todos" on bitacora_usuarios;
 create policy "Permitir select de bitacora_usuarios a todos"
 on bitacora_usuarios for select to anon, authenticated using (true);
 
+drop policy if exists "Permitir insert de bitacora_usuarios a todos" on bitacora_usuarios;
 create policy "Permitir insert de bitacora_usuarios a todos"
 on bitacora_usuarios for insert to anon, authenticated with check (true);
+
 
 
 

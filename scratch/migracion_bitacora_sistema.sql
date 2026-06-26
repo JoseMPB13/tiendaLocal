@@ -27,11 +27,14 @@ CREATE INDEX IF NOT EXISTS idx_bitacora_usuarios_fecha ON bitacora_usuarios(fech
 -- RLS y Políticas de Seguridad
 ALTER TABLE bitacora_usuarios ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Permitir select de bitacora_usuarios a todos" ON bitacora_usuarios;
 CREATE POLICY "Permitir select de bitacora_usuarios a todos"
 ON bitacora_usuarios FOR SELECT TO anon, authenticated USING (true);
 
+DROP POLICY IF EXISTS "Permitir insert de bitacora_usuarios a todos" ON bitacora_usuarios;
 CREATE POLICY "Permitir insert de bitacora_usuarios a todos"
 ON bitacora_usuarios FOR INSERT TO anon, authenticated WITH CHECK (true);
+
 
 
 -- -----------------------------------------------------------------------------
