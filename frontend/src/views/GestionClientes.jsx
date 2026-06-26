@@ -11,8 +11,9 @@ import { useState, useEffect } from 'react';
 import clienteService from '../services/clienteService';
 import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
+import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import toast, { Toaster } from 'react-hot-toast';
-import { Plus, Edit3, Trash2, X, Users, MapPin } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Users, MapPin, DollarSign, AlertCircle, TrendingUp, UserCheck } from 'lucide-react';
 import MapaInteractivo from '../components/MapaInteractivo';
 
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
@@ -100,9 +101,19 @@ export const GestionClientes = () => {
   const [clientes, setClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
 
+  // Filtros de búsqueda y estado/deuda
+  const [buscarTexto, setBuscarTexto] = useState('');
+  const [estadoSel, setEstadoSel] = useState('');
+  const [deudaSel, setDeudaSel] = useState('');
+
   // Paginación
   const [pagina, setPagina] = useState(1);
   const itemsPorPagina = 7;
+
+  // Reiniciar página al cambiar filtros
+  useEffect(() => {
+    setPagina(1);
+  }, [buscarTexto, estadoSel, deudaSel]);
 
   // Modal Formulario
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -253,6 +264,26 @@ export const GestionClientes = () => {
     }
   };
 
+  const handleEnlaceChange = (val) => {
+    setEnlaceUbicacion(val);
+    if (!val) return;
+    const coords = extraerCoordenadas(val);
+    if (coords) {
+      toast.success('Coordenadas extraídas del enlace automáticamente.');
+      handleUbicacionCambiada(coords.lat, coords.lng, false);
+    }
+  };
+
+  const handleEnlacePaste = (e) => {
+    const val = e.clipboardData.getData('text');
+    if (!val) return;
+    const coords = extraerCoordenadas(val);
+    if (coords) {
+      toast.success('Coordenadas extraídas desde el portapapeles.');
+      handleUbicacionCambiada(coords.lat, coords.lng, false);
+    }
+  };
+
   const handleGuardar = async (e) => {
     e.preventDefault();
     setProcesandoForm(true);
@@ -316,8 +347,44 @@ export const GestionClientes = () => {
     }
   };
 
+  // Lógica de filtrado de clientes (búsqueda en tiempo real por Nombre, DNI/RUC o Teléfono,
+  // y filtros por Estado y condición de Deuda)
+  const clientesFiltrados = clientes.filter((cli) => {
+    const coincideTexto =
+      cli.nombre.toLowerCase().includes(buscarTexto.toLowerCase()) ||
+      (cli.dni_ruc && cli.dni_ruc.toLowerCase().includes(buscarTexto.toLowerCase())) ||
+      (cli.telefono && cli.telefono.toLowerCase().includes(buscarTexto.toLowerCase()));
+
+    const coincideEstado =
+      !estadoSel || cli.estado === estadoSel;
+
+    let coincideDeuda = true;
+    if (deudaSel === 'con_deuda') {
+      coincideDeuda = cli.saldo_deudor > 0;
+    } else if (deudaSel === 'sin_deuda') {
+      coincideDeuda = cli.saldo_deudor === 0;
+    }
+
+    return coincideTexto && coincideEstado && coincideDeuda;
+  });
+
   const indexInicio = (pagina - 1) * itemsPorPagina;
-  const clientesPaginados = clientes.slice(indexInicio, indexInicio + itemsPorPagina);
+  const clientesPaginados = clientesFiltrados.slice(indexInicio, indexInicio + itemsPorPagina);
+
+  // Cálculos dinámicos de métricas del Mini-Dashboard
+  // Tarjeta 1: Total Clientes Activos (Recuento de registros con estado 'Activo')
+  const totalActivosCount = clientes.filter(c => c.estado === 'Activo').length;
+
+  // Tarjeta 2: Clientes con Deuda (Cantidad de clientes cuyo 'saldo_deudor > 0')
+  const clientesConDeudaCount = clientes.filter(c => c.saldo_deudor > 0).length;
+
+  // Tarjeta 3: Cartera Total en la Calle (Suma acumulada de todos los 'saldo_deudor')
+  const carteraCalleTotal = clientes.reduce((acc, c) => acc + (parseFloat(c.saldo_deudor) || 0), 0);
+
+  // Tarjeta 4: Promedio de Límite de Crédito (Media del 'limite_credito' asignado)
+  const promedioLimiteCredito = clientes.length > 0
+    ? clientes.reduce((acc, c) => acc + (parseFloat(c.limite_credito) || 0), 0) / clientes.length
+    : 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -349,6 +416,129 @@ export const GestionClientes = () => {
           Registrar Cliente
         </button>
       </div>
+
+      {/* ── MINI-DASHBOARD DE CLIENTES ── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: '16px',
+        marginBottom: '5px'
+      }}>
+        {/* Tarjeta 1: Total Clientes Activos */}
+        <div style={{
+          background: 'white',
+          border: '1px solid #e2e8f0',
+          borderRadius: '12px',
+          padding: '16px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div style={{
+            width: '40px', height: '40px',
+            background: '#fdf2f8',
+            color: '#db2777',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <UserCheck size={20} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Clientes Activos</span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', fontFamily: 'Inter, sans-serif' }}>{totalActivosCount} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>regs</span></span>
+          </div>
+        </div>
+
+        {/* Tarjeta 2: Clientes con Deuda */}
+        <div style={{
+          background: 'white',
+          border: '1px solid #fee2e2',
+          borderRadius: '12px',
+          padding: '16px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div style={{
+            width: '40px', height: '40px',
+            background: '#fef2f2',
+            color: '#ef4444',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <AlertCircle size={20} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Con Deuda</span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ef4444', fontFamily: 'Inter, sans-serif' }}>{clientesConDeudaCount} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>deudores</span></span>
+          </div>
+        </div>
+
+        {/* Tarjeta 3: Cartera Total */}
+        <div style={{
+          background: 'white',
+          border: '1px solid #e2e8f0',
+          borderRadius: '12px',
+          padding: '16px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div style={{
+            width: '40px', height: '40px',
+            background: '#f0fdf4',
+            color: '#22c55e',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <DollarSign size={20} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Cartera en la Calle</span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', fontFamily: 'Inter, sans-serif' }}>Bs. {carteraCalleTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+        </div>
+
+        {/* Tarjeta 4: Promedio Límite de Crédito */}
+        <div style={{
+          background: 'white',
+          border: '1px solid #e2e8f0',
+          borderRadius: '12px',
+          padding: '16px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div style={{
+            width: '40px', height: '40px',
+            background: '#faf5ff',
+            color: '#9333ea',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <TrendingUp size={20} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Promedio Límite</span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', fontFamily: 'Inter, sans-serif' }}>Bs. {promedioLimiteCredito.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── PANEL DE BÚSQUEDA Y FILTRADO ── */}
+      <PanelFiltroBusqueda
+        buscarTexto={buscarTexto}
+        alCambiarBuscarTexto={setBuscarTexto}
+        estadoSeleccionado={estadoSel}
+        alCambiarEstado={setEstadoSel}
+        deudaSeleccionada={deudaSel}
+        alCambiarDeuda={setDeudaSel}
+        placeholder="Buscar clientes por nombre, DNI/RUC o teléfono..."
+      />
 
       {/* ── TABLA / CARDS RESPONSIVAS ── */}
       <div className="table-wrapper">
@@ -506,7 +696,7 @@ export const GestionClientes = () => {
         )}
 
         <PaginadorTablas
-          totalItems={clientes.length}
+          totalItems={clientesFiltrados.length}
           itemsPorPagina={itemsPorPagina}
           paginaActual={pagina}
           alCambiarPagina={setPagina}
@@ -583,7 +773,8 @@ export const GestionClientes = () => {
                   <input
                     type="text"
                     value={enlaceUbicacion}
-                    onChange={(e) => setEnlaceUbicacion(e.target.value)}
+                    onChange={(e) => handleEnlaceChange(e.target.value)}
+                    onPaste={handleEnlacePaste}
                     onBlur={handleEnlaceBlur}
                     placeholder="https://maps.google.com/?q=..."
                     className="form-input"

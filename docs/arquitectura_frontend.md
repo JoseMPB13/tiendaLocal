@@ -127,13 +127,22 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **Captura Bidireccional de Coordenadas:**
   - El modal de creación/edición de clientes incluye el mapa interactivo. Si el cliente cuenta con coordenadas previas, el mapa centra el marcador automáticamente.
   - El usuario puede hacer clic en cualquier punto del mapa o arrastrar el marcador para actualizar los inputs numéricos de latitud y longitud en tiempo real.
-  - **Parser Universal de Enlaces:** Al perder el foco el input del enlace (`onBlur`), se ejecuta la función `extraerCoordenadas` utilizando un motor regex multidominio. Este parser es completamente agnóstico al dominio (soporta dominios de producción como `google.com` u `openstreetmap.org`, así como subdominios mock de desarrollo como `googleusercontent.com` y placeholders). Adicionalmente, cuenta con un fallback agresivo que detecta cualquier secuencia consecutiva de coordenadas decimales.
+  - **Parser Universal de Enlaces en Caliente (onChange / onPaste / onBlur):** Se agregaron escuchadores para los eventos de cambio y pegado en el input. Al recibir un enlace válido (ej. que contenga `@-17.7833,-63.1821` o `q=-17.7833,-63.1821`), se extraen la Latitud y Longitud reactivamente, actualizando el mapa y centrando el marcador en tiempo real. Este parser es completamente agnóstico al dominio (soporta dominios de producción como `google.com` u `openstreetmap.org`, así como subdominios mock de desarrollo como `googleusercontent.com` y placeholders). Adicionalmente, cuenta con un fallback agresivo que detecta cualquier secuencia consecutiva de coordenadas decimales.
   - **Validación Geográfica Estricta:** Antes de adoptar cualquier par de coordenadas extraídas, el sistema verifica que la Latitud se encuentre en el rango [-90, 90] y la Longitud en el rango [-180, 180], previniendo saltos de marcador erráticos ante enlaces mal formados. Esto actualiza los estados locales y gatilla la sincronización imperativa hacia el mapa.
 - **Geocodificación Inversa con OpenStreetMap Nominatim:**
-  - Al interactuar con el mapa (hacer clic o terminar de arrastrar el marcador) o al resolver un enlace pegado (`onBlur`), se dispara una consulta asíncrona a la API gratuita de geocodificación inversa de Nominatim.
+  - Al interactuar con el mapa (hacer clic o terminar de arrastrar el marcador) o al resolver un enlace pegado/cambiado, se dispara una consulta asíncrona a la API gratuita de geocodificación inversa de Nominatim.
   - Extrae el nombre de la calle, avenida, barrio o localidad del JSON de respuesta y lo inyecta automáticamente en el input de **"Dirección"** del cliente.
-  - Se implementó un control de llamadas discretas (únicamente en eventos finalizados como `dragend`, `click` y `onBlur` del enlace) para no violar el límite de uso de la API Nominatim (máximo 1 petición/segundo) ni saturar la conexión mientras el usuario arrastra dinámicamente el marcador.
+  - Se implementó un control de llamadas discretas (únicamente en eventos finalizados como `dragend`, `click` y en detecciones de enlaces válidos) para no violar el límite de uso de la API Nominatim (máximo 1 petición/segundo) ni saturar la conexión mientras el usuario interactúa.
 - **Acceso Rápido y Modal de Vista Previa:**
   - Si un cliente cuenta con coordenadas, se muestra un icono `MapPin` de color fucsia en la tabla de escritorio o en la tarjeta móvil.
+
+## 14b. Búsqueda, Filtros y Mini-Dashboard del Módulo de Clientes (`GestionClientes.jsx`, `PanelFiltroBusqueda.jsx`)
+- **Extensión del Componente de Filtro:** Se modificó `PanelFiltroBusqueda.jsx` para soportar de manera opcional parámetros de Estado (`estadoSeleccionado`, `alCambiarEstado`) y Deuda (`deudaSeleccionada`, `alCambiarDeuda`). Esto mantiene la modularidad del componente, asegurando compatibilidad con el catálogo de productos mientras unifica la visualización y estilos de los filtros de clientes.
+- **Filtrado Multi-Parámetro de Clientes:** `GestionClientes.jsx` filtra la colección en base a coincidencias insensibles a mayúsculas sobre Nombre, DNI/RUC o Teléfono, junto con los selectores de Estado (Activos/Inactivos) y condición de Deuda (con o sin saldo pendiente).
+- **Mini-Dashboard de Cartera y Crédito:** Se renderiza en la parte superior un panel con 4 tarjetas estadísticas dinámicas:
+  - **Clientes Activos:** Conteo de clientes en estado `Activo`.
+  - **Con Deuda:** Cantidad de deudores con `saldo_deudor > 0`.
+  - **Cartera en la Calle:** Suma monetaria total acumulada de saldos deudores pendientes de cobro.
+  - **Promedio Límite de Crédito:** Promedio del límite de crédito asignado a todos los registros.
 
 

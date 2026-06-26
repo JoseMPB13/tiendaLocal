@@ -15,7 +15,11 @@ export const PanelFiltroBusqueda = ({
   alCambiarCategoria,
   categorias = [],
   placeholder = "Buscar...",
-  etiquetaCategoria = "Categoría"
+  etiquetaCategoria = "Categoría",
+  estadoSeleccionado,
+  alCambiarEstado,
+  deudaSeleccionada,
+  alCambiarDeuda
 }) => {
   return (
     <div style={{
@@ -62,33 +66,91 @@ export const PanelFiltroBusqueda = ({
       </div>
 
       {/* Selector de Categorías */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569', fontFamily: 'Inter, sans-serif' }}>
-          {etiquetaCategoria}:
-        </span>
-        <select
-          value={categoriaSeleccionada}
-          onChange={(e) => alCambiarCategoria(e.target.value)}
-          style={{
-            padding: '10px 16px',
-            borderRadius: '8px',
-            border: '1px solid #cbd5e1',
-            fontSize: '0.8125rem',
-            background: 'white',
-            outline: 'none',
-            cursor: 'pointer',
-            fontFamily: 'Inter, sans-serif'
-          }}
-          className="focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
-        >
-          <option value="">Todas</option>
-          {categorias.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.nombre}
-            </option>
-          ))}
-        </select>
-      </div>
+      {alCambiarCategoria && categorias && categorias.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569', fontFamily: 'Inter, sans-serif' }}>
+            {etiquetaCategoria}:
+          </span>
+          <select
+            value={categoriaSeleccionada}
+            onChange={(e) => alCambiarCategoria(e.target.value)}
+            style={{
+              padding: '10px 16px',
+              borderRadius: '8px',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.8125rem',
+              background: 'white',
+              outline: 'none',
+              cursor: 'pointer',
+              fontFamily: 'Inter, sans-serif'
+            }}
+            className="focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
+          >
+            <option value="">Todas</option>
+            {categorias.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Selector de Estado */}
+      {alCambiarEstado && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569', fontFamily: 'Inter, sans-serif' }}>
+            Estado:
+          </span>
+          <select
+            value={estadoSeleccionado}
+            onChange={(e) => alCambiarEstado(e.target.value)}
+            style={{
+              padding: '10px 16px',
+              borderRadius: '8px',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.8125rem',
+              background: 'white',
+              outline: 'none',
+              cursor: 'pointer',
+              fontFamily: 'Inter, sans-serif'
+            }}
+            className="focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
+          >
+            <option value="">Todos</option>
+            <option value="Activo">Activos</option>
+            <option value="Inactivo">Inactivos</option>
+          </select>
+        </div>
+      )}
+
+      {/* Selector de Deuda */}
+      {alCambiarDeuda && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569', fontFamily: 'Inter, sans-serif' }}>
+            Deuda:
+          </span>
+          <select
+            value={deudaSeleccionada}
+            onChange={(e) => alCambiarDeuda(e.target.value)}
+            style={{
+              padding: '10px 16px',
+              borderRadius: '8px',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.8125rem',
+              background: 'white',
+              outline: 'none',
+              cursor: 'pointer',
+              fontFamily: 'Inter, sans-serif'
+            }}
+            className="focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
+          >
+            <option value="">Todos</option>
+            <option value="con_deuda">Con Saldo Pendiente</option>
+            <option value="sin_deuda">Sin Deuda</option>
+          </select>
+        </div>
+      )}
     </div>
   );
 };
