@@ -9,7 +9,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import {
   LayoutDashboard, Package, Users, Tag,
-  ShoppingCart, Truck, LogOut, Menu, ChevronLeft, Database,
+  ShoppingCart, Truck, LogOut, ChevronLeft, Database,
   UserCog, ChevronRight,
 } from 'lucide-react';
 
@@ -34,7 +34,7 @@ export const LayoutEscritorio = () => {
     { ruta: '/envios',       etiqueta: 'Envíos & Reparto', icono: <Truck size={19} />,           color: '#2dd4bf' },
     ...(usuario?.rol === 'Administrador'
       ? [
-          { ruta: '/kardex',     etiqueta: 'Kárdex de Stock',  icono: <Database size={19} />,        color: '#fb923c' },
+          { ruta: '/bitacora',     etiqueta: 'Bitácora',  icono: <Database size={19} />,        color: '#fb923c' },
           { ruta: '/usuarios',   etiqueta: 'Personal',         icono: <UserCog size={19} />,         color: '#c084fc' }
         ]
       : []

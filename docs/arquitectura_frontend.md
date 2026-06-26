@@ -67,10 +67,13 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **Acciones Seguras (Gesto Swipe):** Para impedir marcas de entrega o tránsito accidentales durante el trayecto, se integra el componente `DeslizadorInteractivo.jsx`, requiriendo un arrastre continuo del control deslizante hasta el 92% para consolidar la actualización de estado.
 - **Enlaces Geográficos Dinámicos:** Cuenta con redirección nativa al mapa del dispositivo móvil mediante protocolo `geo:0,0?q=` con fallback integrado a Google Maps vía web, permitiendo abrir la ruta de destino de forma fluida.
 
-## 10. Dashboard de Administración y Auditorías (`DashboardAdmin.jsx`, `KardexInventario.jsx`)
+## 10. Dashboard de Administración y Auditorías (`DashboardAdmin.jsx`, `BitacoraSistema.jsx`)
 - **Visualización de Estadísticas Interactivas:** Utiliza **Recharts** para graficar de forma dinámica la distribución y participación de ventas del negocio por categoría de producto mediante gráficos de barras y pastel.
-- **Auditoría de Historial de Stock:** El kárdex presenta una interfaz tabular donde se consultan los movimientos filtrados por producto, rango de fechas y tipo de variación (compras, ventas, mermas por ajuste).
+- **Bitácora del Sistema (Pestañas Duales):** Sustituye el antiguo kárdex plano por una interfaz integrada y unificada:
+  - **Pestaña 1: Movimientos de Inventario:** Permite auditar el flujo de stock de productos mediante filtros de intervalo temporal dinámicos (**Día, Semana, Mes**) con conmutadores premium. Las métricas (total transacciones, ingresos, salidas y balance neto) se calculan y actualizan de forma reactiva en base al período. Es completamente adaptativa en celulares (las filas de la tabla colapsan en tarjetas de datos compactas).
+  - **Pestaña 2: Auditoría de Usuarios:** Muestra un listado cronológico de las acciones del personal (creaciones, modificaciones, bajas lógicas, anulaciones) detallando operador, módulo afectado y justificación. En celulares se presenta como una línea de tiempo (Timeline) vertical interactiva con avatares de usuario.
 - **Cierre de Caja Diario en PDF:** El botón de cierre diario abre una nueva pestaña del navegador apuntando directamente a la ruta de streaming del backend (`/reportes/cierre-pdf`), la cual sirve el archivo binario dinámico permitiendo visualizarlo en el lector nativo de PDF e imprimirlo con facilidad.
+
 
 ## 11. Gestión de Catálogos y CRUDs Administrativos (`GestionCategorias.jsx`, `GestionProductos.jsx`, `GestionClientes.jsx`, `GestionUsuarios.jsx`)
 - **Modales Flotantes:** Los formularios de creación y edición se presentan mediante modales interactivos superpuestos en la misma pantalla. Esto permite registrar y actualizar registros de forma rápida y fluida sin redireccionamientos ni pérdida de contexto.

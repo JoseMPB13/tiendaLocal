@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import RutaProtegida from './components/RutaProtegida';
 import LayoutEscritorio from './components/LayoutEscritorio';
@@ -8,7 +7,7 @@ import Login from './views/Login';
 import PuntoVenta from './views/PuntoVenta';
 import DeliveryReparto from './views/DeliveryReparto';
 import DashboardAdmin from './views/DashboardAdmin';
-import KardexInventario from './views/KardexInventario';
+import BitacoraSistema from './views/BitacoraSistema';
 import GestionCategorias from './views/GestionCategorias';
 import GestionProductos from './views/GestionProductos';
 import GestionClientes from './views/GestionClientes';
@@ -37,7 +36,7 @@ export const RutasApp = () => {
         {/* RUTA DE ADMINISTRADOR EXCLUSIVA PARA USUARIOS Y KARDEX */}
         <Route element={<RutaProtegida rolesPermitidos={['Administrador']} />}>
           <Route element={<LayoutEscritorio />}>
-            <Route path="/kardex" element={<KardexInventario />} />
+            <Route path="/bitacora" element={<BitacoraSistema />} />
             <Route path="/usuarios" element={<GestionUsuarios />} />
           </Route>
         </Route>
