@@ -10,6 +10,7 @@ import categoriaService from '../services/categoriaService';
 import compraService from '../services/compraService';
 import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
+import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import useAuthStore from '../store/authStore';
 import toast, { Toaster } from 'react-hot-toast';
 import { Plus, Edit3, Trash2, X, Package, Eye, RotateCcw, Search, AlertTriangle } from 'lucide-react';
@@ -22,9 +23,18 @@ export const GestionProductos = () => {
   const [categorias, setCategorias] = useState([]);
   const [cargando, setCargando] = useState(true);
 
+  // Filtros de búsqueda y categoría
+  const [buscarTexto, setBuscarTexto] = useState('');
+  const [categoriaSel, setCategoriaSel] = useState('');
+
   // Paginación
   const [pagina, setPagina] = useState(1);
   const itemsPorPagina = 7;
+
+  // Reiniciar página al cambiar filtros
+  useEffect(() => {
+    setPagina(1);
+  }, [buscarTexto, categoriaSel]);
 
   // Modal Formulario
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -318,8 +328,32 @@ export const GestionProductos = () => {
     }
   };
 
+  // Filtrar productos por búsqueda y categoría
+  const productosFiltrados = productos.filter((prod) => {
+    const coincideTexto =
+      prod.nombre.toLowerCase().includes(buscarTexto.toLowerCase()) ||
+      (prod.codigo_barras && prod.codigo_barras.toLowerCase().includes(buscarTexto.toLowerCase()));
+    const coincideCategoria =
+      !categoriaSel || prod.categoria_id === categoriaSel;
+    return coincideTexto && coincideCategoria;
+  });
+
   const indexInicio = (pagina - 1) * itemsPorPagina;
-  const productosPaginados = productos.slice(indexInicio, indexInicio + itemsPorPagina);
+  const productosPaginados = productosFiltrados.slice(indexInicio, indexInicio + itemsPorPagina);
+
+  // Cálculos del Mini-Dashboard de Inventario en tiempo real (sobre productos cargados)
+  const stockBajoCount = productos.filter(p => p.estado === 'Activo' && p.stock_actual <= p.stock_minimo).length;
+  
+  const valorTotalInventario = productos
+    .filter(p => p.estado === 'Activo')
+    .reduce((acc, p) => acc + (p.stock_actual * p.precio_compra), 0);
+
+  const productosMargen = productos.filter(p => p.estado === 'Activo' && p.precio_compra > 0);
+  const margenPromedio = productosMargen.length > 0
+    ? productosMargen.reduce((acc, p) => acc + (((p.precio_venta - p.precio_compra) / p.precio_compra) * 100), 0) / productosMargen.length
+    : 0;
+
+  const variedadCatalogoCount = productos.filter(p => p.estado === 'Activo').length;
 
   // Filtrado y paginación para el historial de compras
   const comprasFiltradas = compras.filter((c) => {
@@ -399,9 +433,135 @@ export const GestionProductos = () => {
         </button>
       </div>
 
+      {/* ── MINI-DASHBOARD DE INVENTARIO ── */}
+      {tabActiva === 'catalogo' && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '16px',
+          marginBottom: '5px'
+        }}>
+          {/* Tarjeta 1: Stock Bajo */}
+          <div style={{
+            background: 'white',
+            border: '1px solid #fee2e2',
+            borderRadius: '12px',
+            padding: '16px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            <div style={{
+              width: '40px', height: '40px',
+              background: '#fef2f2',
+              color: '#ef4444',
+              borderRadius: '10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Stock Bajo</span>
+              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ef4444', fontFamily: 'Inter, sans-serif' }}>{stockBajoCount} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>prods</span></span>
+            </div>
+          </div>
+
+          {/* Tarjeta 2: Valor Total */}
+          <div style={{
+            background: 'white',
+            border: '1px solid #e2e8f0',
+            borderRadius: '12px',
+            padding: '16px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            <div style={{
+              width: '40px', height: '40px',
+              background: '#f0fdf4',
+              color: '#22c55e',
+              borderRadius: '10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'Inter, sans-serif'
+            }}>
+              <span style={{ fontSize: '1.1rem', fontWeight: 800 }}>Bs</span>
+            </div>
+            <div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Valor Inventario</span>
+              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', fontFamily: 'Inter, sans-serif' }}>Bs. {valorTotalInventario.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          </div>
+
+          {/* Tarjeta 3: Margen Promedio */}
+          <div style={{
+            background: 'white',
+            border: '1px solid #e2e8f0',
+            borderRadius: '12px',
+            padding: '16px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            <div style={{
+              width: '40px', height: '40px',
+              background: '#f0f9ff',
+              color: '#0284c7',
+              borderRadius: '10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'Inter, sans-serif'
+            }}>
+              <span style={{ fontSize: '1.1rem', fontWeight: 800 }}>%</span>
+            </div>
+            <div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Margen Ganancia</span>
+              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', fontFamily: 'Inter, sans-serif' }}>{margenPromedio.toFixed(1)}%</span>
+            </div>
+          </div>
+
+          {/* Tarjeta 4: Variedad Catálogo */}
+          <div style={{
+            background: 'white',
+            border: '1px solid #e2e8f0',
+            borderRadius: '12px',
+            padding: '16px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            <div style={{
+              width: '40px', height: '40px',
+              background: '#faf5ff',
+              color: '#9333ea',
+              borderRadius: '10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <Package size={20} />
+            </div>
+            <div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Variedad Catálogo</span>
+              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', fontFamily: 'Inter, sans-serif' }}>{variedadCatalogoCount} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>ítems</span></span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── PESTAÑA: CATÁLOGO DE PRODUCTOS ── */}
       {tabActiva === 'catalogo' && (
-        <div className="table-wrapper">
+        <>
+          <PanelFiltroBusqueda
+            buscarTexto={buscarTexto}
+            alCambiarBuscarTexto={setBuscarTexto}
+            categoriaSeleccionada={categoriaSel}
+            alCambiarCategoria={setCategoriaSel}
+            categorias={categorias}
+            placeholder="Buscar por nombre de producto o código de barras..."
+            etiquetaCategoria="Filtrar por Categoría"
+          />
+          <div className="table-wrapper">
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table" style={{ minWidth: '700px' }}>
               <thead>
@@ -488,12 +648,13 @@ export const GestionProductos = () => {
           </div>
 
           <PaginadorTablas
-            totalItems={productos.length}
+            totalItems={productosFiltrados.length}
             itemsPorPagina={itemsPorPagina}
             paginaActual={pagina}
             alCambiarPagina={setPagina}
           />
         </div>
+        </>
       )}
 
       {/* ── PESTAÑA: HISTORIAL DE REABASTECIMIENTOS ── */}

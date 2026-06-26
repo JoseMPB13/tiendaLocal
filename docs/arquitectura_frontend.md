@@ -108,6 +108,14 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **Modal de Detalle del Reabastecimiento:** Muestra el desglose de productos adquiridos con sus nombres enriquecidos, cantidades, costos y subtotales.
 - **Anulación Lógica de Compras:** Admite la cancelación mediante el procedimiento `cancelarCompra(id)` en la base de datos (restringido a administradores), revirtiendo el stock de productos de forma segura y controlando que no resulte en inventario negativo.
 
+## 13b. Panel de Filtros y Mini-Dashboard de Inventario (`GestionProductos.jsx`)
+- **Panel de Filtros Modular (`PanelFiltroBusqueda.jsx`):** Se integró un componente modular en la parte superior del catálogo de productos que permite filtrar reactivamente la lista por nombre del producto o por su código de barras, así como por la categoría asociada. La tabla y el paginador se ajustan dinámicamente y reinician el contador a la página 1 al interactuar con el filtro.
+- **Mini-Dashboard de Inventario:** Se inyectó un panel horizontal antes de la tabla del catálogo con 4 tarjetas de métricas calculadas en tiempo real:
+  - *Stock Bajo:* Conteo de productos activos con existencia inferior o igual al stock mínimo.
+  - *Valor del Inventario:* Capital invertido acumulado (`stock_actual * precio_compra`) para todos los productos activos.
+  - *Margen de Ganancia Promedio:* Porcentaje del margen de ganancia promedio (`((precio_venta - precio_compra) / precio_compra) * 100`) para productos activos con costo de compra positivo.
+  - *Variedad del Catálogo:* Sumatoria de productos activos únicos registrados.
+
 ## 14. Integración del Mapa Interactivo y Geolocalización de Clientes (`GestionClientes.jsx`, `MapaInteractivo.jsx`)
 - **Controlador del Mapa Wrapper de Leaflet (`MapaInteractivo.jsx`):**
   - Implementado mediante la biblioteca principal `leaflet` directamente asociada al DOM con React refs (`useRef`) y hooks de ciclo de vida (`useEffect`). Esto asegura total compatibilidad con **React 19** y evita peer dependencies obsoletas que podrían causar fallos en la compilación de Vite.
