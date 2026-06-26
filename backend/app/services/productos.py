@@ -113,7 +113,8 @@ class ProductoService:
 
         # Validar categoría si se actualiza
         if "categoria_id" in datos_actualizar:
-            cat_check = supabase.table("categorias").select("id").eq("id", str(datos_actualizar["categoria_id"])).execute()
+            datos_actualizar["categoria_id"] = str(datos_actualizar["categoria_id"])
+            cat_check = supabase.table("categorias").select("id").eq("id", datos_actualizar["categoria_id"]).execute()
             if not cat_check.data:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
