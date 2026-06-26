@@ -132,6 +132,9 @@ export const PuntoVenta = () => {
   // Código de factura en edición (si aplica)
   const [codigoFacturaEdicion, setCodigoFacturaEdicion] = useState('');
 
+  // Últimas facturas emitidas en la sesión actual
+  const [ultimasFacturas, setUltimasFacturas] = useState([]);
+
   // Autocomplete de clientes
   const [buscarCliente, setBuscarCliente] = useState('');
   const [dropdownClienteVisible, setDropdownClienteVisible] = useState(false);
@@ -550,6 +553,16 @@ export const PuntoVenta = () => {
         
         const ventaId = respuesta.data.id;
 
+        // Registrar factura en el historial rápido de la sesión actual (máximo 3)
+        const nuevaFactura = {
+          id: ventaId,
+          codigo_factura: codigoFacturaGenerado,
+          total: total,
+          cliente: clienteSeleccionado?.nombre || 'Cliente General',
+          fecha: new Date()
+        };
+        setUltimasFacturas(prev => [nuevaFactura, ...prev].slice(0, 3));
+
         // Limpiar el carrito y reiniciar formulario
         vaciarCarrito();
         setRequiereDelivery(false);
@@ -894,7 +907,7 @@ export const PuntoVenta = () => {
                       <div
                         key={prod.id}
                         onClick={() => !agotado && handleAgregarProductoPOS(prod)}
-                        className={`bg-white rounded-xl p-3 border shadow-sm flex flex-col justify-between h-[150px] transition-all duration-200 ${
+                        className={`bg-white rounded-xl p-3 border shadow-sm flex flex-col justify-between h-[170px] transition-all duration-200 ${
                           agotado
                             ? 'border-red-100 opacity-60 cursor-not-allowed'
                             : 'border-slate-200 cursor-pointer hover:-translate-y-1 hover:shadow-md hover:border-indigo-500'
@@ -906,10 +919,15 @@ export const PuntoVenta = () => {
                               {prod.categoria_nombre}
                             </span>
                           )}
-                          <h4 className="font-bold text-xs text-slate-800 line-clamp-2 leading-tight">
+                          <h4 className="font-bold text-xs text-slate-800 line-clamp-1 leading-tight">
                             {prod.nombre}
                           </h4>
-                          <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+                          {prod.descripcion && (
+                            <p className="text-[10px] text-slate-500 line-clamp-2 mt-1 leading-tight font-medium" title={prod.descripcion}>
+                              {prod.descripcion}
+                            </p>
+                          )}
+                          <span className="text-[10px] text-slate-400 font-mono block mt-1">
                             {prod.codigo_barras}
                           </span>
                         </div>
@@ -955,6 +973,97 @@ export const PuntoVenta = () => {
                   <Trash2 size={12} /> Vaciar
                 </button>
               )}
+            </div>
+
+            {/* Panel de Estadísticas Rápidas en Tiempo Real */}
+            <div className="bg-slate-50 border-b border-slate-200 p-3.5 flex flex-col gap-2 text-[11px]">
+              {/* Fila 1: Resumen de Carrito y Cliente */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-white border border-slate-200 rounded-xl p-2 flex flex-col justify-between shadow-xs">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Resumen Carrito</span>
+                  <div className="mt-1 flex items-baseline justify-between">
+                    <span className="font-extrabold text-indigo-950 text-xs">Bs. {total.toFixed(2)}</span>
+                    <span className="text-slate-500 font-bold">({carrito.reduce((acc, item) => acc + item.cantidad, 0)} uds)</span>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl p-2 flex flex-col justify-between shadow-xs">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Cliente Activo</span>
+                  <div className="mt-1">
+                    {clienteSeleccionado ? (
+                      <div className="leading-tight">
+                        <p className="font-bold text-slate-700 truncate max-w-[130px]">{clienteSeleccionado.nombre}</p>
+                        {clienteSeleccionado.saldo_deudor > 0 ? (
+                          <span className="text-[9px] font-bold text-red-500 block mt-0.5">Deuda: Bs. {clienteSeleccionado.saldo_deudor.toFixed(2)}</span>
+                        ) : (
+                          <span className="text-[9px] font-bold text-emerald-600 block mt-0.5">Sin Deuda</span>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-slate-400 italic">No seleccionado</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Fila 2: Alertas de Stock */}
+              {(() => {
+                const alertas = carrito.filter(item => {
+                  const generalCritico = item.stock_actual <= item.stock_minimo;
+                  const solicitadoLimite = item.cantidad >= item.stock_actual;
+                  return generalCritico || solicitadoLimite;
+                });
+                if (alertas.length === 0) return null;
+                return (
+                  <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-2 flex flex-col gap-1 shadow-xs">
+                    <div className="flex items-center gap-1 font-bold text-[9px] uppercase tracking-wider text-red-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
+                      Alertas de Stock ({alertas.length})
+                    </div>
+                    <div className="max-h-[60px] overflow-y-auto divide-y divide-red-100 scrollbar-thin pr-1">
+                      {alertas.map(item => (
+                        <div key={item.id} className="py-0.5 text-[9px] leading-tight flex justify-between gap-2">
+                          <span className="truncate max-w-[160px] font-semibold text-slate-700">{item.nombre}</span>
+                          <span className="font-bold shrink-0 text-red-600">
+                            {item.cantidad >= item.stock_actual 
+                              ? 'Límite stock' 
+                              : `Crítico (${item.stock_actual} uds)`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Fila 3: Últimas 3 Facturas en Sesión */}
+              <div className="bg-white border border-slate-200 rounded-xl p-2 shadow-xs">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Últimas Facturas (Sesión)</span>
+                {ultimasFacturas.length === 0 ? (
+                  <p className="text-slate-400 italic text-[9px] mt-1">Ninguna factura emitida en esta sesión</p>
+                ) : (
+                  <div className="mt-1 flex flex-col gap-1">
+                    {ultimasFacturas.map(fac => (
+                      <div key={fac.id} className="flex justify-between items-center bg-slate-50 border border-slate-100 hover:border-slate-200 rounded-lg px-2 py-1 transition-colors">
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-mono font-bold text-slate-700 text-[10px] leading-none">{fac.codigo_factura}</span>
+                          <span className="text-[8px] text-slate-400 truncate max-w-[110px] mt-0.5">{fac.cliente}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="font-extrabold text-slate-900">Bs. {fac.total.toFixed(2)}</span>
+                          <button
+                            onClick={() => { setOrigenRecibo('pos'); handleVerDetalle(fac.id); }}
+                            className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 p-1 rounded-md transition cursor-pointer"
+                            title="Ver Comprobante"
+                          >
+                            <Eye size={10} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Listado del Carrito */}

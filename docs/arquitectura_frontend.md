@@ -32,6 +32,14 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **Validaciones Integradas:** Controla que la cantidad de ítems no exceda el `stock_actual` disponible de forma reactiva en el cliente.
 - **Control de Crédito Local:** Si el método de pago seleccionado es "Crédito", valida en caliente que la suma de la deuda existente del cliente más el total a cobrar no supere su `limite_credito` autorizado, rechazando la venta antes de enviarla.
 
+## 5b. Panel de Estadísticas y Descripciones en el POS (`PuntoVenta.jsx`)
+- **Renderizado de Descripciones:** Las tarjetas del catálogo muestran de forma elegante la descripción del producto (`prod.descripcion`) con tamaño de fuente pequeño (`text-[10px] text-slate-500`) y con límite de desborde (`line-clamp-2`), optimizando el alto de la tarjeta a `170px`.
+- **Panel de Estadísticas Rápidas:** Añade una sección informativa arriba del listado del carrito que expone en tiempo real:
+  - **Total de Venta y Unidades:** Total de la venta acumulado y sumatoria de unidades de artículos en el carrito.
+  - **Cliente Seleccionado:** Nombre del cliente activo y resalte rojo de su saldo deudor si este es mayor a cero.
+  - **Alertas de Stock Críticas:** Notificación visual roja reactiva si un producto del carrito cuenta con stock crítico (`stock_actual <= stock_minimo`) o si la cantidad en caja iguala/excede la capacidad física disponible (`cantidad >= stock_actual`).
+  - **Historial de Sesión:** Listado rápido con las últimas 3 facturas registradas en la pestaña activa del navegador, con opción de pre-visualizar el ticket térmico usando un botón rápido de inspección visual (`Eye`).
+
 ## 6. Funcionalidad de Escucha Activa de Código de Barras (POS)
 - Para acelerar la atención de cajeros, el input del buscador en `PuntoVenta.jsx` escucha continuamente.
 - Si el texto ingresado coincide exactamente con la clave `codigo_barras` de un producto del catálogo, añade automáticamente el producto al carrito con cantidad inicial 1 y limpia el input de inmediato de forma automatizada, permitiendo emular el comportamiento de una pistola lectora física sin interrumpir el flujo.
