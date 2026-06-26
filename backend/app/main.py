@@ -1,7 +1,8 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import usuarios, categorias, productos, clientes, ventas, delivery, reportes, auth, compras, bitacora
+from app.routers import usuarios, categorias, productos, clientes, ventas, delivery, reportes, auth, compras
+from app.routers import bitacora
 from app.database import supabase
 
 # Cargar la configuración de modo depuración
