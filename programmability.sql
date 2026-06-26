@@ -1038,4 +1038,59 @@ comment on function obtener_movimientos_stock_agrupados(text) is 'Retorna movimi
 
 
 -- -----------------------------------------------------------------------------
+-- 5. INDICADORES DE RENDIMIENTO DE PERSONAL (RPC Analítico)
+-- -----------------------------------------------------------------------------
+create or replace function obtener_rendimiento_personal()
+returns json as $$
+declare
+    v_cajeros json;
+    v_repartidores json;
+begin
+    -- 1. Agregación de Cajeros (usuarios de rol 'Administrador' o 'Cajero')
+    select coalesce(json_agg(t), '[]'::json) into v_cajeros
+    from (
+        select 
+            u.id as usuario_id,
+            u.nombre_completo,
+            u.email,
+            coalesce(count(v.id), 0)::integer as total_ventas,
+            coalesce(sum(case when v.estado_venta = 'Completada' then v.total else 0 end), 0.00)::numeric(12, 2) as monto_total
+        from usuarios u
+        left join ventas v on v.usuario_id = u.id and v.estado_venta = 'Completada'
+        where u.rol in ('Administrador', 'Cajero')
+        group by u.id, u.nombre_completo, u.email
+    ) t;
+
+    -- 2. Agregación de Repartidores (usuarios de rol 'Repartidor')
+    select coalesce(json_agg(t), '[]'::json) into v_repartidores
+    from (
+        select 
+            u.id as usuario_id,
+            u.nombre_completo,
+            u.email,
+            r.id as repartidor_id,
+            r.vehiculo,
+            r.placa,
+            coalesce(sum(case when e.estado_envio = 'Entregado' then 1 else 0 end), 0)::integer as envios_entregados,
+            coalesce(sum(case when e.estado_envio = 'Cancelado' then 1 else 0 end), 0)::integer as envios_cancelados,
+            coalesce(count(e.id), 0)::integer as total_envios,
+            case 
+                when count(e.id) > 0 then 
+                    round((sum(case when e.estado_envio = 'Entregado' then 1 else 0 end)::numeric / count(e.id)::numeric) * 100, 2)::numeric(5, 2)
+                else 0.00
+            END as efectividad_entrega
+        from usuarios u
+        join repartidores r on r.usuario_id = u.id
+        left join envios e on e.repartidor_id = r.id
+        group by u.id, u.nombre_completo, u.email, r.id, r.vehiculo, r.placa
+    ) t;
+
+    return json_build_object(
+        'cajeros', v_cajeros,
+        'repartidores', v_repartidores
+    );
+end;
+$$ language plpgsql;
+
+comment on function obtener_rendimiento_personal() is 'Calcula y unifica métricas de ventas para cajeros y efectividad de envíos para repartidores.';
 

@@ -198,3 +198,22 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
   - Se implementó el estado `filaExpandida` (almacena el ID del registro seleccionado).
   - En la tabla de escritorio, se agregó la columna "Cambios" con el botón "Ver JSON". Al hacer clic, se despliega un panel inferior de ancho completo con dos contenedores premium que contrastan en tiempo real el **Estado Anterior (Antes)** y el **Estado Nuevo (Después)** formateados de manera indentada y elegante.
   - En la vista móvil, las tarjetas cuentan con el botón "Ver Cambios JSON" que expande en la misma tarjeta la vista diferencial para asegurar una excelente experiencia de usuario adaptable.
+
+
+## 17. Módulo de Personal e Indicadores de Rendimiento (GestionUsuarios.jsx)
+
+### 17a. Backend & DB: Agregación Analítica (RPC)
+- **Función RPC Analítica:** Se implementó `obtener_rendimiento_personal()` en la base de datos (con script incremental en `scratch/migracion_rendimiento_personal.sql` e incorporado en `programmability.sql`). Esta función ejecuta agrupaciones con cláusulas SQL de tipo `COUNT` y `SUM` condicionadas por el estado de las transacciones para recolectar:
+  - **Para Cajeros:** Suma total facturada en dinero de ventas completadas y número de ventas procesadas desde la tabla `ventas`.
+  - **Para Repartidores:** Cantidad de envíos entregados con éxito, envíos cancelados, total de envíos asignados y efectividad logístico-operativa calculada como `(entregados / total) * 100` desde la tabla `envios` con JOIN a `repartidores`.
+- **Nuevo Endpoint Analítico (`GET /usuarios/rendimiento`):** Implementado en `backend/app/routers/usuarios.py` antes de los selectores dinámicos por ID para evitar colisiones de enrutamiento en FastAPI. Consume la lógica encapsulada en `UsuarioService.obtener_rendimiento()`.
+
+### 17b. Frontend: Panel de Búsqueda y Filtrado
+- Se integró el componente reusable `PanelFiltroBusqueda.jsx` en `GestionUsuarios.jsx`.
+- **Filtros en tiempo real:** Permite la búsqueda libre por Nombre Completo o Correo Electrónico, y filtrado selectivo por el Rol de Acceso (`Administrador`, `Cajero`, `Repartidor`) y por el Estado actual del operador (`Activo`, `Inactivo`).
+
+### 17c. Frontend: Dashboard de Indicadores de Rendimiento de Personal
+- Se implementó un panel visual premium dividido en dos cuadrículas analíticas en la parte superior de la vista:
+  - **Top de Cajeros:** Muestra a los cajeros ordenados de forma descendente en base al volumen total facturado, incluyendo cantidad de ventas procesadas.
+  - **Top de Repartidores:** Muestra a los repartidores ordenados de forma descendente en base a su porcentaje de efectividad de entrega, detallando el balance de envíos entregados y cancelados.
+- **Sincronización:** El dashboard se recarga de forma automática cada vez que se carga la vista o se realiza una mutación sobre el personal (creación, edición o baja lógica).

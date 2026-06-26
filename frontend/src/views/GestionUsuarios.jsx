@@ -8,14 +8,27 @@ import { useState, useEffect } from 'react';
 import usuarioService from '../services/usuarioService';
 import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
+import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import toast, { Toaster } from 'react-hot-toast';
-import { Plus, Edit3, Trash2, X, Eye, EyeOff, UserCog } from 'lucide-react';
+import { 
+  Plus, Edit3, Trash2, X, Eye, EyeOff, UserCog, 
+  TrendingUp, Award, CheckCircle, XCircle 
+} from 'lucide-react';
 
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
 
 export const GestionUsuarios = () => {
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(true);
+
+  // Estados de filtros y búsqueda
+  const [buscarTexto, setBuscarTexto] = useState('');
+  const [rolSeleccionado, setRolSeleccionado] = useState('');
+  const [estadoSeleccionado, setEstadoSeleccionado] = useState('');
+
+  // Estados de rendimiento analítico de personal
+  const [rendimiento, setRendimiento] = useState({ cajeros: [], repartidores: [] });
+  const [cargandoRendimiento, setCargandoRendimiento] = useState(true);
 
   // Paginación
   const [pagina, setPagina] = useState(1);
@@ -54,11 +67,26 @@ export const GestionUsuarios = () => {
     }
   };
 
+  const cargarRendimiento = async () => {
+    try {
+      setCargandoRendimiento(true);
+      const res = await usuarioService.obtenerRendimiento();
+      if (res.ok) {
+        setRendimiento(res.data || { cajeros: [], repartidores: [] });
+      }
+    } catch (ex) {
+      console.error("Error al cargar rendimiento de personal:", ex);
+    } finally {
+      setCargandoRendimiento(false);
+    }
+  };
+
   useEffect(() => {
     // Evita actualizaciones síncronas de estado en el render inicial de React
     const inicializar = async () => {
       await Promise.resolve();
       cargarUsuarios();
+      cargarRendimiento();
     };
     inicializar();
   }, []);
@@ -116,6 +144,7 @@ export const GestionUsuarios = () => {
         toast.success('Usuario creado correctamente.');
         setMostrarForm(false);
         cargarUsuarios();
+        cargarRendimiento();
       } else {
         if (password.trim()) {
           payload.password = password;
@@ -126,6 +155,7 @@ export const GestionUsuarios = () => {
         toast.success('Usuario actualizado correctamente.');
         setMostrarForm(false);
         cargarUsuarios();
+        cargarRendimiento();
       }
     } catch (ex) {
       const errorMsg = ex.response?.data?.detail || 'Error al procesar el formulario de usuario.';
@@ -156,6 +186,7 @@ export const GestionUsuarios = () => {
         toast.success('Usuario desactivado (baja lógica).');
         setMostrarEliminar(false);
         cargarUsuarios();
+        cargarRendimiento();
       }
     } catch (ex) {
       console.error(ex);
@@ -165,11 +196,25 @@ export const GestionUsuarios = () => {
     }
   };
 
-  // Lógica de paginación
-  const totalItems = usuarios.length;
+  // Filtrado de usuarios en tiempo real
+  const usuariosFiltrados = usuarios.filter((usr) => {
+    const matchTexto = buscarTexto.trim() === '' ||
+      (usr.nombre_completo || '').toLowerCase().includes(buscarTexto.toLowerCase()) ||
+      (usr.email || '').toLowerCase().includes(buscarTexto.toLowerCase());
+    const matchRol = rolSeleccionado === '' || usr.rol === rolSeleccionado;
+    const matchEstado = estadoSeleccionado === '' || usr.estado === estadoSeleccionado;
+    return matchTexto && matchRol && matchEstado;
+  });
+
+  // Lógica de paginación sobre el listado filtrado
+  const totalItems = usuariosFiltrados.length;
   const indiceUltimoItem = pagina * itemsPorPagina;
   const indicePrimerItem = indiceUltimoItem - itemsPorPagina;
-  const usuariosPaginados = usuarios.slice(indicePrimerItem, indiceUltimoItem);
+  const usuariosPaginados = usuariosFiltrados.slice(indicePrimerItem, indiceUltimoItem);
+
+  // Ordenamiento de rankings de rendimiento (Top 3)
+  const cajerosOrdenados = [...(rendimiento.cajeros || [])].sort((a, b) => b.monto_total - a.monto_total);
+  const repartidoresOrdenados = [...(rendimiento.repartidores || [])].sort((a, b) => b.efectividad_entrega - a.efectividad_entrega);
 
   /* Colores de badge según rol */
   const rolBadge = (rolStr) => {
@@ -211,6 +256,84 @@ export const GestionUsuarios = () => {
           Nuevo Usuario
         </button>
       </div>
+
+      {/* ── SECCIÓN DE INDICADORES DE RENDIMIENTO ── */}
+      {!cargandoRendimiento && (cajerosOrdenados.length > 0 || repartidoresOrdenados.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-2">
+          {/* Panel Cajeros */}
+          <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm animate-fade-in-up">
+            <div className="flex items-center gap-2 mb-4">
+              <Award className="text-purple-600" size={18} />
+              <h4 className="font-bold text-zinc-900 text-sm uppercase tracking-wider">Rendimiento de Facturación (Cajeros)</h4>
+            </div>
+            <div className="space-y-3">
+              {cajerosOrdenados.slice(0, 3).map((cajero, idx) => (
+                <div key={cajero.usuario_id} className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100 hover:bg-zinc-100/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-zinc-400 font-mono">#{idx + 1}</span>
+                    <div>
+                      <p className="font-bold text-zinc-950 text-xs">{cajero.nombre_completo}</p>
+                      <p className="text-[10px] text-zinc-400 font-semibold">{cajero.email}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-black text-zinc-900 text-xs">Bs. {Number(cajero.monto_total).toFixed(2)}</p>
+                    <p className="text-[10px] text-zinc-500 font-medium">{cajero.total_ventas} ventas</p>
+                  </div>
+                </div>
+              ))}
+              {cajerosOrdenados.length === 0 && (
+                <p className="text-xs text-zinc-400 italic text-center py-4">No hay datos de rendimiento para cajeros.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Panel Repartidores */}
+          <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm animate-fade-in-up">
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="text-emerald-600" size={18} />
+              <h4 className="font-bold text-zinc-900 text-sm uppercase tracking-wider">Efectividad de Entrega (Repartidores)</h4>
+            </div>
+            <div className="space-y-3">
+              {repartidoresOrdenados.slice(0, 3).map((rep, idx) => (
+                <div key={rep.usuario_id} className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100 hover:bg-zinc-100/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-zinc-400 font-mono">#{idx + 1}</span>
+                    <div>
+                      <p className="font-bold text-zinc-950 text-xs">{rep.nombre_completo}</p>
+                      <p className="text-[10px] text-zinc-400 font-semibold">{rep.vehiculo} • Placa {rep.placa}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-black text-emerald-600 text-xs">{rep.efectividad_entrega}% Efec.</p>
+                    <p className="text-[10px] text-zinc-500 font-medium">✔️ {rep.envios_entregados} / ❌ {rep.envios_cancelados}</p>
+                  </div>
+                </div>
+              ))}
+              {repartidoresOrdenados.length === 0 && (
+                <p className="text-xs text-zinc-400 italic text-center py-4">No hay datos de rendimiento para repartidores.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PANEL DE BÚSQUEDA Y FILTRADO ── */}
+      <PanelFiltroBusqueda
+        buscarTexto={buscarTexto}
+        alCambiarBuscarTexto={(val) => { setBuscarTexto(val); setPagina(1); }}
+        categoriaSeleccionada={rolSeleccionado}
+        alCambiarCategoria={(val) => { setRolSeleccionado(val); setPagina(1); }}
+        categorias={[
+          { id: 'Administrador', nombre: 'Administrador' },
+          { id: 'Cajero', nombre: 'Cajero' },
+          { id: 'Repartidor', nombre: 'Repartidor' }
+        ]}
+        etiquetaCategoria="Rol"
+        placeholder="Buscar por nombre o correo electrónico..."
+        estadoSeleccionado={estadoSeleccionado}
+        alCambiarEstado={(val) => { setEstadoSeleccionado(val); setPagina(1); }}
+      />
 
       {/* ── TABLA ── */}
       <div className="table-wrapper">

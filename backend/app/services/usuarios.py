@@ -81,3 +81,18 @@ class UsuarioService:
                 detail="No se pudo actualizar el usuario."
             )
         return resultado.data[0]
+
+    @staticmethod
+    def obtener_rendimiento() -> dict:
+        """
+        Calcula indicadores analíticos de rendimiento de personal consumiendo el RPC de base de datos.
+        """
+        try:
+            resultado = supabase.rpc("obtener_rendimiento_personal", {}).execute()
+            # El RPC retorna el JSON directamente en resultado.data
+            return resultado.data or {"cajeros": [], "repartidores": []}
+        except Exception as ex:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al calcular indicadores de rendimiento: {str(ex)}"
+            )

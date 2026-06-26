@@ -33,6 +33,17 @@ async def listar_usuarios(
     respuestas = [UsuarioRespuesta.model_validate(u) for u in lista]
     return {"ok": True, "data": respuestas}
 
+@router.get("/rendimiento", response_model=dict)
+async def obtener_rendimiento(
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
+):
+    """
+    Retorna indicadores analíticos de rendimiento de cajeros y repartidores.
+    Limitado únicamente al rol 'Administrador'.
+    """
+    resultado = UsuarioService.obtener_rendimiento()
+    return {"ok": True, "data": resultado}
+
 @router.get("/{usuario_id}", response_model=dict)
 async def obtener_usuario(
     usuario_id: UUID,
