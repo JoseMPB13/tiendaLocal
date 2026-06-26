@@ -9,7 +9,6 @@ export const useCartStore = create((set, get) => ({
   carrito: [],
   clienteSeleccionado: null,
   metodoPago: "Efectivo",
-  codigoFactura: "",
 
   /**
    * Agrega un producto al carrito. Si ya existe, incrementa su cantidad.
@@ -79,14 +78,12 @@ export const useCartStore = create((set, get) => ({
     set({
       carrito: [],
       clienteSeleccionado: null,
-      metodoPago: "Efectivo",
-      codigoFactura: ""
+      metodoPago: "Efectivo"
     });
   },
 
   setCliente: (cliente) => set({ clienteSeleccionado: cliente }),
   setMetodoPago: (metodo) => set({ metodoPago: metodo }),
-  setCodigoFactura: (codigo) => set({ codigoFactura: codigo }),
   cargarCarrito: (items) => set({ carrito: items }),
 
   /**

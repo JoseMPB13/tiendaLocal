@@ -74,7 +74,6 @@ for each row execute function fn_controlar_stock_venta();
 create or replace function registrar_venta_credito(
     p_cliente_id uuid,
     p_usuario_id uuid,
-    p_codigo_factura varchar(50),
     p_total numeric(12, 2),
     p_items jsonb,
     p_para_delivery boolean DEFAULT false,
@@ -84,12 +83,16 @@ create or replace function registrar_venta_credito(
 returns uuid as $$
 declare
     v_venta_id uuid;
+    v_codigo_factura varchar(50);
     v_saldo_deudor numeric(12, 2);
     v_limite_credito numeric(12, 2);
     v_nombre_cliente varchar(150);
     v_item record;
     v_subtotal numeric(12, 2);
 begin
+    -- Generar el código de factura de forma segura y transaccional
+    v_codigo_factura := generar_codigo_factura();
+
     -- 1. Validar límite de crédito del cliente
     select saldo_deudor, limite_credito, nombre
     into v_saldo_deudor, v_limite_credito, v_nombre_cliente
@@ -105,7 +108,7 @@ begin
 
     -- 2. Insertar cabecera de la venta con tipo de pago 'Credito'
     insert into ventas (cliente_id, usuario_id, codigo_factura, total, tipo_pago, estado_venta)
-    values (p_cliente_id, p_usuario_id, p_codigo_factura, p_total, 'Credito', 'Completada')
+    values (p_cliente_id, p_usuario_id, v_codigo_factura, p_total, 'Credito', 'Completada')
     returning id into v_venta_id;
 
     -- 3. Iterar sobre los productos ordenados por producto_id para prevenir deadlocks
@@ -155,7 +158,6 @@ $$ language plpgsql;
 create or replace function registrar_venta_contado(
     p_cliente_id uuid,
     p_usuario_id uuid,
-    p_codigo_factura varchar(50),
     p_total numeric(12, 2),
     p_tipo_pago varchar(30),
     p_items jsonb,
@@ -166,12 +168,16 @@ create or replace function registrar_venta_contado(
 returns uuid as $$
 declare
     v_venta_id uuid;
+    v_codigo_factura varchar(50);
     v_item record;
     v_subtotal numeric(12, 2);
 begin
+    -- Generar el código de factura de forma segura y transaccional
+    v_codigo_factura := generar_codigo_factura();
+
     -- 1. Insertar cabecera de la venta al contado
     insert into ventas (cliente_id, usuario_id, codigo_factura, total, tipo_pago, estado_venta)
-    values (p_cliente_id, p_usuario_id, p_codigo_factura, p_total, p_tipo_pago, 'Completada')
+    values (p_cliente_id, p_usuario_id, v_codigo_factura, p_total, p_tipo_pago, 'Completada')
     returning id into v_venta_id;
 
     -- 2. Iterar sobre los productos e insertarlos en el detalle
@@ -544,18 +550,27 @@ end;
 $$ language plpgsql;
 
 -- -----------------------------------------------------------------------------
--- 7. SECUENCIA Y TRIGGER PARA AUTOGENERACIÓN DE CÓDIGO DE FACTURA (FAC-YYYYMMDD-XXXXX)
+-- 7. SECUENCIA Y FUNCIÓN PARA GENERACIÓN DE CÓDIGO DE FACTURA (F-YYYYMMDD-XXXXX)
 -- -----------------------------------------------------------------------------
-create sequence if not exists seq_codigo_factura;
+create sequence if not exists seq_codigo_factura_f;
+
+create or replace function generar_codigo_factura()
+returns varchar as $$
+declare
+    v_fecha varchar(8);
+    v_next_val bigint;
+begin
+    v_fecha := to_char(timezone('utc'::text, now()), 'YYYYMMDD');
+    v_next_val := nextval('seq_codigo_factura_f');
+    return 'F-' || v_fecha || '-' || lpad(v_next_val::text, 5, '0');
+end;
+$$ language plpgsql;
 
 create or replace function fn_autogenerar_codigo_factura()
 returns trigger as $$
-declare
-    v_fecha varchar(8);
 begin
     if new.codigo_factura is null or new.codigo_factura = '' or new.codigo_factura = 'Autogenerado' then
-        v_fecha := to_char(timezone('utc'::text, now()), 'YYYYMMDD');
-        new.codigo_factura := 'FAC-' || v_fecha || '-' || lpad(nextval('seq_codigo_factura')::text, 5, '0');
+        new.codigo_factura := generar_codigo_factura();
     end if;
     return new;
 end;
@@ -578,12 +593,12 @@ begin
     -- Obtenemos el próximo valor de la secuencia global sin consumirlo
     select coalesce(last_value, 1) + case when is_called then 1 else 0 end
     into v_next_val
-    from seq_codigo_factura;
+    from seq_codigo_factura_f;
     
     v_fecha := to_char(timezone('utc'::text, now()), 'YYYYMMDD');
-    return 'FAC-' || v_fecha || '-' || lpad(v_next_val::text, 5, '0');
+    return 'F-' || v_fecha || '-' || lpad(v_next_val::text, 5, '0');
 exception when others then
-    return 'FAC-' || to_char(timezone('utc'::text, now()), 'YYYYMMDD') || '-00001';
+    return 'F-' || to_char(timezone('utc'::text, now()), 'YYYYMMDD') || '-00001';
 end;
 $$ language plpgsql;
 

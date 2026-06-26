@@ -129,8 +129,8 @@ export const PuntoVenta = () => {
   const [buscarDebounced, setBuscarDebounced] = useState('');
   const [categoriaSel, setCategoriaSel] = useState('Todas');
 
-  // Próxima factura calculada
-  const [proximoNumeroFactura, setProximoNumeroFactura] = useState('');
+  // Código de factura en edición (si aplica)
+  const [codigoFacturaEdicion, setCodigoFacturaEdicion] = useState('');
 
   // Autocomplete de clientes
   const [buscarCliente, setBuscarCliente] = useState('');
@@ -180,9 +180,9 @@ export const PuntoVenta = () => {
 
   // Zustand stores
   const {
-    carrito, clienteSeleccionado, metodoPago, codigoFactura,
+    carrito, clienteSeleccionado, metodoPago,
     agregarProducto, actualizarCantidad, removerProducto, vaciarCarrito,
-    setCliente, setMetodoPago, setCodigoFactura, obtenerTotal, cargarCarrito
+    setCliente, setMetodoPago, obtenerTotal, cargarCarrito
   } = useCartStore();
 
   const { usuario } = useAuthStore();
@@ -196,28 +196,12 @@ export const PuntoVenta = () => {
     return () => clearTimeout(handler);
   }, [buscarInput]);
 
-  /**
-   * Sincroniza en tiempo real el próximo código de factura correlativo desde la base de datos.
-   * Evita problemas de duplicidad de claves primarias.
-   * Idioma: Español
-   */
-  const sincronizarProximoCodigoFactura = async () => {
-    try {
-      const res = await ventaService.obtenerProximoNumeroFactura();
-      if (res.ok && res.data) {
-        setProximoNumeroFactura(res.data);
-        setCodigoFactura(res.data);
-      }
-    } catch (err) {
-      console.error("Error al obtener el próximo correlativo de factura:", err);
-    }
-  };
+
 
   /** Carga inicial del POS */
   const inicializarPOS = async () => {
     try {
       setCargando(true);
-      await sincronizarProximoCodigoFactura();
       
       const [resProds, resClis, resCats] = await Promise.all([
         ventaService.obtenerProductos(),
@@ -422,10 +406,6 @@ export const PuntoVenta = () => {
       toast.error('Selecciona un cliente antes de proceder.');
       return;
     }
-    if (!proximoNumeroFactura.trim()) {
-      toast.error('El número de factura no se ha cargado correctamente.');
-      return;
-    }
     if (metodoPago === 'Credito' && clienteSeleccionado) {
       const nuevoSaldo = clienteSeleccionado.saldo_deudor + total;
       if (nuevoSaldo > clienteSeleccionado.limite_credito) {
@@ -552,7 +532,6 @@ export const PuntoVenta = () => {
       const payload = {
         cliente_id: clienteSeleccionado.id,
         usuario_id: usuario.id,
-        codigo_factura: proximoNumeroFactura,
         tipo_pago: metodoPago,
         detalles: carrito.map(item => ({
           producto_id: item.id,
@@ -566,7 +545,8 @@ export const PuntoVenta = () => {
 
       const respuesta = await ventaService.registrarVenta(payload);
       if (respuesta.ok) {
-        toast.success(`✓ Venta ${proximoNumeroFactura} registrada exitosamente.`);
+        const codigoFacturaGenerado = respuesta.data.codigo_factura;
+        toast.success(`✓ Venta ${codigoFacturaGenerado} registrada exitosamente.`);
         
         const ventaId = respuesta.data.id;
 
@@ -581,9 +561,8 @@ export const PuntoVenta = () => {
         setOrigenRecibo('pos');
         await handleVerDetalle(ventaId);
         
-        // Recargar catálogos y próximo correlativo limpio
+        // Recargar catálogos
         await Promise.all([
-          sincronizarProximoCodigoFactura(),
           ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); }),
           ventaService.obtenerClientes().then(res => { if (res.ok) setClientes(res.data); })
         ]);
@@ -610,7 +589,6 @@ export const PuntoVenta = () => {
       const payload = {
         cliente_id: clienteSeleccionado.id,
         usuario_id: usuario.id,
-        codigo_factura: proximoNumeroFactura,
         tipo_pago: metodoPago,
         detalles: carrito.map(item => ({
           producto_id: item.id,
@@ -641,9 +619,8 @@ export const PuntoVenta = () => {
         setOrigenRecibo('pos');
         await handleVerDetalle(ventaId);
         
-        // Recargar catálogos y próximo correlativo limpio
+        // Recargar catálogos
         await Promise.all([
-          sincronizarProximoCodigoFactura(),
           ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); }),
           ventaService.obtenerClientes().then(res => { if (res.ok) setClientes(res.data); })
         ]);
@@ -695,7 +672,7 @@ export const PuntoVenta = () => {
         cargarCarrito(itemsParaCarrito);
         setItemsEditadosOriginales(res.data.detalles);
         setEditandoVentaId(ventaId);
-        setProximoNumeroFactura(res.data.codigo_factura);
+        setCodigoFacturaEdicion(res.data.codigo_factura);
         
         setActiveTab('pos');
         toast.success("Venta cargada en el Punto de Venta.");
@@ -712,7 +689,7 @@ export const PuntoVenta = () => {
     setEditandoVentaId(null);
     setItemsEditadosOriginales([]);
     vaciarCarrito();
-    sincronizarProximoCodigoFactura();
+    setCodigoFacturaEdicion('');
     toast.success("Edición cancelada. Volviendo a modo Nueva Venta.");
   };
 
@@ -769,8 +746,7 @@ export const PuntoVenta = () => {
 
         const [resProds, resClis] = await Promise.all([
           ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); }),
-          ventaService.obtenerClientes().then(res => { if (res.ok) setClientes(res.data); }),
-          cargarProximoNumero()
+          ventaService.obtenerClientes().then(res => { if (res.ok) setClientes(res.data); })
         ]);
         if (resProds.ok) setProductos(resProds.data);
         if (resClis.ok) setClientes(resClis.data);
@@ -844,7 +820,7 @@ export const PuntoVenta = () => {
                 <div>
                   <h4 className="text-xs font-bold text-amber-950">MODO EDICIÓN ACTIVO</h4>
                   <p className="text-[10px] text-amber-700">
-                    Editando venta: <span className="font-mono font-bold text-amber-900">{proximoNumeroFactura}</span>
+                    Editando venta: <span className="font-mono font-bold text-amber-900">{codigoFacturaEdicion}</span>
                   </p>
                 </div>
               </div>
@@ -973,7 +949,7 @@ export const PuntoVenta = () => {
               </div>
               {carrito.length > 0 && (
                 <button
-                  onClick={() => { vaciarCarrito(); cargarProximoNumero(); }}
+                  onClick={vaciarCarrito}
                   className="bg-white/10 hover:bg-white/20 border border-white/15 text-red-300 text-[10px] font-bold px-2.5 py-1 rounded-lg transition duration-150 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Trash2 size={12} /> Vaciar
@@ -1028,14 +1004,13 @@ export const PuntoVenta = () => {
                 </div>
               )}
 
-              {/* Próxima Factura */}
+              {/* Código de Factura */}
               <div className="flex flex-col">
                 <span className="text-[9px] font-bold tracking-widest text-slate-400 uppercase mb-1">
-                  Próxima Factura a Emitir
+                  Código de Factura
                 </span>
-                <div className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-slate-600 flex justify-between items-center">
-                  <span>#{proximoNumeroFactura || 'Cargando...'}</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <div className="bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-semibold text-slate-500 text-center">
+                  El código se generará automáticamente al cobrar
                 </div>
               </div>
 
@@ -1372,7 +1347,9 @@ export const PuntoVenta = () => {
                 </div>
                 <div className="text-right">
                   <span className="text-[9px] text-slate-400 block font-bold uppercase">Factura</span>
-                  <span className="font-mono font-bold text-[10px] text-slate-600 block mt-0.5">#{proximoNumeroFactura}</span>
+                  <span className="font-mono font-bold text-[10px] text-slate-600 block mt-0.5">
+                    {editandoVentaId ? `#${codigoFacturaEdicion}` : 'Autogenerado'}
+                  </span>
                 </div>
               </div>
 
