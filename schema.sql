@@ -785,12 +785,16 @@ create table if not exists bitacora_usuarios (
     tabla_afectada varchar(100) not null,
     registro_id uuid not null,
     detalles text,
-    fecha timestamp with time zone default timezone('utc'::text, now()) not null
+    fecha timestamp with time zone default timezone('utc'::text, now()) not null,
+    datos_anteriores jsonb default null,
+    datos_nuevos jsonb default null,
+    operacion varchar(10) default null
 );
 
 comment on table bitacora_usuarios is 'Tabla unificada para auditoría de acciones críticas de usuarios en el sistema.';
 create index if not exists idx_bitacora_usuarios_tabla on bitacora_usuarios(tabla_afectada);
 create index if not exists idx_bitacora_usuarios_fecha on bitacora_usuarios(fecha);
+create index if not exists idx_bitacora_usuarios_operacion on bitacora_usuarios(operacion);
 
 alter table bitacora_usuarios enable row level security;
 

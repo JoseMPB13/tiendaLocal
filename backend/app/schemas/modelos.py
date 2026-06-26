@@ -368,6 +368,10 @@ class BitacoraUsuarioRespuesta(BaseModel):
     registro_id: UUID
     detalles: Optional[str] = None
     fecha: datetime
+    # Campos de captura diferencial agregados en la migración de normalización
+    operacion: Optional[str] = None        # Tipo DML: INSERT, UPDATE, DELETE
+    datos_anteriores: Optional[dict] = None  # Snapshot JSONB del estado previo
+    datos_nuevos: Optional[dict] = None      # Snapshot JSONB del estado nuevo
     usuarios: Optional[UsuarioMini] = None  # Enriquecido con el join de la tabla usuarios
 
     model_config = ConfigDict(from_attributes=True)

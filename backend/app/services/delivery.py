@@ -123,10 +123,12 @@ class DeliveryService:
 
     @staticmethod
     def obtener_todos_envios() -> List[dict]:
+        # Se incluyen latitud, longitud y enlace_mapa del cliente para que el
+        # frontend pueda renderizar el mapa interactivo en la vista administrativa
         query = supabase.table("envios")\
-            .select("*, ventas(id, cliente_id, clientes(nombre, telefono, direccion, enlace_ubicacion))")\
+            .select("*, ventas(id, cliente_id, clientes(nombre, telefono, direccion, enlace_ubicacion, enlace_mapa, latitud, longitud))")\
             .execute()
-        
+
         envios_formateados = []
         for e in (query.data or []):
             venta = e.get("ventas") or {}
@@ -147,7 +149,11 @@ class DeliveryService:
                     "nombre_completo": cliente_data.get("nombre", ""),
                     "telefono": cliente_data.get("telefono", ""),
                     "direccion": cliente_data.get("direccion", ""),
-                    "enlace_ubicacion": cliente_data.get("enlace_ubicacion", "")
+                    "enlace_ubicacion": cliente_data.get("enlace_ubicacion", ""),
+                    "enlace_mapa": cliente_data.get("enlace_mapa", ""),
+                    # Coordenadas geográficas del cliente para el mapa interactivo
+                    "latitud": cliente_data.get("latitud"),
+                    "longitud": cliente_data.get("longitud")
                 }
             }
             envios_formateados.append(e_formateado)
@@ -298,8 +304,10 @@ class DeliveryService:
             )
         repartidor_id = rep_res.data[0]["id"]
 
+        # Se incluyen latitud, longitud y enlace_mapa para pintar el destino
+        # del repartidor en el mapa interactivo de DeliveryReparto.jsx
         query = supabase.table("envios")\
-            .select("*, ventas(id, cliente_id, clientes(nombre, telefono, direccion, enlace_ubicacion))")\
+            .select("*, ventas(id, cliente_id, clientes(nombre, telefono, direccion, enlace_ubicacion, enlace_mapa, latitud, longitud))")\
             .eq("repartidor_id", str(repartidor_id))\
             .eq("estado_envio", "En Camino")\
             .execute()
@@ -308,7 +316,7 @@ class DeliveryService:
         for e in (query.data or []):
             venta = e.get("ventas") or {}
             cliente_data = venta.get("clientes") or {}
-            
+
             e_formateado = {
                 "id": e["id"],
                 "venta_id": e["venta_id"],
@@ -325,9 +333,50 @@ class DeliveryService:
                     "nombre_completo": cliente_data.get("nombre", ""),
                     "telefono": cliente_data.get("telefono", ""),
                     "direccion": cliente_data.get("direccion", ""),
-                    "enlace_ubicacion": cliente_data.get("enlace_ubicacion", "")
+                    "enlace_ubicacion": cliente_data.get("enlace_ubicacion", ""),
+                    "enlace_mapa": cliente_data.get("enlace_mapa", ""),
+                    # Coordenadas para renderizar el mapa de destino en pantalla
+                    "latitud": cliente_data.get("latitud"),
+                    "longitud": cliente_data.get("longitud")
                 }
             }
             envios_formateados.append(e_formateado)
         return envios_formateados
+
+    @staticmethod
+    def cancelar_envio(envio_id: UUID, motivo: str) -> dict:
+        """
+        Realiza una baja lógica del envío cambiando su estado a 'Cancelado'.
+        Nunca elimina el registro físico de la base de datos.
+        Solo se permite cancelar envíos en estado 'Pendiente'.
+        """
+        # Verificar que el envío exista
+        envio_act = DeliveryService.obtener_envio_por_id(envio_id)
+
+        # Solo se permite cancelar envíos que aún están en estado Pendiente
+        if envio_act["estado_envio"] != "Pendiente":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Solo se pueden cancelar envíos en estado 'Pendiente'. Estado actual: '{envio_act['estado_envio']}'."
+            )
+
+        # Validar que el motivo de cancelación no sea vacío
+        if not motivo or not motivo.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Debe proporcionar un motivo de cancelación para registrar la baja lógica del envío."
+            )
+
+        # Aplicar la baja lógica: actualizar estado a 'Cancelado' y guardar el motivo
+        datos_cancelacion = {
+            "estado_envio": "Cancelado",
+            "motivo_cancelacion": motivo.strip()
+        }
+        resultado = supabase.table("envios").update(datos_cancelacion).eq("id", str(envio_id)).execute()
+        if not resultado.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No se pudo registrar la cancelación del envío."
+            )
+        return resultado.data[0]
 

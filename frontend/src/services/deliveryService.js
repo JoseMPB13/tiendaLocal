@@ -32,6 +32,20 @@ export const deliveryService = {
   },
 
   /**
+   * Cancela un envío de forma lógica (baja lógica → estado='Cancelado').
+   * El registro NO se elimina físicamente de la base de datos.
+   * Solo se permite cancelar envíos en estado 'Pendiente'.
+   * @param {string} envioId - UUID del envío a cancelar.
+   * @param {string} motivoCancelacion - Motivo textual obligatorio.
+   */
+  cancelarEnvio: async (envioId, motivoCancelacion) => {
+    const respuesta = await clienteApi.delete(`/delivery/envios/${envioId}`, {
+      data: { motivo_cancelacion: motivoCancelacion }
+    });
+    return respuesta.data;
+  },
+
+  /**
    * Obtiene el listado de repartidores registrados.
    */
   obtenerRepartidores: async () => {

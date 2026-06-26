@@ -64,6 +64,21 @@ async def registrar_venta(
     """
     usuario_id = usuario_actual["id"]
     resultado = VentaService.registrar_venta(venta, usuario_id)
+    # Registrar en bitácora de forma atómica con el usuario_id real del JWT
+    BitacoraService.registrar_accion(
+        usuario_id=usuario_id,
+        accion="CREAR",
+        tabla_afectada="ventas",
+        registro_id=resultado["id"],
+        operacion="INSERT",
+        detalles=f"Venta registrada: Factura {resultado.get('codigo_factura')} por Bs. {resultado.get('total')}",
+        datos_nuevos={
+            "codigo_factura": resultado.get("codigo_factura"),
+            "total": float(resultado.get("total")) if resultado.get("total") is not None else 0.0,
+            "estado_venta": resultado.get("estado_venta"),
+            "tipo_pago": resultado.get("tipo_pago")
+        }
+    )
     respuesta = VentaRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 
@@ -76,8 +91,26 @@ async def cancelar_venta(
     Realiza la baja lógica de una venta (cambiando su estado a 'Cancelada').
     Dispara la reversión automática de stock e inventario en la base de datos de manera atómica.
     """
+    # Intentar obtener la factura antes de cancelar para los detalles de la bitácora
+    try:
+        venta_obj = VentaService.obtener_completa_por_id(venta_id)
+        cod_fac = venta_obj.get("codigo_factura", "Desconocida")
+    except Exception:
+        cod_fac = "Desconocida"
+
     resultado_id = VentaService.cancelar_venta(venta_id)
-    BitacoraService.asociar_usuario_a_ultimo_cambio(venta_id, usuario_actual.get("id"))
+
+    # Registrar anulación en bitácora de forma atómica
+    BitacoraService.registrar_accion(
+        usuario_id=usuario_actual["id"],
+        accion="ANULAR",
+        tabla_afectada="ventas",
+        registro_id=venta_id,
+        operacion="UPDATE",
+        detalles=f"Venta anulada: Factura {cod_fac}",
+        datos_anteriores={"estado_venta": "Completada"},
+        datos_nuevos={"estado_venta": "Cancelada"}
+    )
     return {"ok": True, "data": {"id": resultado_id, "estado_venta": "Cancelada"}}
 
 @router.put("/{venta_id}", response_model=dict)
@@ -90,8 +123,37 @@ async def actualizar_venta(
     Actualiza una venta existente (cabecera, artículos y delivery) de forma atómica.
     Realiza validaciones de stock y reajustes del balance del cliente.
     """
+    # Capturar el estado previo de la venta antes de actualizar
+    try:
+        venta_antes = VentaService.obtener_completa_por_id(venta_id)
+        datos_previos = {
+            "total": float(venta_antes.get("total")) if venta_antes.get("total") is not None else 0.0,
+            "tipo_pago": venta_antes.get("tipo_pago"),
+            "detalles": [
+                {"producto_id": str(d.get("producto_id")), "cantidad": d.get("cantidad"), "precio_unitario": float(d.get("precio_unitario"))}
+                for d in venta_antes.get("detalles", [])
+            ]
+        }
+    except Exception:
+        datos_previos = None
+
     resultado = VentaService.actualizar_venta(venta_id, venta)
-    BitacoraService.asociar_usuario_a_ultimo_cambio(venta_id, usuario_actual.get("id"))
+
+    # Registrar modificación en bitácora con snapshot diferencial (antes/después)
+    BitacoraService.registrar_accion(
+        usuario_id=usuario_actual["id"],
+        accion="MODIFICAR",
+        tabla_afectada="ventas",
+        registro_id=venta_id,
+        operacion="UPDATE",
+        detalles=f"Venta modificada: Factura {resultado.get('codigo_factura')}",
+        datos_anteriores=datos_previos,
+        datos_nuevos={
+            "total": float(resultado.get("total")) if resultado.get("total") is not None else 0.0,
+            "tipo_pago": resultado.get("tipo_pago"),
+            "detalles": [d.model_dump() for d in venta.detalles]
+        }
+    )
     respuesta = VentaRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 

@@ -146,3 +146,55 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
   - **Promedio Límite de Crédito:** Promedio del límite de crédito asignado a todos los registros.
 
 
+## 15. Módulo de Envíos y Reparto (Delivery)
+
+### 15a. Backend: Enriquecimiento de Respuesta con Coordenadas Geográficas
+- Los métodos `obtener_todos_envios` y `obtener_envios_activos_repartidor` en `backend/app/services/delivery.py` incluyen ahora en su SELECT de Supabase los campos `latitud`, `longitud` y `enlace_mapa` del cliente asociado a la venta. Estos datos viajan en el objeto `cliente` anidado dentro de cada envío y son consumidos directamente por el frontend para renderizar el mapa.
+
+### 15b. Backend: Baja Lógica de Envíos (`DELETE /delivery/envios/{id}`)
+- Se implementó el endpoint `DELETE /delivery/envios/{envio_id}` en `backend/app/routers/delivery.py`.
+- **Política de integridad:** Nunca elimina el registro físicamente. Cambia el `estado_envio` a `'Cancelado'` y persiste el `motivo_cancelacion` en la base de datos.
+- **Restricciones:** Solo opera sobre envíos en estado `'Pendiente'`. Requiere un cuerpo JSON con el campo `motivo_cancelacion` (obligatorio y no vacío).
+- **Autorización:** Accesible únicamente por roles `Administrador` y `Cajero`.
+- El método `cancelar_envio` en `DeliveryService` centraliza toda la lógica de validación antes de ejecutar el UPDATE atómico.
+
+### 15c. Frontend: `deliveryService.js`
+- Se añadió el método `cancelarEnvio(envioId, motivoCancelacion)` que invoca `DELETE /delivery/envios/{id}` pasando el motivo en el cuerpo de la petición (`data` del objeto de configuración de Axios).
+
+### 15d. Frontend: `GestionEnvios.jsx` (Vista Administrativa)
+- **Botón de Cancelación por Fila:** En la columna "Gestión Directa" de la tabla, los envíos en estado `Pendiente` cuentan ahora con un botón secundario rojo (`Ban`) de cancelación administrativa, además del botón "Iniciar Ruta".
+- **Modal de Cancelación Administrativa:** Al hacer clic en el botón `Cancelar`, se despliega un modal con:
+  - Mensaje informativo que aclara la naturaleza de la baja lógica (conserva el historial).
+  - Campo de texto obligatorio para ingresar el motivo de cancelación.
+  - Botones "Atrás" (cerrar modal) y "Confirmar Cancelación" (deshabilitado hasta que se ingrese un motivo).
+  - Indicador de estado `procesandoCancelarAdmin` para evitar doble envío.
+
+### 15e. Frontend: `DeliveryReparto.jsx` (Vista del Repartidor)
+- **Integración de `MapaInteractivo`:** Se importó y se renderiza el componente `MapaInteractivo.jsx` (basado en Leaflet) en la pestaña **"Mi Ruta"**.
+- **Condicional de activación:** El mapa solo se muestra si el envío activo dispone de coordenadas (`env.cliente?.latitud` y `env.cliente?.longitud`). En ese caso, aparece un botón "Ver Mapa de Destino" (azul) que alterna la visibilidad del mapa.
+- **Modo solo lectura:** El mapa se renderiza con `soloLectura={true}` para deshabilitar la interacción del usuario y centrar el marcador en las coordenadas del cliente.
+- **Estado `mapasExpandidos`:** Diccionario local `{[envio.id]: boolean}` que permite expandir/colapsar mapas de múltiples envíos en la vista de forma independiente.
+
+
+## 16. Módulo de Bitácora y Auditoría (BitacoraSistema.jsx)
+
+### 16a. Backend & DB: Normalización y Persistencia Atómica
+- **Captura diferencial:** Se agregaron las columnas `operacion` (VARCHAR), `datos_anteriores` (JSONB) y `datos_nuevos` (JSONB) a la tabla `bitacora_usuarios` de la base de datos.
+- **Inserción directa desde FastAPI:** Se eliminó por completo el uso del método parche `asociar_usuario_a_ultimo_cambio`. Ahora, tras cada mutación exitosa en los routers (`ventas.py`, `productos.py`, `clientes.py`, `delivery.py`), se invoca de manera síncrona `BitacoraService.registrar_accion()`.
+- **Garantía del operador JWT:** Se inyecta de forma segura el `usuario_id` recuperado desde el JWT, eliminando la latencia y las fallas por concurrencia que ocurrían cuando el frontend asignaba el usuario "a posteriori".
+- **Desactivación de Triggers Obsoletos:** Se eliminaron los triggers de auditoría a nivel de base de datos (`trg_auditar_clientes`, `trg_auditar_productos`, etc.) para evitar duplicidad de registros y auditorías con `usuario_id` nulo.
+
+### 16b. Backend: Endpoints con Filtrado Delegado a la DB
+- El endpoint `GET /bitacora/usuarios` acepta ahora parámetros de consulta opcionales: `fecha_inicio`, `fecha_fin`, `tabla_afectada` (módulo) y `operacion` (DML).
+- La consulta a Supabase se construye dinámicamente y se aplica el filtrado a nivel de motor de base de datos (no en memoria en el servidor), garantizando eficiencia en consultas con alto volumen de registros.
+
+### 16c. Frontend: `bitacoraService.js`
+- El servicio fue extendido para recibir un objeto `filtros` y enviarlo como query params (`params: { skip, limit, ...filtros }`) en `obtenerAuditoriaUsuarios`.
+
+### 16d. Frontend: `BitacoraSistema.jsx` (Vista de Auditoría Premium)
+- **Panel de Filtros Avanzados:** Se rediseñó la cabecera de la pestaña de auditoría para incluir inputs de fecha (`fechaInicio`/`fechaFin`), un selector de módulo (`tabla_afectada`, integrando `envios` y `repartidores`) y un selector de operación (`operacion` DML: `INSERT`, `UPDATE`, `DELETE`).
+- **Filtrado delegado:** Al presionar "Actualizar", el frontend realiza la consulta directa al backend con los filtros vigentes (cero filtrado manual en memoria).
+- **Visor de Diffs JSON Expandible:** 
+  - Se implementó el estado `filaExpandida` (almacena el ID del registro seleccionado).
+  - En la tabla de escritorio, se agregó la columna "Cambios" con el botón "Ver JSON". Al hacer clic, se despliega un panel inferior de ancho completo con dos contenedores premium que contrastan en tiempo real el **Estado Anterior (Antes)** y el **Estado Nuevo (Después)** formateados de manera indentada y elegante.
+  - En la vista móvil, las tarjetas cuentan con el botón "Ver Cambios JSON" que expande en la misma tarjeta la vista diferencial para asegurar una excelente experiencia de usuario adaptable.

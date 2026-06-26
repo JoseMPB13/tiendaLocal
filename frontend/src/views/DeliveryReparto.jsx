@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import deliveryService from '../services/deliveryService';
 import DeslizadorInteractivo from '../components/DeslizadorInteractivo';
+import { MapaInteractivo } from '../components/MapaInteractivo';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   ChevronDown, ChevronUp, MapPin, Navigation, Phone, 
-  Clock, FileText, CheckCircle2, XCircle 
+  Clock, FileText, CheckCircle2, XCircle, Map
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 
@@ -22,6 +23,9 @@ export const DeliveryReparto = () => {
   const [envioACancelar, setEnvioACancelar] = useState(null);
   const [motivoCancelacionText, setMotivoCancelacionText] = useState("");
   const [procesandoCancelacion, setProcesandoCancelacion] = useState(false);
+
+  // Control de expansión del mapa interactivo por envío (id → boolean)
+  const [mapasExpandidos, setMapasExpandidos] = useState({});
 
   // Carga de datos unificada
   const cargarDatos = async () => {
@@ -91,6 +95,14 @@ export const DeliveryReparto = () => {
 
   const toggleAcordeon = (id) => {
     setAcordeonesAbiertos(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  // Alterna la visibilidad del mapa interactivo de un envío específico
+  const toggleMapa = (id) => {
+    setMapasExpandidos(prev => ({
       ...prev,
       [id]: !prev[id]
     }));
@@ -402,6 +414,28 @@ export const DeliveryReparto = () => {
                         {env.cliente?.enlace_ubicacion && !esUrlValida(env.cliente?.enlace_ubicacion) && (
                           <div className="bg-amber-50/50 border border-amber-200/50 rounded-xl p-3 text-xs text-amber-800">
                             <span className="font-bold">Referencia de Ubicación:</span> {env.cliente.enlace_ubicacion}
+                          </div>
+                        )}
+
+                        {/* MAPA INTERACTIVO DE DESTINO: visible solo en Mi Ruta si hay coordenadas */}
+                        {tabActiva === 'mi_ruta' && env.cliente?.latitud && env.cliente?.longitud && (
+                          <div>
+                            <button
+                              onClick={() => toggleMapa(env.id)}
+                              className="w-full flex items-center justify-center gap-2 py-2 px-3.5 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl text-xs font-semibold transition-colors"
+                            >
+                              <Map size={14} />
+                              {mapasExpandidos[env.id] ? 'Ocultar Mapa de Destino' : 'Ver Mapa de Destino'}
+                            </button>
+                            {mapasExpandidos[env.id] && (
+                              <div className="mt-2 rounded-xl overflow-hidden border border-sky-200" style={{ height: '220px' }}>
+                                <MapaInteractivo
+                                  lat={parseFloat(env.cliente.latitud)}
+                                  lng={parseFloat(env.cliente.longitud)}
+                                  soloLectura={true}
+                                />
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

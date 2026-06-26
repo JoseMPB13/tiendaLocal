@@ -17,7 +17,16 @@ async def crear_producto(
     Registra un nuevo producto en el catálogo. Requiere rol 'Administrador'.
     """
     resultado = ProductoService.crear_producto(producto)
-    BitacoraService.asociar_usuario_a_ultimo_cambio(resultado["id"], usuario_actual.get("id"))
+    # Registrar en bitácora de forma atómica con el usuario_id real del JWT
+    BitacoraService.registrar_accion(
+        usuario_id=usuario_actual["id"],
+        accion="CREAR",
+        tabla_afectada="productos",
+        registro_id=resultado["id"],
+        operacion="INSERT",
+        detalles=f"Producto creado: '{resultado.get('nombre')}' (Cód: {resultado.get('codigo_barras')})",
+        datos_nuevos={"nombre": resultado.get("nombre"), "precio_venta": resultado.get("precio_venta"), "stock_actual": resultado.get("stock_actual")}
+    )
     respuesta = ProductoRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 
@@ -54,8 +63,20 @@ async def actualizar_producto(
     """
     Actualiza la información de un producto. Requiere rol 'Administrador'.
     """
+    # Capturar el estado previo del producto antes de actualizar
+    prod_antes = ProductoService.obtener_por_id(producto_id)
     resultado = ProductoService.actualizar_producto(producto_id, producto)
-    BitacoraService.asociar_usuario_a_ultimo_cambio(producto_id, usuario_actual.get("id"))
+    # Registrar en bitácora con snapshot diferencial (antes/después)
+    BitacoraService.registrar_accion(
+        usuario_id=usuario_actual["id"],
+        accion="MODIFICAR",
+        tabla_afectada="productos",
+        registro_id=producto_id,
+        operacion="UPDATE",
+        detalles=f"Producto actualizado: '{resultado.get('nombre')}'",
+        datos_anteriores={k: prod_antes.get(k) for k in producto.model_dump(exclude_unset=True)},
+        datos_nuevos=producto.model_dump(exclude_unset=True)
+    )
     respuesta = ProductoRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 
@@ -68,7 +89,17 @@ async def eliminar_producto(
     Inactiva un producto (Baja lógica). Requiere rol 'Administrador'.
     """
     resultado = ProductoService.eliminar_producto(producto_id)
-    BitacoraService.asociar_usuario_a_ultimo_cambio(producto_id, usuario_actual.get("id"))
+    # Registrar baja lógica (estado Inactivo) en bitácora
+    BitacoraService.registrar_accion(
+        usuario_id=usuario_actual["id"],
+        accion="DESACTIVAR",
+        tabla_afectada="productos",
+        registro_id=producto_id,
+        operacion="UPDATE",
+        detalles=f"Producto desactivado: '{resultado.get('nombre')}'",
+        datos_anteriores={"estado": "Activo"},
+        datos_nuevos={"estado": "Inactivo"}
+    )
     respuesta = ProductoRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 

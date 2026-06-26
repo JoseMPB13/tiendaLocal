@@ -30,7 +30,10 @@ export const BitacoraSistema = () => {
   const [auditorias, setAuditorias] = useState([]);
   const [paginaAuditoria, setPaginaAuditoria] = useState(1);
   const [filtroModulo, setFiltroModulo] = useState('');
-  const [filtroAccion, setFiltroAccion] = useState('');
+  const [filtroOperacion, setFiltroOperacion] = useState('');
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [fechaFin, setFechaFin] = useState('');
+  const [filaExpandida, setFilaExpandida] = useState(null);
   const itemsPorPaginaAuditoria = 10;
 
   // --- Carga de Datos ---
@@ -51,17 +54,25 @@ export const BitacoraSistema = () => {
   const cargarAuditorias = useCallback(async () => {
     try {
       setCargando(true);
-      // Paginación y límite del backend
-      const res = await bitacoraService.obtenerAuditoriaUsuarios(0, 500); // Traemos una buena cantidad para filtrar en memoria
+      const filtros = {};
+      if (fechaInicio) filtros.fecha_inicio = fechaInicio;
+      if (fechaFin) filtros.fecha_fin = fechaFin;
+      if (filtroModulo) filtros.tabla_afectada = filtroModulo;
+      if (filtroOperacion) filtros.operacion = filtroOperacion;
+
+      // Traer una cantidad razonable filtrada desde la base de datos
+      const res = await bitacoraService.obtenerAuditoriaUsuarios(0, 200, filtros);
       if (res.ok) {
         setAuditorias(res.data || []);
+        setPaginaAuditoria(1); // Reiniciar a la primera página tras una nueva búsqueda
+        setFilaExpandida(null); // Colapsar filas expandidas
       }
     } catch {
       toast.error("Error al cargar el registro de auditoría de usuarios.");
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [fechaInicio, fechaFin, filtroModulo, filtroOperacion]);
 
   useEffect(() => {
     let activo = true;
@@ -91,10 +102,24 @@ export const BitacoraSistema = () => {
     toast.success("Filtros restablecidos");
   };
 
-  const handleLimpiarFiltrosAuditoria = () => {
+  const handleLimpiarFiltrosAuditoria = async () => {
     setFiltroModulo('');
-    setFiltroAccion('');
+    setFiltroOperacion('');
+    setFechaInicio('');
+    setFechaFin('');
     setPaginaAuditoria(1);
+    setFilaExpandida(null);
+    try {
+      setCargando(true);
+      const res = await bitacoraService.obtenerAuditoriaUsuarios(0, 200);
+      if (res.ok) {
+        setAuditorias(res.data || []);
+      }
+    } catch {
+      toast.error("Error al restablecer los datos de auditoría.");
+    } finally {
+      setCargando(false);
+    }
     toast.success("Filtros restablecidos");
   };
 
@@ -112,13 +137,8 @@ export const BitacoraSistema = () => {
   const indexInicioInv = (paginaInventario - 1) * itemsPorPaginaInventario;
   const movimientosPaginados = movimientosFiltrados.slice(indexInicioInv, indexInicioInv + itemsPorPaginaInventario);
 
-  // --- Filtrado y Procesamiento en Memoria (Pestaña 2) ---
-  const auditoriasFiltradas = auditorias
-    .filter(item => {
-      const matchModulo = filtroModulo ? (item.tabla_afectada || '').toLowerCase() === filtroModulo.toLowerCase() : true;
-      const matchAccion = filtroAccion ? (item.accion || '').toLowerCase() === filtroAccion.toLowerCase() : true;
-      return matchModulo && matchAccion;
-    });
+  // --- Filtrado y Procesamiento (Pestaña 2) ---
+  const auditoriasFiltradas = auditorias; // Ya están filtrados por el backend
 
   const indexInicioAud = (paginaAuditoria - 1) * itemsPorPaginaAuditoria;
   const auditoriasPaginadas = auditoriasFiltradas.slice(indexInicioAud, indexInicioAud + itemsPorPaginaAuditoria);
@@ -503,7 +523,7 @@ export const BitacoraSistema = () => {
               <p className="text-sm text-zinc-500 mt-0.5">Control histórico de las acciones realizadas por los operadores en los módulos principales.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="flex flex-col space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Módulo Afectado</label>
                 <select
@@ -516,23 +536,43 @@ export const BitacoraSistema = () => {
                   <option value="productos">Productos</option>
                   <option value="ventas">Ventas</option>
                   <option value="compras">Compras</option>
+                  <option value="envios">Envíos (Delivery)</option>
+                  <option value="repartidores">Repartidores</option>
                 </select>
               </div>
 
               <div className="flex flex-col space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Acción Realizada</label>
+                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Operación (DML)</label>
                 <select
-                  value={filtroAccion}
-                  onChange={(e) => { setFiltroAccion(e.target.value); setPaginaAuditoria(1); }}
+                  value={filtroOperacion}
+                  onChange={(e) => { setFiltroOperacion(e.target.value); setPaginaAuditoria(1); }}
                   className="w-full px-3 py-2 border border-zinc-200 bg-white rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none font-medium text-zinc-700 cursor-pointer"
                 >
-                  <option value="">Todas las acciones</option>
-                  <option value="CREAR">Creación</option>
-                  <option value="MODIFICAR">Modificación</option>
-                  <option value="DESACTIVAR">Desactivar / Baja lógica</option>
-                  <option value="ANULAR">Anulación</option>
-                  <option value="ELIMINAR">Eliminación física</option>
+                  <option value="">Todas las operaciones</option>
+                  <option value="INSERT">INSERT (Crear)</option>
+                  <option value="UPDATE">UPDATE (Modificar / Desactivar)</option>
+                  <option value="DELETE">DELETE (Eliminar)</option>
                 </select>
+              </div>
+
+              <div className="flex flex-col space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Fecha Inicio</label>
+                <input
+                  type="date"
+                  value={fechaInicio}
+                  onChange={(e) => { setFechaInicio(e.target.value); setPaginaAuditoria(1); }}
+                  className="w-full px-3 py-2 border border-zinc-200 bg-white rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none font-medium text-zinc-700"
+                />
+              </div>
+
+              <div className="flex flex-col space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Fecha Fin</label>
+                <input
+                  type="date"
+                  value={fechaFin}
+                  onChange={(e) => { setFechaFin(e.target.value); setPaginaAuditoria(1); }}
+                  className="w-full px-3 py-2 border border-zinc-200 bg-white rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none font-medium text-zinc-700"
+                />
               </div>
             </div>
 
@@ -565,7 +605,7 @@ export const BitacoraSistema = () => {
               </div>
             ) : (
               <>
-                {/* Vista Escritorio (Tabla Detallada con Iconos) */}
+                {/* Vista Escritorio (Tabla Detallada con Iconos y Diffs JSON) */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left border-collapse text-sm">
                     <thead>
@@ -575,6 +615,7 @@ export const BitacoraSistema = () => {
                         <th className="py-3.5 px-6 font-semibold">Acción</th>
                         <th className="py-3.5 px-6 font-semibold">Módulo</th>
                         <th className="py-3.5 px-6 font-semibold">Detalles</th>
+                        <th className="py-3.5 px-6 font-semibold text-center">Cambios</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100 text-zinc-700 bg-white">
@@ -607,13 +648,63 @@ export const BitacoraSistema = () => {
                           <td className="py-4 px-6 text-xs text-zinc-500 font-medium max-w-[280px] truncate" title={item.detalles}>
                             {item.detalles || 'Sin detalles'}
                           </td>
+                          <td className="py-4 px-6 text-center">
+                            <button
+                              onClick={() => setFilaExpandida(filaExpandida === item.id ? null : item.id)}
+                              className="px-2.5 py-1 text-xs font-bold rounded-lg border border-zinc-200 hover:bg-zinc-100 hover:border-zinc-300 text-zinc-600 transition-all cursor-pointer flex items-center justify-center space-x-1 mx-auto"
+                            >
+                              <span>{filaExpandida === item.id ? 'Ocultar' : 'Ver JSON'}</span>
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
 
-                {/* Vista Celulares (Línea de tiempo / Timeline estético) */}
+                {/* Sub-tabla / Sección expandida para Diffs JSON */}
+                <div className="hidden md:block">
+                  {auditoriasPaginadas.map((item) => (
+                    filaExpandida === item.id && (
+                      <div key={`diff-${item.id}`} className="bg-zinc-50/50 p-6 border-b border-zinc-200/60">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
+                          <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+                            <p className="font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center">
+                              <span className="h-2 w-2 rounded-full bg-rose-500 mr-2"></span>
+                              Estado Anterior (Antes de la modificación)
+                            </p>
+                            {item.datos_anteriores ? (
+                              <pre className="font-mono text-zinc-700 bg-zinc-50 p-4 rounded-xl border border-zinc-150 overflow-auto max-h-56 leading-relaxed">
+                                {JSON.stringify(item.datos_anteriores, null, 2)}
+                              </pre>
+                            ) : (
+                              <p className="text-zinc-400 italic bg-zinc-50/50 p-4 rounded-xl border border-dashed border-zinc-200">
+                                No hay datos anteriores (Operación de creación / registro inicial)
+                              </p>
+                            )}
+                          </div>
+                          <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+                            <p className="font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center">
+                              <span className="h-2 w-2 rounded-full bg-emerald-500 mr-2"></span>
+                              Estado Nuevo (Después de la modificación)
+                            </p>
+                            {item.datos_nuevos ? (
+                              <pre className="font-mono text-zinc-700 bg-zinc-50 p-4 rounded-xl border border-zinc-150 overflow-auto max-h-56 leading-relaxed">
+                                {JSON.stringify(item.datos_nuevos, null, 2)}
+                              </pre>
+                            ) : (
+                              <p className="text-zinc-400 italic bg-zinc-50/50 p-4 rounded-xl border border-dashed border-zinc-200">
+                                No hay datos nuevos (Operación de anulación o eliminación física)
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  ))}
+                </div>
+
+                {/* Vista Celulares (Línea de tiempo / Timeline estético con Diffs JSON) */}
                 <div className="block md:hidden p-6 bg-white">
                   <div className="relative border-l border-zinc-200 ml-4 space-y-8">
                     {auditoriasPaginadas.map((item) => (
@@ -649,6 +740,40 @@ export const BitacoraSistema = () => {
                           <p className="text-xs text-zinc-500 font-medium border-t border-zinc-100 pt-2 mt-2 leading-relaxed">
                             {item.detalles}
                           </p>
+
+                          <div className="pt-2 border-t border-zinc-100 flex justify-end">
+                            <button
+                              onClick={() => setFilaExpandida(filaExpandida === item.id ? null : item.id)}
+                              className="text-[11px] font-bold text-zinc-600 hover:text-zinc-900 border border-zinc-200 bg-white rounded-lg px-2.5 py-1 transition-all cursor-pointer"
+                            >
+                              {filaExpandida === item.id ? 'Ocultar JSON' : 'Ver Cambios JSON'}
+                            </button>
+                          </div>
+
+                          {filaExpandida === item.id && (
+                            <div className="space-y-3 pt-3 border-t border-zinc-200/60 mt-3 text-[10px] font-mono leading-normal bg-white p-3 rounded-xl border border-zinc-150">
+                              <div>
+                                <p className="font-bold text-rose-600 mb-1">ANTES:</p>
+                                {item.datos_anteriores ? (
+                                  <pre className="overflow-auto max-h-36 bg-zinc-50 p-2 rounded border border-zinc-100 max-w-full">
+                                    {JSON.stringify(item.datos_anteriores, null, 2)}
+                                  </pre>
+                                ) : (
+                                  <span className="text-zinc-400 italic">Sin datos previos</span>
+                                )}
+                              </div>
+                              <div className="border-t border-zinc-100 pt-2 mt-2">
+                                <p className="font-bold text-emerald-600 mb-1">DESPUÉS:</p>
+                                {item.datos_nuevos ? (
+                                  <pre className="overflow-auto max-h-36 bg-zinc-50 p-2 rounded border border-zinc-100 max-w-full">
+                                    {JSON.stringify(item.datos_nuevos, null, 2)}
+                                  </pre>
+                                ) : (
+                                  <span className="text-zinc-400 italic">Sin datos nuevos</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

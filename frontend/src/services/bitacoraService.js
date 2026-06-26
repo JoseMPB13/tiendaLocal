@@ -19,13 +19,14 @@ export const bitacoraService = {
   },
 
   /**
-   * Obtiene el listado completo de auditoría de acciones de usuarios.
+   * Obtiene el listado de auditoría de acciones de usuarios con filtros opcionales.
    * @param {number} skip - Registros a saltar.
    * @param {number} limit - Límite de registros a retornar.
+   * @param {object} filtros - Filtros opcionales: fecha_inicio, fecha_fin, tabla_afectada, operacion.
    */
-  obtenerAuditoriaUsuarios: async (skip = 0, limit = 50) => {
+  obtenerAuditoriaUsuarios: async (skip = 0, limit = 50, filtros = {}) => {
     const respuesta = await clienteApi.get('/bitacora/usuarios', {
-      params: { skip, limit }
+      params: { skip, limit, ...filtros }
     });
     return respuesta.data;
   }

@@ -50,12 +50,12 @@ create trigger trg_repartidores_update before update on repartidores
 create trigger trg_envios_update before update on envios
     for each row execute function update_fecha_actualizacion();
 
--- Trigger de auditoría para repartidores y envíos
-create trigger trg_auditar_repartidores
-after insert or update or delete on repartidores
-for each row execute function fn_auditar_cambios();
+-- Trigger de auditoría para repartidores y envíos (DESACTIVADOS, gestionados por FastAPI)
+-- create trigger trg_auditar_repartidores
+-- after insert or update or delete on repartidores
+-- for each row execute function fn_auditar_cambios();
 
-create or replace trigger trg_auditar_envios
-after insert or update or delete on envios
-for each row execute function fn_auditar_cambios();
+-- create or replace trigger trg_auditar_envios
+-- after insert or update or delete on envios
+-- for each row execute function fn_auditar_cambios();
 

@@ -5,7 +5,7 @@ import PaginadorTablas from '../components/PaginadorTablas';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Truck, Plus, Search, Filter, MapPin, 
-  CheckCircle2, Clock, X, ShieldAlert
+  CheckCircle2, Clock, X, ShieldAlert, Ban
 } from 'lucide-react';
 
 export const GestionEnvios = () => {
@@ -29,6 +29,12 @@ export const GestionEnvios = () => {
   const [direccion, setDireccion] = useState('');
   const [costoEnvio, setCostoEnvio] = useState('0.00');
   const [procesandoForm, setProcesandoForm] = useState(false);
+
+  // Modal para cancelación administrativa de un envío (baja lógica)
+  const [mostrarModalCancelarAdmin, setMostrarModalCancelarAdmin] = useState(false);
+  const [envioCancelarId, setEnvioCancelarId] = useState(null);
+  const [motivoCancelarAdmin, setMotivoCancelarAdmin] = useState('');
+  const [procesandoCancelarAdmin, setProcesandoCancelarAdmin] = useState(false);
 
   const cargarDatos = async () => {
     try {
@@ -99,6 +105,34 @@ export const GestionEnvios = () => {
     } catch (ex) {
       const errorMsg = ex.response?.data?.detail || "No se pudo actualizar el estado.";
       toast.error(errorMsg);
+    }
+  };
+
+  // Abrir modal de cancelación administrativa (baja lógica)
+  const abrirModalCancelarAdmin = (envioId) => {
+    setEnvioCancelarId(envioId);
+    setMotivoCancelarAdmin('');
+    setMostrarModalCancelarAdmin(true);
+  };
+
+  // Confirmar cancelación administrativa con motivo obligatorio
+  const handleCancelarEnvioAdmin = async () => {
+    if (!motivoCancelarAdmin.trim() || !envioCancelarId) return;
+    try {
+      setProcesandoCancelarAdmin(true);
+      const res = await deliveryService.cancelarEnvio(envioCancelarId, motivoCancelarAdmin.trim());
+      if (res.ok) {
+        toast.success('Envío cancelado administrativamente. El registro se conserva en el historial.');
+        setMostrarModalCancelarAdmin(false);
+        setEnvioCancelarId(null);
+        setMotivoCancelarAdmin('');
+        cargarDatos();
+      }
+    } catch (ex) {
+      const errorMsg = ex.response?.data?.detail || 'No se pudo cancelar el envío.';
+      toast.error(`Error: ${errorMsg}`);
+    } finally {
+      setProcesandoCancelarAdmin(false);
     }
   };
 
@@ -340,13 +374,24 @@ export const GestionEnvios = () => {
                         ) : (
                           <div className="flex items-center justify-center space-x-2">
                             {env.estado_envio === 'Pendiente' && (
-                              <button
-                                onClick={() => handleActualizarEstado(env.id, 'En Camino')}
-                                disabled={!env.repartidor_id}
-                                className="py-1.5 px-3 bg-zinc-950 hover:bg-zinc-800 text-white rounded-lg text-xs font-semibold transition-all disabled:opacity-40 shadow-sm"
-                              >
-                                Iniciar Ruta
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleActualizarEstado(env.id, 'En Camino')}
+                                  disabled={!env.repartidor_id}
+                                  className="py-1.5 px-3 bg-zinc-950 hover:bg-zinc-800 text-white rounded-lg text-xs font-semibold transition-all disabled:opacity-40 shadow-sm"
+                                >
+                                  Iniciar Ruta
+                                </button>
+                                {/* Botón de cancelación administrativa (baja lógica) */}
+                                <button
+                                  onClick={() => abrirModalCancelarAdmin(env.id)}
+                                  className="py-1.5 px-2.5 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
+                                  title="Cancelar envío administrativamente"
+                                >
+                                  <Ban size={13} />
+                                  Cancelar
+                                </button>
+                              </>
                             )}
                             {env.estado_envio === 'En Camino' && (
                               <>
@@ -480,6 +525,67 @@ export const GestionEnvios = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CANCELACIÓN ADMINISTRATIVA DE ENVÍO (BAJA LÓGICA) */}
+      {mostrarModalCancelarAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-zinc-200 transition-all duration-300">
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-100">
+              <h3 className="font-bold text-zinc-900 text-base flex items-center">
+                <Ban className="text-rose-600 mr-2" size={20} />
+                Cancelar Envío (Baja Lógica)
+              </h3>
+              <button
+                onClick={() => setMostrarModalCancelarAdmin(false)}
+                className="text-zinc-400 hover:text-zinc-600 p-1 hover:bg-zinc-100 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="my-4 space-y-4">
+              <p className="text-sm text-zinc-600">
+                El envío se marcará como <span className="font-semibold text-rose-600">Cancelado</span> y se conservará
+                en el historial del sistema. Esta acción no elimina el registro.
+              </p>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                  Motivo de Cancelación <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  value={motivoCancelarAdmin}
+                  onChange={(e) => setMotivoCancelarAdmin(e.target.value)}
+                  placeholder="Ej: Error en la dirección, cliente no disponible, pedido duplicado..."
+                  rows="3"
+                  className="w-full px-3.5 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none resize-none transition-all placeholder:text-zinc-400"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setMostrarModalCancelarAdmin(false)}
+                  disabled={procesandoCancelarAdmin}
+                  className="flex-1 py-2 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-sm font-medium transition-all"
+                >
+                  Atrás
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelarEnvioAdmin}
+                  disabled={procesandoCancelarAdmin || !motivoCancelarAdmin.trim()}
+                  className="flex-1 py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-50 shadow-sm flex items-center justify-center gap-2"
+                >
+                  <Ban size={15} />
+                  {procesandoCancelarAdmin ? 'Cancelando...' : 'Confirmar Cancelación'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

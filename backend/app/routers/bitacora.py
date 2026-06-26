@@ -6,7 +6,8 @@
 # =============================================================================
 
 from fastapi import APIRouter, Depends, status, Query
-from typing import List, Literal
+from typing import List, Literal, Optional
+from datetime import date
 from app.schemas import MovimientoStockAgrupadoRespuesta, BitacoraUsuarioRespuesta
 from app.services.bitacora import BitacoraService
 from app.services.dependencias import verificar_roles
@@ -29,13 +30,31 @@ async def obtener_movimientos_productos(
 @router.get("/usuarios", response_model=dict)
 async def listar_bitacora_usuarios(
     skip: int = Query(0, ge=0, description="Número de registros a omitir para paginación"),
-    limit: int = Query(50, ge=1, le=100, description="Límite máximo de registros a retornar"),
+    limit: int = Query(50, ge=1, le=200, description="Límite máximo de registros a retornar"),
+    # Filtros avanzados delegados al motor de base de datos (no en memoria)
+    fecha_inicio: Optional[date] = Query(None, description="Fecha de inicio del rango (YYYY-MM-DD, inclusiva)"),
+    fecha_fin: Optional[date] = Query(None, description="Fecha de fin del rango (YYYY-MM-DD, inclusiva hasta las 23:59:59)"),
+    tabla_afectada: Optional[str] = Query(None, description="Tabla SQL afectada: ventas, productos, clientes, envios, compras"),
+    operacion: Optional[str] = Query(None, description="Tipo de operación DML: INSERT, UPDATE, DELETE"),
     usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
-    Retorna el historial completo de acciones de usuarios con paginación y orden descendente.
-    Acceso limitado exclusivamente al rol 'Administrador'.
+    Retorna el historial de auditoría de acciones de usuarios con soporte de filtros
+    avanzados delegados a la base de datos. Acceso limitado al rol 'Administrador'.
+
+    Filtros disponibles (todos opcionales):
+        - fecha_inicio / fecha_fin: Rango de fechas (ISO 8601).
+        - tabla_afectada: ventas, productos, clientes, envios, compras.
+        - operacion: INSERT, UPDATE, DELETE.
     """
-    resultado = BitacoraService.listar_bitacora_usuarios(skip=skip, limit=limit)
+    resultado = BitacoraService.listar_bitacora_usuarios(
+        skip=skip,
+        limit=limit,
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin,
+        tabla_afectada=tabla_afectada,
+        operacion=operacion
+    )
     respuestas = [BitacoraUsuarioRespuesta.model_validate(r) for r in resultado]
     return {"ok": True, "data": respuestas}
+
