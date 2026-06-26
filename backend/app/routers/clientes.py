@@ -4,6 +4,7 @@ from uuid import UUID
 from app.schemas.modelos import ClienteCrear, ClienteActualizar, ClienteRespuesta
 from app.services.clientes import ClienteService
 from app.services.dependencias import verificar_roles
+from app.services.bitacora import BitacoraService
 
 router = APIRouter(prefix="/clientes", tags=["Clientes"])
 
@@ -16,6 +17,7 @@ async def crear_cliente(
     Registra un nuevo cliente. Accesible por Administrador y Cajero.
     """
     resultado = ClienteService.crear_cliente(cliente)
+    BitacoraService.asociar_usuario_a_ultimo_cambio(resultado["id"], usuario_actual.get("id"))
     respuesta = ClienteRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 
@@ -53,6 +55,7 @@ async def actualizar_cliente(
     Actualiza la información de un cliente. Accesible por Administrador y Cajero.
     """
     resultado = ClienteService.actualizar_cliente(cliente_id, cliente)
+    BitacoraService.asociar_usuario_a_ultimo_cambio(cliente_id, usuario_actual.get("id"))
     respuesta = ClienteRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 
@@ -65,5 +68,6 @@ async def eliminar_cliente(
     Inactiva un cliente (Baja lógica). Requiere rol 'Administrador'.
     """
     resultado = ClienteService.eliminar_cliente(cliente_id)
+    BitacoraService.asociar_usuario_a_ultimo_cambio(cliente_id, usuario_actual.get("id"))
     respuesta = ClienteRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}

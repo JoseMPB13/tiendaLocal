@@ -338,4 +338,40 @@ class CompraConDetallesRespuesta(CompraRespuesta):
     model_config = ConfigDict(from_attributes=True)
 
 
+# -----------------------------------------------------------------------------
+# ESQUEMAS PARA EL MÓDULO DE BITÁCORA Y AUDITORÍA
+# -----------------------------------------------------------------------------
+
+class MovimientoStockAgrupadoRespuesta(BaseModel):
+    periodo_fecha: datetime
+    producto_id: UUID
+    producto_nombre: str
+    tipo_movimiento: str
+    total_entradas: Decimal
+    total_salidas: Decimal
+    balance_neto: Decimal
+    cantidad_movimientos: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+class UsuarioMini(BaseModel):
+    nombre_completo: str
+    email: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class BitacoraUsuarioRespuesta(BaseModel):
+    id: UUID
+    usuario_id: Optional[UUID] = None
+    accion: str
+    tabla_afectada: str
+    registro_id: UUID
+    detalles: Optional[str] = None
+    fecha: datetime
+    usuarios: Optional[UsuarioMini] = None  # Enriquecido con el join de la tabla usuarios
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+
 

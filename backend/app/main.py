@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import usuarios, categorias, productos, clientes, ventas, delivery, reportes, auth, compras
+from app.routers import usuarios, categorias, productos, clientes, ventas, delivery, reportes, auth, compras, bitacora
 from app.database import supabase
 
 # Cargar la configuración de modo depuración
@@ -45,6 +45,7 @@ app.include_router(ventas.router)
 app.include_router(delivery.router)
 app.include_router(reportes.router)
 app.include_router(compras.router)
+app.include_router(bitacora.router)
 
 
 @app.get("/")

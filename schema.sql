@@ -775,3 +775,30 @@ create policy "Permitir select de historial_stock a todos"
 on historial_stock for select to anon, authenticated using (true);
 
 
+-- -----------------------------------------------------------------------------
+-- 12. TABLA Y POLÍTICAS: bitacora_usuarios (Paso 9)
+-- -----------------------------------------------------------------------------
+create table if not exists bitacora_usuarios (
+    id uuid default uuid_generate_v4() primary key,
+    usuario_id uuid references usuarios(id) on delete set null,
+    accion varchar(50) not null,
+    tabla_afectada varchar(100) not null,
+    registro_id uuid not null,
+    detalles text,
+    fecha timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+comment on table bitacora_usuarios is 'Tabla unificada para auditoría de acciones críticas de usuarios en el sistema.';
+create index if not exists idx_bitacora_usuarios_tabla on bitacora_usuarios(tabla_afectada);
+create index if not exists idx_bitacora_usuarios_fecha on bitacora_usuarios(fecha);
+
+alter table bitacora_usuarios enable row level security;
+
+create policy "Permitir select de bitacora_usuarios a todos"
+on bitacora_usuarios for select to anon, authenticated using (true);
+
+create policy "Permitir insert de bitacora_usuarios a todos"
+on bitacora_usuarios for insert to anon, authenticated with check (true);
+
+
+

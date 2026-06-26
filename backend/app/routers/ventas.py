@@ -11,6 +11,7 @@ from uuid import UUID
 from app.schemas.modelos import VentaCrear, VentaRespuesta, VentaConDetallesRespuesta
 from app.services.ventas import VentaService
 from app.services.dependencias import verificar_roles
+from app.services.bitacora import BitacoraService
 
 router = APIRouter(prefix="/ventas", tags=["Ventas"])
 
@@ -76,6 +77,7 @@ async def cancelar_venta(
     Dispara la reversión automática de stock e inventario en la base de datos de manera atómica.
     """
     resultado_id = VentaService.cancelar_venta(venta_id)
+    BitacoraService.asociar_usuario_a_ultimo_cambio(venta_id, usuario_actual.get("id"))
     return {"ok": True, "data": {"id": resultado_id, "estado_venta": "Cancelada"}}
 
 @router.put("/{venta_id}", response_model=dict)
@@ -89,6 +91,7 @@ async def actualizar_venta(
     Realiza validaciones de stock y reajustes del balance del cliente.
     """
     resultado = VentaService.actualizar_venta(venta_id, venta)
+    BitacoraService.asociar_usuario_a_ultimo_cambio(venta_id, usuario_actual.get("id"))
     respuesta = VentaRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 

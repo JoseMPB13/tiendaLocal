@@ -4,6 +4,7 @@ from uuid import UUID
 from app.schemas.modelos import ProductoCrear, ProductoActualizar, ProductoRespuesta, ProductoReabastecer
 from app.services.productos import ProductoService
 from app.services.dependencias import verificar_roles
+from app.services.bitacora import BitacoraService
 
 router = APIRouter(prefix="/productos", tags=["Productos"])
 
@@ -16,6 +17,7 @@ async def crear_producto(
     Registra un nuevo producto en el catálogo. Requiere rol 'Administrador'.
     """
     resultado = ProductoService.crear_producto(producto)
+    BitacoraService.asociar_usuario_a_ultimo_cambio(resultado["id"], usuario_actual.get("id"))
     respuesta = ProductoRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 
@@ -53,6 +55,7 @@ async def actualizar_producto(
     Actualiza la información de un producto. Requiere rol 'Administrador'.
     """
     resultado = ProductoService.actualizar_producto(producto_id, producto)
+    BitacoraService.asociar_usuario_a_ultimo_cambio(producto_id, usuario_actual.get("id"))
     respuesta = ProductoRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 
@@ -65,6 +68,7 @@ async def eliminar_producto(
     Inactiva un producto (Baja lógica). Requiere rol 'Administrador'.
     """
     resultado = ProductoService.eliminar_producto(producto_id)
+    BitacoraService.asociar_usuario_a_ultimo_cambio(producto_id, usuario_actual.get("id"))
     respuesta = ProductoRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 

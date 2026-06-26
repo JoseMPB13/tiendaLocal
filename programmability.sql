@@ -975,5 +975,152 @@ $$;
 -- -----------------------------------------------------------------------------
 
 
+-- -----------------------------------------------------------------------------
+-- FUNCIÓN DE AGREGACIÓN DE INVENTARIO: obtener_movimientos_stock_agrupados (Paso 9)
+-- -----------------------------------------------------------------------------
+create or replace function obtener_movimientos_stock_agrupados(p_periodo text)
+returns table (
+    periodo_fecha timestamp with time zone,
+    producto_id uuid,
+    producto_nombre varchar(150),
+    tipo_movimiento varchar(50),
+    total_entradas numeric,
+    total_salidas numeric,
+    balance_neto numeric,
+    cantidad_movimientos bigint
+) as $$
+declare
+    v_trunc_period text;
+begin
+    if p_periodo = 'dia' then
+        v_trunc_period := 'day';
+    elsif p_periodo = 'semana' then
+        v_trunc_period := 'week';
+    elsif p_periodo = 'mes' then
+        v_trunc_period := 'month';
+    else
+        v_trunc_period := 'day';
+    end if;
+
+    return query
+    select 
+        date_trunc(v_trunc_period, hs.fecha_movimiento)::timestamp with time zone as periodo_fecha,
+        hs.producto_id,
+        p.nombre as producto_nombre,
+        hs.tipo_movimiento,
+        coalesce(sum(case when hs.cantidad_cambio > 0 then hs.cantidad_cambio else 0 end), 0)::numeric as total_entradas,
+        coalesce(sum(case when hs.cantidad_cambio < 0 then hs.cantidad_cambio else 0 end), 0)::numeric as total_salidas,
+        coalesce(sum(hs.cantidad_cambio), 0)::numeric as balance_neto,
+        count(*)::bigint as cantidad_movimientos
+    from historial_stock hs
+    join productos p on p.id = hs.producto_id
+    group by 1, hs.producto_id, p.nombre, hs.tipo_movimiento
+    order by 1 desc, p.nombre asc;
+end;
+$$ language plpgsql;
+
+comment on function obtener_movimientos_stock_agrupados(text) is 'Retorna movimientos de stock agrupados y consolidados por día, semana o mes.';
+
+
+-- -----------------------------------------------------------------------------
+-- FUNCIÓN TRIGGER PARA AUDITORÍA AUTOMÁTICA DE ACCIONES DE USUARIOS (Paso 9)
+-- -----------------------------------------------------------------------------
+create or replace function fn_auditar_acciones_usuario()
+returns trigger as $$
+declare
+    v_usuario_id uuid := null;
+    v_accion varchar(50);
+    v_detalles text;
+    v_registro_id uuid;
+    v_old_json jsonb := null;
+    v_new_json jsonb := null;
+begin
+    -- Convertir registros a JSONB para evitar errores de acceso a campos dinámicos
+    if tg_op = 'UPDATE' or tg_op = 'DELETE' then
+        v_old_json := to_jsonb(old);
+        v_registro_id := old.id;
+    end if;
+    if tg_op = 'INSERT' or tg_op = 'UPDATE' then
+        v_new_json := to_jsonb(new);
+        v_registro_id := new.id;
+    end if;
+
+    -- 1. Intentar recuperar el ID del usuario desde la sesión de PostgreSQL configurada por el backend
+    begin
+        v_usuario_id := nullif(current_setting('app.current_user_id', true), '')::uuid;
+    exception when others then
+        v_usuario_id := null;
+    end;
+
+    -- 2. Si es nulo y estamos en ventas o compras, intentar recuperar de las columnas correspondientes
+    if v_usuario_id is null then
+        if tg_table_name = 'ventas' or tg_table_name = 'compras' then
+            v_usuario_id := (v_new_json->>'usuario_id')::uuid;
+        end if;
+    end if;
+
+    -- 3. Discriminar la operación y la acción de auditoría
+    if tg_op = 'INSERT' then
+        v_accion := 'CREAR';
+        v_detalles := 'Creación inicial del registro.';
+    elsif tg_op = 'UPDATE' then
+        -- Verificar si es una baja lógica (inactivar o cancelar)
+        if tg_table_name = 'productos' and (v_old_json->>'estado') <> (v_new_json->>'estado') and (v_new_json->>'estado') = 'Inactivo' then
+            v_accion := 'DESACTIVAR';
+            v_detalles := 'Inactivación del producto (baja lógica).';
+        elsif tg_table_name = 'clientes' and (v_old_json->>'estado') <> (v_new_json->>'estado') and (v_new_json->>'estado') = 'Inactivo' then
+            v_accion := 'DESACTIVAR';
+            v_detalles := 'Inactivación del cliente (baja lógica).';
+        elsif tg_table_name = 'ventas' and (v_old_json->>'estado_venta') <> (v_new_json->>'estado_venta') and (v_new_json->>'estado_venta') = 'Cancelada' then
+            v_accion := 'ANULAR';
+            v_detalles := 'Anulación física/lógica de la venta.';
+        elsif tg_table_name = 'compras' and (v_old_json->>'estado_compra') <> (v_new_json->>'estado_compra') and (v_new_json->>'estado_compra') = 'Cancelada' then
+            v_accion := 'ANULAR';
+            v_detalles := 'Anulación de compra de reabastecimiento.';
+        else
+            v_accion := 'MODIFICAR';
+            v_detalles := 'Actualización general de campos del registro.';
+        end if;
+    else
+        -- DELETE
+        v_accion := 'ELIMINAR';
+        v_detalles := 'Eliminación física del registro de la base de datos.';
+    end if;
+
+    -- 4. Insertar la auditoría en la tabla de bitácora
+    insert into bitacora_usuarios (usuario_id, accion, tabla_afectada, registro_id, detalles, fecha)
+    values (v_usuario_id, v_accion, tg_table_name, v_registro_id, v_detalles, timezone('utc'::text, now()));
+
+    if tg_op = 'DELETE' then
+        return old;
+    end if;
+    return new;
+end;
+$$ language plpgsql;
+
+comment on function fn_auditar_acciones_usuario() is 'Trigger automatizado para registrar la auditoría de inserción, actualización o baja en bitacora_usuarios.';
+
+
+-- -----------------------------------------------------------------------------
+-- TRIGGERS DE AUDITORÍA ASOCIADOS A LAS TABLAS
+-- -----------------------------------------------------------------------------
+create or replace trigger trg_auditar_clientes
+after insert or update or delete on clientes
+for each row execute function fn_auditar_acciones_usuario();
+
+create or replace trigger trg_auditar_productos
+after insert or update or delete on productos
+for each row execute function fn_auditar_acciones_usuario();
+
+create or replace trigger trg_auditar_ventas
+after insert or update or delete on ventas
+for each row execute function fn_auditar_acciones_usuario();
+
+create or replace trigger trg_auditar_compras
+after insert or update or delete on compras
+for each row execute function fn_auditar_acciones_usuario();
+
+
+
 
 

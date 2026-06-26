@@ -7,7 +7,8 @@ from .modelos import (
     VentaCrear, VentaRespuesta,
     RepartidorCrear, RepartidorRespuesta,
     EnvioCrear, EnvioRespuesta, EnvioActualizar,
-    DashboardMetricas, MovimientoKardex
+    DashboardMetricas, MovimientoKardex,
+    MovimientoStockAgrupadoRespuesta, UsuarioMini, BitacoraUsuarioRespuesta
 )
 
 
