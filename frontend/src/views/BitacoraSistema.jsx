@@ -64,12 +64,23 @@ export const BitacoraSistema = () => {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'inventario') {
-      cargarMovimientos();
-    } else {
-      cargarAuditorias();
-    }
+    let activo = true;
+    
+    // Deferimos la ejecución usando una microtarea para evitar setState síncrono dentro del effect
+    Promise.resolve().then(() => {
+      if (!activo) return;
+      if (activeTab === 'inventario') {
+        cargarMovimientos();
+      } else {
+        cargarAuditorias();
+      }
+    });
+
+    return () => {
+      activo = false;
+    };
   }, [activeTab, cargarMovimientos, cargarAuditorias]);
+
 
 
   // --- Métodos de Limpieza ---
