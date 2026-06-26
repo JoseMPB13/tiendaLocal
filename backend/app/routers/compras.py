@@ -41,6 +41,7 @@ async def obtener_compra(
     respuesta = CompraConDetallesRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 
+@router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def registrar_reabastecimiento(
     compra: CompraCrear,

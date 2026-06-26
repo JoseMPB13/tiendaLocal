@@ -45,7 +45,7 @@ app.include_router(clientes.router)
 app.include_router(ventas.router)
 app.include_router(delivery.router)
 app.include_router(reportes.router)
-app.include_router(compras.router)
+app.include_router(compras.router)  # Registro físico obligatorio del router de compras
 app.include_router(bitacora.router)
 
 
