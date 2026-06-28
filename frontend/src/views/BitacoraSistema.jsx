@@ -6,7 +6,7 @@
 // Idioma: Español
 // =============================================================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import bitacoraService from '../services/bitacoraService';
 import toast, { Toaster } from 'react-hot-toast';
 import PaginadorTablas from '../components/PaginadorTablas';
@@ -620,88 +620,86 @@ export const BitacoraSistema = () => {
                     </thead>
                     <tbody className="divide-y divide-zinc-100 text-zinc-700 bg-white">
                       {auditoriasPaginadas.map((item) => (
-                        <tr key={item.id} className="hover:bg-zinc-50/50 transition-colors">
-                          <td className="py-4 px-6 font-mono text-zinc-500 text-xs">
-                            {new Date(item.fecha).toLocaleString('es-ES')}
-                          </td>
-                          <td className="py-4 px-6">
-                            <div className="flex items-center">
-                              <div className="h-8 w-8 rounded-full bg-zinc-950 text-white font-bold text-xs flex items-center justify-center border border-zinc-800 shadow-sm">
-                                {getInitials(item.usuarios?.nombre_completo)}
+                        <Fragment key={item.id}>
+                          <tr className="hover:bg-zinc-50/50 transition-colors">
+                            <td className="py-4 px-6 font-mono text-zinc-500 text-xs">
+                              {new Date(item.fecha).toLocaleString('es-ES')}
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="flex items-center">
+                                <div className="h-8 w-8 rounded-full bg-zinc-950 text-white font-bold text-xs flex items-center justify-center border border-zinc-800 shadow-sm">
+                                  {getInitials(item.usuarios?.nombre_completo)}
+                                </div>
+                                <div className="ml-3">
+                                  <p className="font-bold text-zinc-950 text-xs leading-none">
+                                    {item.usuarios?.nombre_completo || 'Sistema / Desconocido'}
+                                  </p>
+                                  <p className="text-[10px] text-zinc-400 font-semibold mt-0.5 leading-none">
+                                    {item.usuarios?.email || 'N/A'}
+                                  </p>
+                                </div>
                               </div>
-                              <div className="ml-3">
-                                <p className="font-bold text-zinc-950 text-xs leading-none">
-                                  {item.usuarios?.nombre_completo || 'Sistema / Desconocido'}
-                                </p>
-                                <p className="text-[10px] text-zinc-400 font-semibold mt-0.5 leading-none">
-                                  {item.usuarios?.email || 'N/A'}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-4 px-6">
-                            {renderBadgeAccion(item.accion)}
-                          </td>
-                          <td className="py-4 px-6 font-semibold text-zinc-900 text-xs">
-                            {renderModuloName(item.tabla_afectada)}
-                          </td>
-                          <td className="py-4 px-6 text-xs text-zinc-500 font-medium max-w-[280px] truncate" title={item.detalles}>
-                            {item.detalles || 'Sin detalles'}
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            <button
-                              onClick={() => setFilaExpandida(filaExpandida === item.id ? null : item.id)}
-                              className="px-2.5 py-1 text-xs font-bold rounded-lg border border-zinc-200 hover:bg-zinc-100 hover:border-zinc-300 text-zinc-600 transition-all cursor-pointer flex items-center justify-center space-x-1 mx-auto"
-                            >
-                              <span>{filaExpandida === item.id ? 'Ocultar' : 'Ver JSON'}</span>
-                            </button>
-                          </td>
-                        </tr>
+                            </td>
+                            <td className="py-4 px-6">
+                              {renderBadgeAccion(item.accion)}
+                            </td>
+                            <td className="py-4 px-6 font-semibold text-zinc-900 text-xs">
+                              {renderModuloName(item.tabla_afectada)}
+                            </td>
+                            <td className="py-4 px-6 text-xs text-zinc-500 font-medium max-w-[280px] truncate" title={item.detalles}>
+                              {item.detalles || 'Sin detalles'}
+                            </td>
+                            <td className="py-4 px-6 text-center">
+                              <button
+                                onClick={() => setFilaExpandida(filaExpandida === item.id ? null : item.id)}
+                                className="px-2.5 py-1 text-xs font-bold rounded-lg border border-zinc-200 hover:bg-zinc-100 hover:border-zinc-300 text-zinc-600 transition-all cursor-pointer flex items-center justify-center space-x-1 mx-auto"
+                              >
+                                <span>{filaExpandida === item.id ? 'Ocultar' : 'Ver JSON'}</span>
+                              </button>
+                            </td>
+                          </tr>
+                          {filaExpandida === item.id && (
+                            <tr className="bg-zinc-50/50">
+                              <td colSpan={6} className="p-6">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
+                                  <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+                                    <p className="font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center">
+                                      <span className="h-2 w-2 rounded-full bg-rose-500 mr-2"></span>
+                                      Estado Anterior (Antes de la modificación)
+                                    </p>
+                                    {item.datos_anteriores ? (
+                                      <pre className="font-mono text-zinc-700 bg-zinc-50 p-4 rounded-xl border border-zinc-150 overflow-auto max-h-56 leading-relaxed">
+                                        {JSON.stringify(item.datos_anteriores, null, 2)}
+                                      </pre>
+                                    ) : (
+                                      <p className="text-zinc-400 italic bg-zinc-50/50 p-4 rounded-xl border border-dashed border-zinc-200">
+                                        No hay datos anteriores (Operación de creación / registro inicial)
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+                                    <p className="font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center">
+                                      <span className="h-2 w-2 rounded-full bg-emerald-500 mr-2"></span>
+                                      Estado Nuevo (Después de la modificación)
+                                    </p>
+                                    {item.datos_nuevos ? (
+                                      <pre className="font-mono text-zinc-700 bg-zinc-50 p-4 rounded-xl border border-zinc-150 overflow-auto max-h-56 leading-relaxed">
+                                        {JSON.stringify(item.datos_nuevos, null, 2)}
+                                      </pre>
+                                    ) : (
+                                      <p className="text-zinc-400 italic bg-zinc-50/50 p-4 rounded-xl border border-dashed border-zinc-200">
+                                        No hay datos nuevos (Operación de anulación o eliminación física)
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>
-                </div>
-
-                {/* Sub-tabla / Sección expandida para Diffs JSON */}
-                <div className="hidden md:block">
-                  {auditoriasPaginadas.map((item) => (
-                    filaExpandida === item.id && (
-                      <div key={`diff-${item.id}`} className="bg-zinc-50/50 p-6 border-b border-zinc-200/60">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
-                          <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
-                            <p className="font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center">
-                              <span className="h-2 w-2 rounded-full bg-rose-500 mr-2"></span>
-                              Estado Anterior (Antes de la modificación)
-                            </p>
-                            {item.datos_anteriores ? (
-                              <pre className="font-mono text-zinc-700 bg-zinc-50 p-4 rounded-xl border border-zinc-150 overflow-auto max-h-56 leading-relaxed">
-                                {JSON.stringify(item.datos_anteriores, null, 2)}
-                              </pre>
-                            ) : (
-                              <p className="text-zinc-400 italic bg-zinc-50/50 p-4 rounded-xl border border-dashed border-zinc-200">
-                                No hay datos anteriores (Operación de creación / registro inicial)
-                              </p>
-                            )}
-                          </div>
-                          <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
-                            <p className="font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center">
-                              <span className="h-2 w-2 rounded-full bg-emerald-500 mr-2"></span>
-                              Estado Nuevo (Después de la modificación)
-                            </p>
-                            {item.datos_nuevos ? (
-                              <pre className="font-mono text-zinc-700 bg-zinc-50 p-4 rounded-xl border border-zinc-150 overflow-auto max-h-56 leading-relaxed">
-                                {JSON.stringify(item.datos_nuevos, null, 2)}
-                              </pre>
-                            ) : (
-                              <p className="text-zinc-400 italic bg-zinc-50/50 p-4 rounded-xl border border-dashed border-zinc-200">
-                                No hay datos nuevos (Operación de anulación o eliminación física)
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  ))}
                 </div>
 
                 {/* Vista Celulares (Línea de tiempo / Timeline estético con Diffs JSON) */}

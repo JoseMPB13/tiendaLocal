@@ -421,6 +421,20 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
   {
     "detail": "La latitud ingresada no es válida. Debe estar entre -90 y 90."
   }
+### Resolver Enlace Google Maps
+* **Ruta:** `GET /clientes/resolver-enlace-mapa/`
+* **Permisos:** `Administrador`, `Cajero`
+* **Parámetros de Consulta (Query):**
+  - `url` (String, Obligatorio): Enlace de ubicación de mapas acortado (ej: `https://maps.app.goo.gl/...`).
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "latitud": -16.500000,
+      "longitud": -68.150000
+    }
+  }
   ```
 
 ---
@@ -711,7 +725,8 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
 ### Obtener Métricas de Dashboard
 * **Ruta:** `GET /reportes/dashboard`
 * **Parámetros de Consulta (Query):**
-  - `fecha` (Fecha YYYY-MM-DD, Opcional): Filtra el resumen analítico y de ventas para un día específico.
+  - `fecha_inicio` (Fecha YYYY-MM-DD, Opcional): Fecha inicial del rango para filtrar el resumen analítico.
+  - `fecha_fin` (Fecha YYYY-MM-DD, Opcional): Fecha final del rango para filtrar el resumen analítico.
 * **Permisos:** Solo `Administrador`
 * **Respuesta (200 OK):**
   ```json

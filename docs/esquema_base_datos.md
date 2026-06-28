@@ -112,7 +112,7 @@ Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se 
 
 ### J. Función Almacenada: obtener_metricas_dashboard
 - **Tipo:** Función PL/pgSQL
-- **Parámetros:** `p_fecha` (Date, Opcional)
-- **Comportamiento:** Consolida las métricas financieras, conteo de transacciones, saldos deudores, efectividad de entregas y ventas por categoría del negocio. Si se proporciona `p_fecha`, filtra el análisis por ese día específico y calcula la tendencia comparándolo con el día anterior.
+- **Parámetros:** `p_fecha_inicio` (Date, Opcional), `p_fecha_fin` (Date, Opcional)
+- **Comportamiento:** Consolida las métricas financieras, conteo de transacciones, saldos deudores, efectividad de entregas y ventas por categoría del negocio. Si se especifican las fechas de inicio y fin, filtra el análisis para ese rango inclusivo y calcula la tendencia de ventas comparándola contra el período espejo anterior de igual duración exacta.
 
 
