@@ -7,7 +7,7 @@
  * y auto-rellenado de dirección en tiempo real vía geocodificación de Nominatim.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import clienteService from '../services/clienteService';
 import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
@@ -110,13 +110,6 @@ export const GestionClientes = () => {
   const [pagina, setPagina] = useState(1);
   const itemsPorPagina = 7;
 
-  // Patrón correcto para reset de página sin useEffect:
-  const filtroKey = buscarTexto + '|' + estadoSel + '|' + deudaSel;
-  const filtroKeyRef = useRef(filtroKey);
-  if (filtroKeyRef.current !== filtroKey) {
-    filtroKeyRef.current = filtroKey;
-    if (pagina !== 1) setPagina(1);
-  }
 
   // Modal Formulario
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -393,7 +386,10 @@ export const GestionClientes = () => {
     return coincideTexto && coincideEstado && coincideDeuda;
   });
 
-  const indexInicio = (pagina - 1) * itemsPorPagina;
+  // Página efectiva: clampea automáticamente cuando los filtros reducen los resultados
+  const totalPaginasClientes = Math.ceil(clientesFiltrados.length / itemsPorPagina) || 1;
+  const paginaEfectiva = Math.min(pagina, totalPaginasClientes);
+  const indexInicio = (paginaEfectiva - 1) * itemsPorPagina;
   const clientesPaginados = clientesFiltrados.slice(indexInicio, indexInicio + itemsPorPagina);
 
   // Cálculos dinámicos de métricas del Mini-Dashboard
@@ -723,7 +719,7 @@ export const GestionClientes = () => {
         <PaginadorTablas
           totalItems={clientesFiltrados.length}
           itemsPorPagina={itemsPorPagina}
-          paginaActual={pagina}
+          paginaActual={paginaEfectiva}
           alCambiarPagina={setPagina}
         />
       </div>

@@ -68,7 +68,7 @@ export const GestionCategorias = () => {
     (async () => {
       await Promise.all([cargarCategorias(), cargarMetricas()]);
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const abrirCrear = () => {
     setCategoriaEdit(null);

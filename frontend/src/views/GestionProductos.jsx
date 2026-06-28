@@ -4,7 +4,7 @@
  * Incluye tabla paginada, formulario modal premium y baja lógica con confirmación.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import productoService from '../services/productoService';
 import categoriaService from '../services/categoriaService';
 import PaginadorTablas from '../components/PaginadorTablas';
@@ -30,14 +30,6 @@ export const GestionProductos = () => {
   const [pagina, setPagina] = useState(1);
   const itemsPorPagina = 7;
 
-  // Patrón correcto para reset de página sin useEffect:
-  // Comparamos el filtroKey anterior en tiempo de render con useRef.
-  const filtroKey = buscarTexto + '|' + categoriaSel;
-  const filtroKeyRef = useRef(filtroKey);
-  if (filtroKeyRef.current !== filtroKey) {
-    filtroKeyRef.current = filtroKey;
-    if (pagina !== 1) setPagina(1);
-  }
 
   // Modal Formulario
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -236,7 +228,10 @@ export const GestionProductos = () => {
     return coincideTexto && coincideCategoria;
   });
 
-  const indexInicio = (pagina - 1) * itemsPorPagina;
+  // Pagina efectiva: se clampea al rango válido cuando los filtros reducen los resultados
+  const totalPaginasProductos = Math.ceil(productosFiltrados.length / itemsPorPagina) || 1;
+  const paginaEfectiva = Math.min(pagina, totalPaginasProductos);
+  const indexInicio = (paginaEfectiva - 1) * itemsPorPagina;
   const productosPaginados = productosFiltrados.slice(indexInicio, indexInicio + itemsPorPagina);
 
   // Cálculos del Mini-Dashboard de Inventario en tiempo real (sobre productos cargados)
@@ -511,7 +506,7 @@ export const GestionProductos = () => {
           <PaginadorTablas
             totalItems={productosFiltrados.length}
             itemsPorPagina={itemsPorPagina}
-            paginaActual={pagina}
+            paginaActual={paginaEfectiva}
             alCambiarPagina={setPagina}
           />
         </div>
