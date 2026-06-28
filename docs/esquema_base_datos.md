@@ -22,9 +22,9 @@ Se definen las siguientes 10 tablas maestras y relacionales en Supabase:
 4. `clientes`: Información de contacto, saldo deudor, límites de crédito asignados y coordenadas geográficas (`latitud`, `longitud`, `enlace_mapa`) para envíos.
 5. `ventas`: Cabecera de transacciones comerciales.
 6. `detalles_ventas`: Ítems asociados a cada comprobante de venta.
-7. `compras`: Cabecera de reabastecimiento de inventario. Contiene el campo `proveedor_nombre` para el registro del proveedor.
-8. `detalles_compras`: Ítems asociados a cada compra.
-9. `historial_stock`: Kárdex histórico de movimientos de inventario (ventas, compras, ajustes).
+7. `compras`: [DESMANTELADO] Cabecera de reabastecimiento de inventario (Migrado a compras_auditoria_historica para auditoría).
+8. `detalles_compras`: [DESMANTELADO] Ítems asociados a cada compra (Migrado a detalles_compras_auditoria_historica para auditoría).
+9. `historial_stock`: Kárdex histórico de movimientos de inventario. Admite únicamente movimientos de tipo 'Venta', 'Ajuste' o 'Cancelacion Venta' mediante una restricción CHECK en `tipo_movimiento`.
 10. `facturas`: Documentos de facturación asociados automáticamente a ventas completadas.
 
 Además, se cuenta con la tabla auxiliar `bitacora` para auditorías.
@@ -40,7 +40,7 @@ Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se 
 - `idx_clientes_coordenadas` en `clientes(latitud, longitud)`
 - `idx_ventas_codigo_factura` en `ventas(codigo_factura)`
 - `idx_ventas_fecha` en `ventas(fecha_venta)`
-- `idx_compras_fecha` en `compras(fecha_compra)`
+- idx_compras_fecha [OBSOLETO]
 - `idx_historial_producto` en `historial_stock(producto_id)`
 - `idx_bitacora_tabla` en `bitacora(tabla_afectada)`
 - `idx_bitacora_fecha` en `bitacora(fecha_registro)`
@@ -83,20 +83,19 @@ Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se 
 - **Tipo:** Función PL/pgSQL
 - **Comportamiento:** Lee el estado de la secuencia `seq_codigo_factura` para calcular el siguiente correlativo asignable, sin consumirlo.
 
-### G. Función Almacenada Sobrecargada: registrar_reabastecimiento
+### G. Función Almacenada: fn_ajustar_stock (SECURITY DEFINER)
 - **Tipo:** Función PL/pgSQL
 - **Parámetros:**
+  - `p_producto_id` (UUID)
+  - `p_cantidad_cambio` (Integer)
+  - `p_motivo` (Text)
   - `p_usuario_id` (UUID)
-  - `p_proveedor_nombre` (Varchar)
-  - `p_codigo_referencia` (Varchar)
-  - `p_total` (Numeric)
-  - `p_items` (JSONB) - Arreglo JSON de ítems a reabastecer.
-- **Comportamiento:** Registra de forma transaccional una compra a proveedores. Itera sobre los detalles de la compra, bloquea los productos involucrados en el catálogo para evitar condiciones de carrera, valida que el costo de compra unitario no sea superior al precio de venta del catálogo (código de error `P0004`), inserta en `detalles_compras` (disparando el trigger `tg_controlar_stock_compra` para incrementar el stock), y finalmente actualiza el `precio_compra` del producto en la tabla `productos`.
+- **Comportamiento:** Realiza un ajuste de stock manual sobre un producto atómicamente. Valida que el producto exista y que el stock resultante no sea menor a cero (código de error `P0007`). Registra la transacción en `historial_stock` con tipo de movimiento 'Ajuste' y retorna el producto actualizado en formato JSONB.
 
-### H. Función Almacenada: cancelar_compra
+### H. Función Almacenada: obtener_metricas_categorias
 - **Tipo:** Función PL/pgSQL
-- **Parámetros:** `p_compra_id` (UUID)
-- **Comportamiento:** Cambia el estado de una compra a `'Cancelada'`. Itera sobre sus detalles de compra, bloquea cada producto y valida que el stock disponible no sea menor a la cantidad a restar (evitando stock negativo con código de error `P0007`). Resta del stock la cantidad comprada y registra el movimiento de tipo `'Cancelacion Compra'` en `historial_stock`.
+- **Parámetros:** Ninguno
+- **Comportamiento:** Consolida métricas de inventario para las categorías del negocio. Retorna un objeto JSONB que incluye el conteo total de categorías activas, los datos de la categoría dominante (aquella con el stock acumulado de productos más alto) y la valorización económica total en base a la suma de `precio_venta * stock_actual` de productos y categorías activas.
 
 ### I. Función Almacenada: actualizar_venta (SECURITY DEFINER)
 - **Tipo:** Función PL/pgSQL

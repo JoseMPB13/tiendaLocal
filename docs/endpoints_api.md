@@ -167,6 +167,23 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
       "fecha_creacion": "2026-06-20T13:30:00Z",
       "fecha_actualizacion": "2026-06-20T13:32:00Z"
     }
+  ```
+
+### Obtener Métricas Consolidadas de Categorías
+* **Ruta:** `GET /categorias/metricas`
+* **Permisos:** `Administrador`, `Cajero`
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "total_categorias_activas": 5,
+      "categoria_dominante": {
+        "nombre": "Gaseosas",
+        "total_stock": 140
+      },
+      "valorizacion_total": 4900.50
+    }
   }
   ```
 
@@ -240,18 +257,17 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
   }
   ```
 
-### Reabastecer Producto (Stock y Costo)
-* **Ruta:** `POST /productos/reabastecer`
+### Ajustar Stock de Producto Manualmente
+* **Ruta:** `POST /productos/{producto_id}/ajustar-stock`
 * **Permisos:** `Administrador`, `Cajero`
 * **Cuerpo de Petición (JSON):**
   ```json
   {
-    "producto_id": "c86a60db-bcf5-48fa-bb4e-7b7ab9344445",
     "cantidad": 10,
-    "costo_compra": 2.80,
-    "codigo_referencia": "Factura-789-Proveedor"
+    "justificacion": "Ingreso directo por inventario inicial"
   }
   ```
+  *(Nota: Se pueden enviar valores negativos para registrar mermas o pérdidas)*
 * **Respuesta (200 OK):**
   ```json
   {
@@ -272,10 +288,10 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
     }
   }
   ```
-* **Respuesta (400 Bad Request — Costo de Compra Excede Precio Venta):**
+* **Respuesta (400 Bad Request — Stock Resultante Negativo):**
   ```json
   {
-    "detail": "El costo de compra no puede ser mayor al precio de venta actual. Ajuste el precio de venta primero."
+    "detail": "No se puede realizar el ajuste. El stock resultante no puede ser menor a cero."
   }
   ```
 
@@ -778,115 +794,18 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
 
 ---
 
-## 9. Módulo de Compras (Reabastecimiento)
+## 9. Módulo de Compras (Reabastecimiento) [DESMANTELADO PERMANENTEMENTE]
 
-### Listar Compras (Historial)
-* **Ruta:** `GET /compras/`
-* **Parámetros de Consulta (Query):**
-  - `estado_compra` (String: 'Completada', 'Cancelada', Opcional)
-  - `skip` (Integer, por defecto `0`, Opcional)
-  - `limit` (Integer, por defecto `100`, Opcional)
-* **Permisos:** `Administrador`, `Cajero`
-* **Respuesta (200 OK):**
-  ```json
-  {
-    "ok": true,
-    "data": [
-      {
-        "id": "e2a14e91-e402-4c28-98e3-ea62b32b8aa0",
-        "usuario_id": "a933f2bd-1fb7-4e78-becc-82f5d918b958",
-        "proveedor_nombre": "Distribuidora Arcor",
-        "codigo_referencia": "FAC-COMPRA-981",
-        "total": 540.00,
-        "estado_compra": "Completada",
-        "fecha_compra": "2026-06-24T18:45:00Z"
-      }
-    ]
-  }
-  ```
+Este módulo ha sido desmantelado y reemplazado por la funcionalidad de Ajustes de Inventario Manuales. Cualquier petición a los endpoints bajo el prefijo `/compras` retornará un error `410 Gone`.
 
-### Obtener Detalle de Compra Completa
-* **Ruta:** `GET /compras/{compra_id}`
-* **Permisos:** `Administrador`, `Cajero`
-* **Respuesta (200 OK):**
+* **Ruta de Acceso:** `* /compras/{path:path}`
+* **Efecto:** Retorna `HTTP 410 Gone`.
+* **Cuerpo de Respuesta:**
   ```json
   {
-    "ok": true,
-    "data": {
-      "id": "e2a14e91-e402-4c28-98e3-ea62b32b8aa0",
-      "usuario_id": "a933f2bd-1fb7-4e78-becc-82f5d918b958",
-      "proveedor_nombre": "Distribuidora Arcor",
-      "codigo_referencia": "FAC-COMPRA-981",
-      "total": 540.00,
-      "estado_compra": "Completada",
-      "fecha_compra": "2026-06-24T18:45:00Z",
-      "detalles": [
-        {
-          "id": "4ac8e19b-a010-449e-8c31-c4f4f3ff5d82",
-          "compra_id": "e2a14e91-e402-4c28-98e3-ea62b32b8aa0",
-          "producto_id": "c86a60db-bcf5-48fa-bb4e-7b7ab9344445",
-          "cantidad": 12,
-          "costo_unitario": 45.00,
-          "subtotal": 540.00,
-          "producto_name": "Bon o Bon Caja 30u"
-        }
-      ]
-    }
+    "detail": "El módulo de compras físicas ha sido desmantelado y reemplazado por Ajustes de Inventario Manuales."
   }
   ```
-
-### Registrar Reabastecimiento (Compra)
-* **Ruta:** `POST /compras/`
-* **Permisos:** Solo `Administrador`
-* **Cuerpo de Petición (JSON):**
-  ```json
-  {
-    "proveedor_nombre": "Distribuidora Arcor",
-    "codigo_referencia": "FAC-COMPRA-981",
-    "detalles": [
-      {
-        "producto_id": "c86a60db-bcf5-48fa-bb4e-7b7ab9344445",
-        "cantidad": 12,
-        "costo_unitario": 45.00
-      }
-    ]
-  }
-  ```
-* **Respuesta (201 Created):**
-  ```json
-  {
-    "ok": true,
-    "data": {
-      "id": "e2a14e91-e402-4c28-98e3-ea62b32b8aa0",
-      "usuario_id": "a933f2bd-1fb7-4e78-becc-82f5d918b958",
-      "proveedor_nombre": "Distribuidora Arcor",
-      "codigo_referencia": "FAC-COMPRA-981",
-      "total": 540.00,
-      "estado_compra": "Completada",
-      "fecha_compra": "2026-06-24T18:45:00Z"
-    }
-  }
-  ```
-* **Errores Controlados:**
-  - `400 Bad Request` (SQLSTATE `P0004`): Si el costo de compra es mayor al precio de venta del catálogo.
-  - `404 Not Found` (SQLSTATE `P0005`): Si alguno de los productos no existe.
-
-### Cancelar Compra
-* **Ruta:** `PUT /compras/{compra_id}/cancelar`
-* **Permisos:** Solo `Administrador`
-* **Respuesta (200 OK):**
-  ```json
-  {
-    "ok": true,
-    "data": {
-      "id": "e2a14e91-e402-4c28-98e3-ea62b32b8aa0",
-      "estado_compra": "Cancelada"
-    }
-  }
-  ```
-* **Errores Controlados:**
-  - `400 Bad Request` (SQLSTATE `P0007`): Si la reversión del stock resulta en inventario negativo (es decir, el stock actual es menor a la cantidad que se compró originalmente).
-  - `404 Not Found` (SQLSTATE `P0005`): Si la compra no existe.
 
 
 
