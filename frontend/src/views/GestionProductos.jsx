@@ -7,7 +7,6 @@
 import { useState, useEffect } from 'react';
 import productoService from '../services/productoService';
 import categoriaService from '../services/categoriaService';
-import compraService from '../services/compraService';
 import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
 import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
@@ -56,34 +55,17 @@ export const GestionProductos = () => {
   const [productoEliminarId, setProductoEliminarId] = useState(null);
   const [procesandoEliminar, setProcesandoEliminar] = useState(false);
 
-  // Modal de Reabastecimiento
-  const [mostrarReabastecer, setMostrarReabastecer] = useState(false);
-  const [productoReabastecer, setProductoReabastecer] = useState(null);
-  const [reabastecerProveedor, setReabastecerProveedor] = useState('');
-  const [reabastecerCantidad, setReabastecerCantidad] = useState('');
-  const [reabastecerCosto, setReabastecerCosto] = useState('');
-  const [reabastecerReferencia, setReabastecerReferencia] = useState('');
-  const [procesandoReabastecer, setProcesandoReabastecer] = useState(false);
+  // Modal de Ajuste de Stock
+  const [mostrarAjuste, setMostrarAjuste] = useState(false);
+  const [productoAjuste, setProductoAjuste] = useState(null);
+  const [ajusteCantidad, setAjusteCantidad] = useState('');
+  const [ajusteJustificacion, setAjusteJustificacion] = useState('');
+  const [procesandoAjuste, setProcesandoAjuste] = useState(false);
 
-  // Rol de usuario y estados de la pestaña del historial de compras
+  // Rol de usuario
   const { usuario } = useAuthStore();
   const esAdmin = usuario?.rol === 'Administrador';
   const [tabActiva, setTabActiva] = useState('catalogo');
-  const [compras, setCompras] = useState([]);
-  const [cargandoCompras, setCargandoCompras] = useState(false);
-  const [filtroEstadoCompra, setFiltroEstadoCompra] = useState(''); // '', 'Completada', 'Cancelada'
-  const [busquedaCompra, setBusquedaCompra] = useState('');
-  const [paginaHistorial, setPaginaHistorial] = useState(1);
-  const itemsPorPaginaHistorial = 8;
-
-  // Modales de detalle y anulación
-  const [compraSeleccionada, setCompraSeleccionada] = useState(null);
-  const [mostrarModalDetalle, setMostrarModalDetalle] = useState(false);
-  const [cargandoDetalle, setCargandoDetalle] = useState(false);
-
-  const [mostrarModalAnular, setMostrarModalAnular] = useState(false);
-  const [compraAnularId, setCompraAnularId] = useState(null);
-  const [procesandoAnular, setProcesandoAnular] = useState(false);
 
   const cargarDatos = async () => {
     try {
@@ -198,133 +180,45 @@ export const GestionProductos = () => {
     }
   };
 
-  const abrirReabastecer = (prod) => {
-    setProductoReabastecer(prod);
-    setReabastecerProveedor('');
-    setReabastecerCantidad('');
-    setReabastecerCosto(prod.precio_compra);
-    setReabastecerReferencia('');
-    setMostrarReabastecer(true);
+  const abrirAjustarStock = (prod) => {
+    setProductoAjuste(prod);
+    setAjusteCantidad('');
+    setAjusteJustificacion('');
+    setMostrarAjuste(true);
   };
 
-  const handleReabastecer = async (e) => {
+  const handleAjustarStock = async (e) => {
     e.preventDefault();
-    if (!esAdmin) {
-      toast.error('Solo los administradores pueden registrar compras.');
+    const cant = parseInt(ajusteCantidad);
+    if (isNaN(cant) || cant === 0) {
+      toast.error('La cantidad del ajuste no puede ser cero ni vacía.');
       return;
     }
-    if (!reabastecerProveedor.trim()) {
-      toast.error('Debe ingresar el nombre del proveedor.');
+    if (!ajusteJustificacion.trim()) {
+      toast.error('Debe ingresar o seleccionar una justificación para el ajuste.');
       return;
     }
-    const cant = parseInt(reabastecerCantidad);
-    const costo = parseFloat(reabastecerCosto);
-
-    if (isNaN(cant) || cant <= 0) {
-      toast.error('La cantidad a ingresar debe ser mayor a 0.');
-      return;
-    }
-    if (isNaN(costo) || costo < 0) {
-      toast.error('El costo de compra no puede ser negativo.');
-      return;
-    }
-    if (costo > productoReabastecer.precio_venta) {
-      toast.error('El costo de compra no puede ser mayor al precio de venta actual.');
+    if (productoAjuste.stock_actual + cant < 0) {
+      toast.error('No se puede realizar el ajuste. El stock resultante no puede ser menor a cero.');
       return;
     }
 
-    setProcesandoReabastecer(true);
+    setProcesandoAjuste(true);
     try {
-      const payload = {
-        proveedor_nombre: reabastecerProveedor.trim(),
-        codigo_referencia: reabastecerReferencia.trim() || null,
-        detalles: [
-          {
-            producto_id: productoReabastecer.id,
-            cantidad: cant,
-            costo_unitario: costo
-          }
-        ]
-      };
-      const res = await compraService.registrarCompra(payload);
+      const res = await productoService.ajustarStock(productoAjuste.id, {
+        cantidad: cant,
+        justificacion: ajusteJustificacion.trim()
+      });
       if (res.ok) {
-        toast.success('✓ Reabastecimiento de stock registrado exitosamente.');
-        setMostrarReabastecer(false);
+        toast.success('✓ Ajuste de stock registrado exitosamente.');
+        setMostrarAjuste(false);
         cargarDatos();
       }
     } catch (ex) {
-      const errorMsg = ex.response?.data?.detail || 'Error al reabastecer el producto.';
+      const errorMsg = ex.response?.data?.detail || 'Error al ajustar el stock del producto.';
       toast.error(errorMsg);
     } finally {
-      setProcesandoReabastecer(false);
-    }
-  };
-
-  // --- Funciones para el Historial de Compras ---
-  const cargarCompras = async () => {
-    try {
-      setCargandoCompras(true);
-      const res = await compraService.obtenerCompras(filtroEstadoCompra || null);
-      if (res.ok) {
-        setCompras(res.data);
-      }
-    } catch (ex) {
-      toast.error('Error al cargar el historial de compras.');
-      console.error(ex);
-    } finally {
-      setCargandoCompras(false);
-    }
-  };
-
-  useEffect(() => {
-    if (tabActiva === 'historial') {
-      cargarCompras();
-    }
-  }, [tabActiva, filtroEstadoCompra]);
-
-  const handleVerDetalles = async (compraId) => {
-    try {
-      setCargandoDetalle(true);
-      setMostrarModalDetalle(true);
-      const res = await compraService.obtenerCompraDetalle(compraId);
-      if (res.ok) {
-        setCompraSeleccionada(res.data);
-      }
-    } catch (ex) {
-      toast.error('No se pudo cargar el detalle de la compra.');
-      setMostrarModalDetalle(false);
-      console.error(ex);
-    } finally {
-      setCargandoDetalle(false);
-    }
-  };
-
-  const handleAbrirAnular = (compraId) => {
-    setCompraAnularId(compraId);
-    setMostrarModalAnular(true);
-  };
-
-  const handleConfirmarAnular = async () => {
-    if (!esAdmin) {
-      toast.error('Solo los administradores pueden anular compras.');
-      return;
-    }
-    try {
-      setProcesandoAnular(true);
-      const res = await compraService.cancelarCompra(compraAnularId);
-      if (res.ok) {
-        toast.success('Compra anulada con éxito. El stock ha sido revertido.');
-        setMostrarModalAnular(false);
-        setCompraAnularId(null);
-        cargarCompras();
-        cargarDatos(); // Recargar también stock de productos
-      }
-    } catch (ex) {
-      const errorMsg = ex.response?.data?.detail || 'Error al anular la compra. Valide que el stock actual no quede negativo.';
-      toast.error(errorMsg);
-      console.error(ex);
-    } finally {
-    setProcesandoAnular(false);
+      setProcesandoAjuste(false);
     }
   };
 
@@ -355,22 +249,7 @@ export const GestionProductos = () => {
 
   const variedadCatalogoCount = productos.filter(p => p.estado === 'Activo').length;
 
-  // Filtrado y paginación para el historial de compras
-  const comprasFiltradas = compras.filter((c) => {
-    const prov = (c.proveedor_nombre || '').toLowerCase();
-    const ref = (c.codigo_referencia || '').toLowerCase();
-    const query = busquedaCompra.toLowerCase();
-    return prov.includes(query) || ref.includes(query);
-  });
-
-  const indexInicioHistorial = (paginaHistorial - 1) * itemsPorPaginaHistorial;
-  const comprasPaginadas = comprasFiltradas.slice(indexInicioHistorial, indexInicioHistorial + itemsPorPaginaHistorial);
-
-  // Validación de costo excedente en el modal de reabastecimiento
-  const costoExcedePrecioVenta =
-    productoReabastecer &&
-    reabastecerCosto &&
-    parseFloat(reabastecerCosto) > parseFloat(productoReabastecer.precio_venta);
+  // Validación de costo no requerida para Ajustes de Inventario
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -409,29 +288,7 @@ export const GestionProductos = () => {
         )}
       </div>
 
-      {/* ── SECTOR DE PESTAÑAS ── */}
-      <div className="flex bg-slate-900/10 p-1 rounded-xl border border-slate-200/50 self-start shadow-sm gap-1">
-        <button
-          onClick={() => setTabActiva('catalogo')}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
-            tabActiva === 'catalogo'
-              ? 'bg-purple-900/10 text-purple-800 border border-purple-200 shadow-sm'
-              : 'text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          Catálogo de Productos
-        </button>
-        <button
-          onClick={() => { setTabActiva('historial'); setPaginaHistorial(1); }}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
-            tabActiva === 'historial'
-              ? 'bg-purple-900/10 text-purple-800 border border-purple-200 shadow-sm'
-              : 'text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          Historial de Reabastecimientos
-        </button>
-      </div>
+      {/* ── SECTOR DE PESTAÑAS (Removido por desmantelamiento de compras) ── */}
 
       {/* ── MINI-DASHBOARD DE INVENTARIO ── */}
       {tabActiva === 'catalogo' && (
@@ -614,10 +471,10 @@ export const GestionProductos = () => {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                           {prod.estado === 'Activo' && (
                             <button
-                              onClick={() => abrirReabastecer(prod)}
+                              onClick={() => abrirAjustarStock(prod)}
                               className="btn-icon"
-                              style={{ color: '#059669' }}
-                              title="Reabastecer stock"
+                              style={{ color: '#6366f1' }}
+                              title="Ajustar stock manual"
                             >
                               <Plus size={15} />
                             </button>
@@ -1144,6 +1001,121 @@ export const GestionProductos = () => {
                   }}
                 >
                   {procesandoReabastecer ? 'Registrando...' : 'Confirmar Reabastecimiento'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL AJUSTAR STOCK MANUAL ── */}
+      {mostrarAjuste && productoAjuste && (
+        <div className="modal-backdrop">
+          <div className="modal-container animate-fade-in-up" style={{ maxWidth: '420px' }}>
+            <div style={{ height: '4px', background: 'linear-gradient(90deg, #6366f1, #4f46e5)' }} />
+
+            <div className="modal-header">
+              <span className="modal-title">🔧 Ajustar Stock Manual</span>
+              <button
+                onClick={() => setMostrarAjuste(false)}
+                style={{
+                  background: '#f3f4f6', border: 'none', borderRadius: '8px',
+                  width: '28px', height: '28px', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', cursor: 'pointer', color: '#6b7280',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#e5e7eb'; e.currentTarget.style.color = '#374151'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#6b7280'; }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAjustarStock}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{
+                  padding: '14px',
+                  background: 'linear-gradient(135deg, #e0e7ff, #eef2ff)',
+                  borderRadius: '12px',
+                  border: '1px solid #c7d2fe',
+                  boxShadow: 'inset 0 1px 2px rgba(79,70,229,0.05)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <p style={{ fontSize: '0.62rem', color: '#4f46e5', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                    Producto a Ajustar
+                  </p>
+                  <p style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 800, fontSize: '1.15rem', color: '#312e81', margin: 0, lineHeight: 1.25 }}>
+                    {productoAjuste.nombre}
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '6px', fontSize: '0.72rem', color: '#3730a3' }}>
+                    <span>Stock actual: <strong style={{ color: '#4f46e5' }}>{productoAjuste.stock_actual} uds</strong></span>
+                  </div>
+                </div>
+
+                <div style={fieldStyle}>
+                  <label className="form-label" style={{ fontWeight: 700, fontSize: '0.72rem', color: '#4b5563' }}>Cantidad del Ajuste *</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="number"
+                      required
+                      value={ajusteCantidad}
+                      onChange={(e) => setAjusteCantidad(e.target.value)}
+                      placeholder="Ej: 10 (ingreso) o -5 (merma)"
+                      className="form-input"
+                      style={{ fontSize: '0.8rem', paddingRight: '45px' }}
+                    />
+                    <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', pointerEvents: 'none' }}>
+                      uds
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: '2px' }}>
+                    Ingresa un número positivo para añadir stock, o negativo para restar stock (mermas/roturas).
+                  </p>
+                </div>
+
+                <div style={fieldStyle}>
+                  <label className="form-label" style={{ fontWeight: 700, fontSize: '0.72rem', color: '#4b5563' }}>Justificación / Motivo del Ajuste *</label>
+                  <select
+                    value={ajusteJustificacion}
+                    onChange={(e) => setAjusteJustificacion(e.target.value)}
+                    className="form-input"
+                    style={{ fontSize: '0.8rem', height: '38px' }}
+                  >
+                    <option value="">-- Selecciona una justificación --</option>
+                    <option value="Ingreso directo por inventario inicial">Ingreso directo por inventario inicial</option>
+                    <option value="Merma por fecha de vencimiento">Merma por fecha de vencimiento</option>
+                    <option value="Rotura / daño de empaque">Rotura / daño de empaque</option>
+                    <option value="Corrección de conteo físico">Corrección de conteo físico</option>
+                    <option value="Pérdida / robo detectado">Pérdida / robo detectado</option>
+                    <option value="Otro motivo (especificar abajo)">Otro motivo (especificar abajo)</option>
+                  </select>
+                  
+                  {ajusteJustificacion.startsWith('Otro motivo') && (
+                    <input
+                      type="text"
+                      required
+                      onChange={(e) => setAjusteJustificacion('Otro motivo: ' + e.target.value)}
+                      placeholder="Escribe el motivo detallado..."
+                      className="form-input mt-2"
+                      style={{ fontSize: '0.8rem' }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ borderTop: '1px solid #f1f5f9', paddingTop: '14px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setMostrarAjuste(false)} className="btn-secondary" style={{ fontSize: '0.78rem' }}>
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={procesandoAjuste}
+                  className="btn-primary"
+                  style={{ fontSize: '0.78rem', background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}
+                >
+                  {procesandoAjuste ? 'Procesando...' : 'Aplicar Ajuste'}
                 </button>
               </div>
             </form>

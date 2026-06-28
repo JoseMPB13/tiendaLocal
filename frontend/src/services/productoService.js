@@ -17,8 +17,8 @@ export const productoService = {
     const respuesta = await clienteApi.delete(`/productos/${id}`);
     return respuesta.data;
   },
-  reabastecer: async (datos) => {
-    const respuesta = await clienteApi.post('/productos/reabastecer', datos);
+  ajustarStock: async (id, datos) => {
+    const respuesta = await clienteApi.post(`/productos/${id}/ajustar-stock/`, datos);
     return respuesta.data;
   }
 };

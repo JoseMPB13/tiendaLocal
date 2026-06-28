@@ -9,13 +9,15 @@ import categoriaService from '../services/categoriaService';
 import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
 import toast, { Toaster } from 'react-hot-toast';
-import { Plus, Edit3, Trash2, X, Tag } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Tag, DollarSign, BarChart2 } from 'lucide-react';
 
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
 
 export const GestionCategorias = () => {
   const [categorias, setCategorias] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [metricas, setMetricas] = useState(null);
+  const [cargandoMetricas, setCargandoMetricas] = useState(true);
 
   // Estados de paginación
   const [pagina, setPagina] = useState(1);
@@ -47,8 +49,23 @@ export const GestionCategorias = () => {
     }
   };
 
+  const cargarMetricas = async () => {
+    try {
+      setCargandoMetricas(true);
+      const res = await categoriaService.obtenerMetricas();
+      if (res.ok) {
+        setMetricas(res.data);
+      }
+    } catch (ex) {
+      console.error('Error al cargar métricas de categorías:', ex);
+    } finally {
+      setCargandoMetricas(false);
+    }
+  };
+
   useEffect(() => {
     cargarCategorias();
+    cargarMetricas();
   }, []);
 
   const abrirCrear = () => {
@@ -75,6 +92,7 @@ export const GestionCategorias = () => {
           toast.success('Categoría actualizada correctamente.');
           setMostrarForm(false);
           cargarCategorias();
+          cargarMetricas();
         }
       } else {
         const res = await categoriaService.crear({ nombre, descripcion });
@@ -82,6 +100,7 @@ export const GestionCategorias = () => {
           toast.success('Categoría creada con éxito.');
           setMostrarForm(false);
           cargarCategorias();
+          cargarMetricas();
         }
       }
     } catch (ex) {
@@ -105,6 +124,7 @@ export const GestionCategorias = () => {
         toast.success('Categoría desactivada (baja lógica).');
         setMostrarEliminar(false);
         cargarCategorias();
+        cargarMetricas();
       }
     } catch (ex) {
       toast.error('No se pudo desactivar la categoría.');
@@ -147,7 +167,50 @@ export const GestionCategorias = () => {
         </button>
       </div>
 
-      {/* ── TABLA ── */}
+      {/* ── CARD METRICAS EJECUTIVAS ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-2">
+        {/* Tarjeta 1: Categorías Activas */}
+        <div className="bg-white rounded-2xl p-5 border border-zinc-200 shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-200">
+          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+            <Tag size={22} />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Categorías Activas</p>
+            <h4 className="text-2xl font-black text-zinc-950 mt-1">
+              {cargandoMetricas ? '...' : metricas?.total_categorias_activas || 0}
+            </h4>
+          </div>
+        </div>
+
+        {/* Tarjeta 2: Categoría Dominante */}
+        <div className="bg-white rounded-2xl p-5 border border-zinc-200 shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-200">
+          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+            <BarChart2 size={22} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Categoría Dominante</p>
+            <h4 className="text-sm font-black text-zinc-950 truncate mt-1">
+              {cargandoMetricas ? '...' : metricas?.categoria_dominante?.nombre || 'Ninguna'}
+            </h4>
+            <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">
+              {cargandoMetricas ? '...' : `${metricas?.categoria_dominante?.total_stock || 0} uds acumuladas`}
+            </p>
+          </div>
+        </div>
+
+        {/* Tarjeta 3: Valorización Económica */}
+        <div className="bg-white rounded-2xl p-5 border border-zinc-200 shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-200">
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+            <DollarSign size={22} />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Valorización de Inventario</p>
+            <h4 className="text-2xl font-black text-emerald-600 mt-1 font-mono">
+              Bs. {cargandoMetricas ? '...' : parseFloat(metricas?.valorizacion_total || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h4>
+          </div>
+        </div>
+      </div>
       <div className="table-wrapper">
         <div style={{ overflowX: 'auto' }}>
           <table className="data-table">
