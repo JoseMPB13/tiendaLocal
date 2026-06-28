@@ -1,8 +1,9 @@
 from typing import List, Optional
 from uuid import UUID
 from fastapi import HTTPException, status
+from postgrest.exceptions import APIError
 from app.database import supabase
-from app.schemas.modelos import ProductoCrear, ProductoActualizar, ProductoReabastecer
+from app.schemas.modelos import ProductoCrear, ProductoActualizar, ProductoAjustarStock
 
 class ProductoService:
     @staticmethod
@@ -144,45 +145,47 @@ class ProductoService:
         return resultado.data[0]
 
     @staticmethod
-    def reabastecer_producto(payload: ProductoReabastecer, usuario_id: str) -> dict:
+    def ajustar_stock(producto_id: UUID, payload: ProductoAjustarStock, usuario_id: str) -> dict:
         """
-        Registra el reabastecimiento de stock de un producto atómicamente llamando al SP.
-        Actualiza el costo y valida que no supere el precio de venta actual.
+        Realiza un ajuste de stock manual para un producto de manera atómica llamando al SP fn_ajustar_stock.
+        Valida que el stock final no resulte menor a cero.
         """
         try:
-            # Invocar la función RPC registrar_reabastecimiento
-            resultado = supabase.rpc("registrar_reabastecimiento", {
-                "p_producto_id": str(payload.producto_id),
-                "p_usuario_id": str(usuario_id),
-                "p_cantidad": payload.cantidad,
-                "p_costo_compra": float(payload.costo_compra),
-                "p_codigo_referencia": payload.codigo_referencia
+            resultado = supabase.rpc("fn_ajustar_stock", {
+                "p_producto_id": str(producto_id),
+                "p_cantidad_cambio": int(payload.cantidad),
+                "p_motivo": str(payload.justificacion),
+                "p_usuario_id": str(usuario_id)
             }).execute()
-            
+
             if not resultado.data:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="No se pudo registrar el reabastecimiento en la base de datos."
+                    detail="No se pudo registrar el ajuste de stock en la base de datos."
                 )
-                
-            # Retornar el producto actualizado
-            return ProductoService.obtener_por_id(payload.producto_id)
             
-        except HTTPException:
-            raise
-        except Exception as ex:
-            error_msg = str(ex)
-            if "P0004" in error_msg or "costo de compra no puede ser mayor" in error_msg:
+            # Retornar el producto actualizado
+            return ProductoService.obtener_por_id(producto_id)
+            
+        except APIError as ex:
+            if ex.code == "P0007":
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="El costo de compra no puede ser mayor al precio de venta actual. Ajuste el precio de venta primero."
+                    detail="No se puede realizar el ajuste. El stock resultante no puede ser menor a cero."
                 )
-            elif "P0005" in error_msg or "producto especificado no existe" in error_msg:
+            elif ex.code == "P0005":
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    status_code=status.HTTP_404_NOT_FOUND,
                     detail="El producto especificado no existe."
                 )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error transaccional al reabastecer stock: {error_msg}"
+                detail=f"Error transaccional en la BD (SQLSTATE {ex.code}): {ex.message}"
+            )
+        except HTTPException:
+            raise
+        except Exception as ex:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error transaccional al ajustar stock: {str(ex)}"
             )

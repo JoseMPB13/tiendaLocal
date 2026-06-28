@@ -32,6 +32,17 @@ async def listar_categorias(
     respuestas = [CategoriaRespuesta.model_validate(c) for c in lista]
     return {"ok": True, "data": respuestas}
 
+@router.get("/metricas", response_model=dict)
+@router.get("/metricas/", include_in_schema=False)
+async def obtener_metricas_categorias(
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
+):
+    """
+    Retorna métricas ejecutivas de valorización económica y distribución de stock por categorías.
+    """
+    resultado = CategoriaService.obtener_metricas()
+    return {"ok": True, "data": resultado}
+
 @router.get("/{categoria_id}", response_model=dict)
 async def obtener_categoria(
     categoria_id: UUID,

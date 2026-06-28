@@ -1,6 +1,7 @@
 from typing import List
 from uuid import UUID
 from fastapi import HTTPException, status
+from postgrest.exceptions import APIError
 from app.database import supabase
 from app.schemas.modelos import CategoriaCrear, CategoriaActualizar
 
@@ -115,3 +116,28 @@ class CategoriaService:
                 detail="No se pudo inactivar la categoría."
             )
         return resultado.data[0]
+
+    @staticmethod
+    def obtener_metricas() -> dict:
+        """
+        Retorna las métricas ejecutivas consolidadas del sector de categorías.
+        Utiliza el SP obtener_metricas_categorias.
+        """
+        try:
+            resultado = supabase.rpc("obtener_metricas_categorias").execute()
+            if not resultado.data:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="No se pudieron recuperar las métricas de categorías."
+                )
+            return resultado.data
+        except APIError as ex:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error transaccional en la BD (SQLSTATE {ex.code}): {ex.message}"
+            )
+        except Exception as ex:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al obtener métricas de categorías: {str(ex)}"
+            )

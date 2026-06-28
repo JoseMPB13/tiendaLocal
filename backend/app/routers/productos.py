@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from typing import List
 from uuid import UUID
-from app.schemas.modelos import ProductoCrear, ProductoActualizar, ProductoRespuesta, ProductoReabastecer
+from app.schemas.modelos import ProductoCrear, ProductoActualizar, ProductoRespuesta, ProductoAjustarStock
 from app.services.productos import ProductoService
 from app.services.dependencias import verificar_roles
 from app.services.bitacora import BitacoraService
@@ -103,15 +103,17 @@ async def eliminar_producto(
     respuesta = ProductoRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
 
-@router.post("/reabastecer", response_model=dict)
-async def reabastecer_producto(
-    payload: ProductoReabastecer,
+@router.post("/{producto_id}/ajustar-stock", response_model=dict)
+@router.post("/{producto_id}/ajustar-stock/", include_in_schema=False)
+async def ajustar_stock_producto(
+    producto_id: UUID,
+    payload: ProductoAjustarStock,
     usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
-    Registra el reabastecimiento de stock de un producto atómicamente y actualiza su costo.
+    Registra un ajuste de stock manual para un producto de manera atómica (positivo para ingresos, negativo para mermas).
     Requiere rol 'Administrador' o 'Cajero'.
     """
-    resultado = ProductoService.reabastecer_producto(payload, usuario_actual["id"])
+    resultado = ProductoService.ajustar_stock(producto_id, payload, usuario_actual["id"])
     respuesta = ProductoRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}

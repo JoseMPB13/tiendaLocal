@@ -332,6 +332,11 @@ class ProductoReabastecer(BaseModel):
     codigo_referencia: Optional[str] = Field(default=None, max_length=100, description="Código de factura o nota de referencia")
 
 
+class ProductoAjustarStock(BaseModel):
+    cantidad: int = Field(..., description="Cantidad de cambio (positivo para ingresos, negativo para egresos/mermas)")
+    justificacion: str = Field(..., min_length=3, max_length=255, description="Justificación técnica del movimiento de inventario")
+
+
 class CompraConDetallesRespuesta(CompraRespuesta):
     detalles: list[DetalleCompraRespuesta]
 
