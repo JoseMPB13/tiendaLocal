@@ -16,6 +16,10 @@ export const clienteService = {
   eliminar: async (id) => {
     const respuesta = await clienteApi.delete(`/clientes/${id}`);
     return respuesta.data;
+  },
+  resolverEnlaceMapa: async (url) => {
+    const respuesta = await clienteApi.get(`/clientes/resolver-enlace-mapa/`, { params: { url } });
+    return respuesta.data;
   }
 };
 export default clienteService;

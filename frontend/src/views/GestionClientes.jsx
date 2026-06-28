@@ -255,12 +255,31 @@ export const GestionClientes = () => {
     }
   };
 
+  const resolverEnlaceBackend = async (url) => {
+    if (!url || !url.startsWith('http')) return;
+    const loadToast = toast.loading('Resolviendo coordenadas del enlace en el servidor...');
+    try {
+      const res = await clienteService.resolverEnlaceMapa(url);
+      toast.dismiss(loadToast);
+      if (res.ok && res.data) {
+        toast.success('Coordenadas resueltas en el servidor.');
+        handleUbicacionCambiada(res.data.latitud, res.data.longitud, false);
+      }
+    } catch (ex) {
+      toast.dismiss(loadToast);
+      console.error(ex);
+      toast.error(ex.response?.data?.detail || 'No se pudieron resolver las coordenadas del enlace.');
+    }
+  };
+
   const handleEnlaceBlur = () => {
     if (!enlaceUbicacion) return;
     const coords = extraerCoordenadas(enlaceUbicacion);
     if (coords) {
       toast.success('Coordenadas extraídas del enlace en caliente.');
       handleUbicacionCambiada(coords.lat, coords.lng, false);
+    } else if (enlaceUbicacion.startsWith('http')) {
+      resolverEnlaceBackend(enlaceUbicacion);
     }
   };
 
@@ -277,10 +296,13 @@ export const GestionClientes = () => {
   const handleEnlacePaste = (e) => {
     const val = e.clipboardData.getData('text');
     if (!val) return;
+    setEnlaceUbicacion(val); // Sincronizar estado en el paste
     const coords = extraerCoordenadas(val);
     if (coords) {
       toast.success('Coordenadas extraídas desde el portapapeles.');
       handleUbicacionCambiada(coords.lat, coords.lng, false);
+    } else if (val.startsWith('http')) {
+      resolverEnlaceBackend(val);
     }
   };
 
