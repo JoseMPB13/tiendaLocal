@@ -245,7 +245,7 @@ export const PuntoVenta = () => {
   };
 
   useEffect(() => {
-    inicializarPOS();
+    (async () => { await inicializarPOS(); })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Consulta el historial de ventas paginado con filtros */
@@ -277,7 +277,7 @@ export const PuntoVenta = () => {
   // Cargar historial de ventas cuando cambia el filtro, pestaña o la página
   useEffect(() => {
     if (activeTab === 'historial') {
-      obtenerHistorialVentas();
+      (async () => { await obtenerHistorialVentas(); })();
     }
   }, [activeTab, filtroEstado, pagina]); // eslint-disable-line react-hooks/exhaustive-deps
 

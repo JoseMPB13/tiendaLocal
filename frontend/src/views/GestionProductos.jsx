@@ -4,7 +4,7 @@
  * Incluye tabla paginada, formulario modal premium y baja lógica con confirmación.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import productoService from '../services/productoService';
 import categoriaService from '../services/categoriaService';
 import PaginadorTablas from '../components/PaginadorTablas';
@@ -12,7 +12,7 @@ import ModalDesactivar from '../components/ModalDesactivar';
 import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import useAuthStore from '../store/authStore';
 import toast, { Toaster } from 'react-hot-toast';
-import { Plus, Edit3, Trash2, X, Package, Eye, RotateCcw, Search, AlertTriangle } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Package, AlertTriangle } from 'lucide-react';
 
 /* ── Estilos de modal compartidos ── */
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
@@ -30,12 +30,14 @@ export const GestionProductos = () => {
   const [pagina, setPagina] = useState(1);
   const itemsPorPagina = 7;
 
-  // Reiniciar página al cambiar filtros
-  useEffect(() => {
-    if (pagina !== 1) {
-      setPagina(1);
-    }
-  }, [buscarTexto, categoriaSel]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Patrón correcto para reset de página sin useEffect:
+  // Comparamos el filtroKey anterior en tiempo de render con useRef.
+  const filtroKey = buscarTexto + '|' + categoriaSel;
+  const filtroKeyRef = useRef(filtroKey);
+  if (filtroKeyRef.current !== filtroKey) {
+    filtroKeyRef.current = filtroKey;
+    if (pagina !== 1) setPagina(1);
+  }
 
   // Modal Formulario
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -66,7 +68,7 @@ export const GestionProductos = () => {
 
   // Rol de usuario
   const { usuario } = useAuthStore();
-  const esAdmin = usuario?.rol === 'Administrador';
+  const esAdmin = usuario?.rol === 'Administrador'; // eslint-disable-line no-unused-vars
   const tabActiva = 'catalogo';
 
   const cargarDatos = async () => {

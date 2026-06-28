@@ -7,7 +7,7 @@
  * y auto-rellenado de dirección en tiempo real vía geocodificación de Nominatim.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import clienteService from '../services/clienteService';
 import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
@@ -110,12 +110,13 @@ export const GestionClientes = () => {
   const [pagina, setPagina] = useState(1);
   const itemsPorPagina = 7;
 
-  // Reiniciar página al cambiar filtros
-  useEffect(() => {
-    if (pagina !== 1) {
-      setPagina(1);
-    }
-  }, [buscarTexto, estadoSel, deudaSel]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Patrón correcto para reset de página sin useEffect:
+  const filtroKey = buscarTexto + '|' + estadoSel + '|' + deudaSel;
+  const filtroKeyRef = useRef(filtroKey);
+  if (filtroKeyRef.current !== filtroKey) {
+    filtroKeyRef.current = filtroKey;
+    if (pagina !== 1) setPagina(1);
+  }
 
   // Modal Formulario
   const [mostrarForm, setMostrarForm] = useState(false);
