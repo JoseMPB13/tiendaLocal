@@ -26,8 +26,8 @@ import toast, { Toaster } from 'react-hot-toast';
 import {
   Search, Trash2, ShoppingCart, CreditCard,
   DollarSign, X, ChevronDown, UserPlus, Plus,
-  RefreshCw, Package, ArrowRight, Loader2, QrCode,
-  Eye, Ban, ChevronLeft, ChevronRight, Calendar,
+  Package, ArrowRight, Loader2, QrCode,
+  Eye, Ban, ChevronLeft, ChevronRight,
   User, FileText, CheckCircle2, Edit2, Printer
 } from 'lucide-react';
 import MapaInteractivo from '../components/MapaInteractivo';
@@ -40,6 +40,7 @@ import MapaInteractivo from '../components/MapaInteractivo';
  * o de coordenadas en bruto. Valida geográficamente que estén dentro de los límites reales.
  * Idioma: Español
  */
+// eslint-disable-next-line no-unused-vars
 const extraerCoordenadas = (url) => {
   if (!url) return null;
   const texto = url.trim();
@@ -202,9 +203,9 @@ export const PuntoVenta = () => {
 
 
   /** Carga inicial del POS */
-  const inicializarPOS = async () => {
+  const inicializarPOS = async (mostrarLoading = false) => {
     try {
-      setCargando(true);
+      if (mostrarLoading) setCargando(true);
       
       const [resProds, resClis, resCats] = await Promise.all([
         ventaService.obtenerProductos(),
@@ -248,8 +249,8 @@ export const PuntoVenta = () => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Consulta el historial de ventas paginado con filtros */
-  const obtenerHistorialVentas = async () => {
-    setCargandoVentas(true);
+  const obtenerHistorialVentas = async (mostrarLoading = false) => {
+    if (mostrarLoading) setCargandoVentas(true);
     try {
       const skip = (pagina - 1) * limitVentas;
       const params = {
@@ -278,7 +279,7 @@ export const PuntoVenta = () => {
     if (activeTab === 'historial') {
       obtenerHistorialVentas();
     }
-  }, [activeTab, filtroEstado, pagina]);
+  }, [activeTab, filtroEstado, pagina]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Cerrar dropdown de clientes al hacer clic fuera ───────────────────── */
   useEffect(() => {

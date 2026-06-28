@@ -12,7 +12,7 @@ import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Plus, Edit3, Trash2, X, Eye, EyeOff, UserCog, 
-  TrendingUp, Award, CheckCircle, XCircle 
+  TrendingUp, Award 
 } from 'lucide-react';
 
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };

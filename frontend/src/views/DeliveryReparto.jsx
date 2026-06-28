@@ -91,7 +91,7 @@ export const DeliveryReparto = () => {
       cargarDatos();
     };
     inicializar();
-  }, [usuario]);
+  }, [usuario]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleAcordeon = (id) => {
     setAcordeonesAbiertos(prev => ({

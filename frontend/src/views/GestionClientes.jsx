@@ -112,8 +112,10 @@ export const GestionClientes = () => {
 
   // Reiniciar página al cambiar filtros
   useEffect(() => {
-    setPagina(1);
-  }, [buscarTexto, estadoSel, deudaSel]);
+    if (pagina !== 1) {
+      setPagina(1);
+    }
+  }, [buscarTexto, estadoSel, deudaSel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Modal Formulario
   const [mostrarForm, setMostrarForm] = useState(false);

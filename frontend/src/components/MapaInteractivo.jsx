@@ -6,7 +6,7 @@
  * Idioma: Español
  */
 
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -97,7 +97,7 @@ export const MapaInteractivo = ({ lat, lng, onChange, soloLectura = false }) => 
         }
       }
     }
-  }, [lat, lng, soloLectura]);
+  }, [lat, lng, soloLectura]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Efecto independiente para la limpieza atómica al desmontar el componente
   useEffect(() => {

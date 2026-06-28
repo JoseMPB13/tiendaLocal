@@ -4,7 +4,7 @@
  * Diseño premium con tabla, formulario modal y confirmación de baja lógica.
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import categoriaService from '../services/categoriaService';
 import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
@@ -35,23 +35,24 @@ export const GestionCategorias = () => {
   const [categoriaEliminarId, setCategoriaEliminarId] = useState(null);
   const [procesandoEliminar, setProcesandoEliminar] = useState(false);
 
-  const cargarCategorias = async () => {
+  const cargarCategorias = async (mostrarLoading = false) => {
     try {
-      setCargando(true);
+      if (mostrarLoading) setCargando(true);
       const res = await categoriaService.obtenerTodas(true);
       if (res.ok) {
         setCategorias(res.data);
       }
     } catch (ex) {
+      console.error(ex);
       toast.error('Error al cargar las categorías.');
     } finally {
       setCargando(false);
     }
   };
 
-  const cargarMetricas = async () => {
+  const cargarMetricas = async (mostrarLoading = false) => {
     try {
-      setCargandoMetricas(true);
+      if (mostrarLoading) setCargandoMetricas(true);
       const res = await categoriaService.obtenerMetricas();
       if (res.ok) {
         setMetricas(res.data);
@@ -127,6 +128,7 @@ export const GestionCategorias = () => {
         cargarMetricas();
       }
     } catch (ex) {
+      console.error(ex);
       toast.error('No se pudo desactivar la categoría.');
     } finally {
       setProcesandoEliminar(false);

@@ -1,4 +1,3 @@
-import React from 'react';
 
 export const PaginaPrueba = ({ modulo }) => {
   return (
