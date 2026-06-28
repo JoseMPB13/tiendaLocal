@@ -50,16 +50,17 @@ export const DashboardAdmin = () => {
     ventas_por_categoria: []
   });
 
-  const [fechaCierre, setFechaCierre] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaFin, setFechaFin] = useState(new Date().toISOString().split('T')[0]);
   const [cargando, setCargando] = useState(true);
 
   /* Paleta de colores para los gráficos */
   const COLORES = ['#6d28d9', '#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed'];
 
-  const cargarMetricas = async (fecha = null) => {
+  const cargarMetricas = async (fInicio = null, fFin = null) => {
     try {
       setCargando(true);
-      const res = await reportesService.obtenerDashboard(fecha);
+      const res = await reportesService.obtenerDashboard(fInicio, fFin);
       if (res.ok) {
         setMetricas(res.data);
       }
@@ -75,10 +76,10 @@ export const DashboardAdmin = () => {
     // Evita actualizaciones síncronas de estado en el render inicial de React
     const inicializar = async () => {
       await Promise.resolve();
-      cargarMetricas(fechaCierre);
+      cargarMetricas(fechaInicio, fechaFin);
     };
     inicializar();
-  }, [fechaCierre]);
+  }, [fechaInicio, fechaFin]);
 
   /**
    * Exportar Cierre de Caja como PDF:
@@ -86,20 +87,20 @@ export const DashboardAdmin = () => {
    * para evitar el error 401 que ocurría con window.open directo.
    */
   const handleExportarCierrePdfClick = async () => {
-    if (!fechaCierre) {
+    if (!fechaFin) {
       toast.error('Seleccione una fecha de cierre válida.');
       return;
     }
 
     try {
       const loadToast = toast.loading('Generando y descargando PDF...');
-      const blob = await reportesService.obtenerCierrePdfBlob(fechaCierre);
+      const blob = await reportesService.obtenerCierrePdfBlob(fechaFin);
       toast.dismiss(loadToast);
 
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `cierre_caja_${fechaCierre}.pdf`;
+      link.download = `cierre_caja_${fechaFin}.pdf`;
       document.body.appendChild(link);
       link.click();
       window.URL.revokeObjectURL(url);
@@ -195,24 +196,45 @@ export const DashboardAdmin = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* Input de fecha */}
-          <div style={{ position: 'relative' }}>
-            <Calendar size={14} style={{
-              position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
-              color: '#9ca3af', pointerEvents: 'none',
-            }} />
-            <input
-              type="date"
-              value={fechaCierre}
-              onChange={(e) => setFechaCierre(e.target.value)}
-              className="form-input"
-              style={{ paddingLeft: '30px', fontSize: '0.78rem', minWidth: '155px' }}
-            />
+          {/* Fecha Inicio */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 650, color: '#4b5563' }}>Inicio:</span>
+            <div style={{ position: 'relative' }}>
+              <Calendar size={14} style={{
+                position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
+                color: '#9ca3af', pointerEvents: 'none',
+              }} />
+              <input
+                type="date"
+                value={fechaInicio}
+                onChange={(e) => setFechaInicio(e.target.value)}
+                className="form-input"
+                style={{ paddingLeft: '30px', fontSize: '0.78rem', minWidth: '135px' }}
+              />
+            </div>
+          </div>
+
+          {/* Fecha Fin */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 650, color: '#4b5563' }}>Fin:</span>
+            <div style={{ position: 'relative' }}>
+              <Calendar size={14} style={{
+                position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
+                color: '#9ca3af', pointerEvents: 'none',
+              }} />
+              <input
+                type="date"
+                value={fechaFin}
+                onChange={(e) => setFechaFin(e.target.value)}
+                className="form-input"
+                style={{ paddingLeft: '30px', fontSize: '0.78rem', minWidth: '135px' }}
+              />
+            </div>
           </div>
 
           {/* Botón Actualizar */}
           <button
-            onClick={() => cargarMetricas(fechaCierre)}
+            onClick={() => cargarMetricas(fechaInicio, fechaFin)}
             className="btn-secondary"
             style={{ gap: '6px' }}
           >

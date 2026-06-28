@@ -4,10 +4,13 @@ export const reportesService = {
   /**
    * Obtiene los indicadores agregados del negocio para el Dashboard.
    */
-  obtenerDashboard: async (fecha = null) => {
+  obtenerDashboard: async (fechaInicio = null, fechaFin = null) => {
     const params = {};
-    if (fecha) {
-      params.fecha = fecha;
+    if (fechaInicio) {
+      params.fecha_inicio = fechaInicio;
+    }
+    if (fechaFin) {
+      params.fecha_fin = fechaFin;
     }
     const respuesta = await clienteApi.get('/reportes/dashboard', { params });
     return respuesta.data;

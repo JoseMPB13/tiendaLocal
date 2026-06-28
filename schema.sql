@@ -372,16 +372,18 @@ for each row
 execute function fn_revertir_venta_cancelada();
 
 -- =============================================================================
+drop function if exists obtener_metricas_dashboard(date);
 drop function if exists obtener_metricas_dashboard();
+drop function if exists obtener_metricas_dashboard(date, date);
 -- FUNCIÓN: obtener_metricas_dashboard
 -- DESCRIPCIÓN: Consolida en una única consulta de base de datos las métricas
 --              financieras, recuentos de ventas, saldos deudores, efectividad
 --              del delivery, distribución de ingresos por categoría del negocio
 --              y el porcentaje de crecimiento (tendencia) de ventas.
--- PARÁMETROS: p_fecha (filtro opcional por fecha).
+-- PARÁMETROS: p_fecha_inicio (fecha inicio rango opcional), p_fecha_fin (fecha fin rango opcional).
 -- RETORNO: jsonb
 -- =============================================================================
-create or replace function obtener_metricas_dashboard(p_fecha date default null)
+create or replace function obtener_metricas_dashboard(p_fecha_inicio date default null, p_fecha_fin date default null)
 returns jsonb as $$
 declare
     v_total_ventas numeric(12, 2);
@@ -395,13 +397,21 @@ declare
     v_total_actual numeric(12, 2);
     v_total_anterior numeric(12, 2);
     v_tendencia_ventas numeric(5, 2);
+    v_duracion_dias integer;
+    v_inicio_anterior date;
+    v_fin_anterior date;
 begin
     -- 1. Suma total vendida y conteo (solo ventas Completadas)
     select coalesce(sum(total), 0.00), count(*)
     into v_total_ventas, v_cantidad_transacciones
     from ventas
     where estado_venta = 'Completada'
-      and (p_fecha is null or fecha_venta::date = p_fecha);
+      and (
+        (p_fecha_inicio is null and p_fecha_fin is null) or
+        (p_fecha_inicio is not null and p_fecha_fin is null and fecha_venta::date = p_fecha_inicio) or
+        (p_fecha_inicio is null and p_fecha_fin is not null and fecha_venta::date = p_fecha_fin) or
+        (p_fecha_inicio is not null and p_fecha_fin is not null and fecha_venta::date between p_fecha_inicio and p_fecha_fin)
+      );
 
     -- 2. Deudas activas en la calle (suma de saldo deudor)
     select coalesce(sum(saldo_deudor), 0.00)
@@ -416,7 +426,12 @@ begin
     )
     into v_efectividad_delivery_porcentaje
     from envios
-    where (p_fecha is null or fecha_creacion::date = p_fecha);
+    where (
+        (p_fecha_inicio is null and p_fecha_fin is null) or
+        (p_fecha_inicio is not null and p_fecha_fin is null and fecha_creacion::date = p_fecha_inicio) or
+        (p_fecha_inicio is null and p_fecha_fin is not null and fecha_creacion::date = p_fecha_fin) or
+        (p_fecha_inicio is not null and p_fecha_fin is not null and fecha_creacion::date between p_fecha_inicio and p_fecha_fin)
+      );
 
     -- 4. Cantidad de clientes activos
     select count(*)
@@ -434,25 +449,40 @@ begin
         join categorias c on c.id = p.categoria_id
         join ventas v on v.id = dv.venta_id
         where v.estado_venta = 'Completada'
-          and (p_fecha is null or v.fecha_venta::date = p_fecha)
+          and (
+            (p_fecha_inicio is null and p_fecha_fin is null) or
+            (p_fecha_inicio is not null and p_fecha_fin is null and v.fecha_venta::date = p_fecha_inicio) or
+            (p_fecha_inicio is null and p_fecha_fin is not null and v.fecha_venta::date = p_fecha_fin) or
+            (p_fecha_inicio is not null and p_fecha_fin is not null and v.fecha_venta::date between p_fecha_inicio and p_fecha_fin)
+          )
         group by c.nombre
     ) t;
 
     -- 6 y 7. Ventas del período actual y anterior para tendencia
-    if p_fecha is not null then
-        -- Ventas del día seleccionado
-        select coalesce(sum(total), 0.00)
-        into v_total_actual
-        from ventas
-        where estado_venta = 'Completada'
-          and fecha_venta::date = p_fecha;
+    if p_fecha_inicio is not null or p_fecha_fin is not null then
+        -- Determinar fechas efectivas de inicio y fin del periodo actual
+        declare
+            v_actual_inicio date := coalesce(p_fecha_inicio, p_fecha_fin);
+            v_actual_fin date := coalesce(p_fecha_fin, p_fecha_inicio);
+        begin
+            v_duracion_dias := v_actual_fin - v_actual_inicio + 1;
+            v_inicio_anterior := v_actual_inicio - v_duracion_dias;
+            v_fin_anterior := v_actual_fin - v_duracion_dias;
 
-        -- Ventas del día anterior
-        select coalesce(sum(total), 0.00)
-        into v_total_anterior
-        from ventas
-        where estado_venta = 'Completada'
-          and fecha_venta::date = p_fecha - 1;
+            -- Ventas del periodo actual
+            select coalesce(sum(total), 0.00)
+            into v_total_actual
+            from ventas
+            where estado_venta = 'Completada'
+              and fecha_venta::date between v_actual_inicio and v_actual_fin;
+
+            -- Ventas del periodo espejo anterior de igual duración exacta
+            select coalesce(sum(total), 0.00)
+            into v_total_anterior
+            from ventas
+            where estado_venta = 'Completada'
+              and fecha_venta::date between v_inicio_anterior and v_fin_anterior;
+        end;
     else
         -- Ventas del período actual (últimos 30 días)
         select coalesce(sum(total), 0.00)

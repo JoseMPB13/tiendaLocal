@@ -12,14 +12,15 @@ router = APIRouter(prefix="/reportes", tags=["Reportes"])
 @router.get("/dashboard", response_model=dict)
 @router.get("/dashboard/", include_in_schema=False)
 async def obtener_dashboard(
-    fecha: Optional[date] = Query(None, description="Fecha específica para el resumen del dashboard (YYYY-MM-DD)"),
+    fecha_inicio: Optional[date] = Query(None, description="Fecha de inicio para el análisis del dashboard (YYYY-MM-DD)"),
+    fecha_fin: Optional[date] = Query(None, description="Fecha de fin para el análisis del dashboard (YYYY-MM-DD)"),
     usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Retorna métricas clave consolidadas para el Dashboard administrativo.
     Acceso limitado exclusivamente al rol 'Administrador'.
     """
-    resultado = ReporteService.obtener_metricas_dashboard(fecha)
+    resultado = ReporteService.obtener_metricas_dashboard(fecha_inicio, fecha_fin)
     # Formatear contra el esquema de validación
     metricas = DashboardMetricas.model_validate(resultado)
     return {"ok": True, "data": metricas}
