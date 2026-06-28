@@ -372,15 +372,16 @@ for each row
 execute function fn_revertir_venta_cancelada();
 
 -- =============================================================================
+drop function if exists obtener_metricas_dashboard();
 -- FUNCIÓN: obtener_metricas_dashboard
 -- DESCRIPCIÓN: Consolida en una única consulta de base de datos las métricas
 --              financieras, recuentos de ventas, saldos deudores, efectividad
 --              del delivery, distribución de ingresos por categoría del negocio
 --              y el porcentaje de crecimiento (tendencia) de ventas.
--- PARÁMETROS: Ninguno.
+-- PARÁMETROS: p_fecha (filtro opcional por fecha).
 -- RETORNO: jsonb
 -- =============================================================================
-create or replace function obtener_metricas_dashboard()
+create or replace function obtener_metricas_dashboard(p_fecha date default null)
 returns jsonb as $$
 declare
     v_total_ventas numeric(12, 2);
@@ -399,7 +400,8 @@ begin
     select coalesce(sum(total), 0.00), count(*)
     into v_total_ventas, v_cantidad_transacciones
     from ventas
-    where estado_venta = 'Completada';
+    where estado_venta = 'Completada'
+      and (p_fecha is null or fecha_venta::date = p_fecha);
 
     -- 2. Deudas activas en la calle (suma de saldo deudor)
     select coalesce(sum(saldo_deudor), 0.00)
@@ -413,7 +415,8 @@ begin
         0.00
     )
     into v_efectividad_delivery_porcentaje
-    from envios;
+    from envios
+    where (p_fecha is null or fecha_creacion::date = p_fecha);
 
     -- 4. Cantidad de clientes activos
     select count(*)
@@ -431,23 +434,41 @@ begin
         join categorias c on c.id = p.categoria_id
         join ventas v on v.id = dv.venta_id
         where v.estado_venta = 'Completada'
+          and (p_fecha is null or v.fecha_venta::date = p_fecha)
         group by c.nombre
     ) t;
 
-    -- 6. Ventas del período actual (últimos 30 días)
-    select coalesce(sum(total), 0.00)
-    into v_total_actual
-    from ventas
-    where estado_venta = 'Completada'
-      and fecha_venta >= timezone('utc'::text, now()) - interval '30 days';
+    -- 6 y 7. Ventas del período actual y anterior para tendencia
+    if p_fecha is not null then
+        -- Ventas del día seleccionado
+        select coalesce(sum(total), 0.00)
+        into v_total_actual
+        from ventas
+        where estado_venta = 'Completada'
+          and fecha_venta::date = p_fecha;
 
-    -- 7. Ventas del período anterior (días 31 al 60 hacia atrás)
-    select coalesce(sum(total), 0.00)
-    into v_total_anterior
-    from ventas
-    where estado_venta = 'Completada'
-      and fecha_venta >= timezone('utc'::text, now()) - interval '60 days'
-      and fecha_venta < timezone('utc'::text, now()) - interval '30 days';
+        -- Ventas del día anterior
+        select coalesce(sum(total), 0.00)
+        into v_total_anterior
+        from ventas
+        where estado_venta = 'Completada'
+          and fecha_venta::date = p_fecha - 1;
+    else
+        -- Ventas del período actual (últimos 30 días)
+        select coalesce(sum(total), 0.00)
+        into v_total_actual
+        from ventas
+        where estado_venta = 'Completada'
+          and fecha_venta >= timezone('utc'::text, now()) - interval '30 days';
+
+        -- Ventas del período anterior (días 31 al 60 hacia atrás)
+        select coalesce(sum(total), 0.00)
+        into v_total_anterior
+        from ventas
+        where estado_venta = 'Completada'
+          and fecha_venta >= timezone('utc'::text, now()) - interval '60 days'
+          and fecha_venta < timezone('utc'::text, now()) - interval '30 days';
+    end if;
 
     -- 8. Cálculo de tendencia porcentual
     if v_total_anterior = 0.00 then

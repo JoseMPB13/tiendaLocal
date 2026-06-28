@@ -10,14 +10,16 @@ from app.services.dependencias import verificar_roles
 router = APIRouter(prefix="/reportes", tags=["Reportes"])
 
 @router.get("/dashboard", response_model=dict)
+@router.get("/dashboard/", include_in_schema=False)
 async def obtener_dashboard(
+    fecha: Optional[date] = Query(None, description="Fecha específica para el resumen del dashboard (YYYY-MM-DD)"),
     usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
     Retorna métricas clave consolidadas para el Dashboard administrativo.
     Acceso limitado exclusivamente al rol 'Administrador'.
     """
-    resultado = ReporteService.obtener_metricas_dashboard()
+    resultado = ReporteService.obtener_metricas_dashboard(fecha)
     # Formatear contra el esquema de validación
     metricas = DashboardMetricas.model_validate(resultado)
     return {"ok": True, "data": metricas}

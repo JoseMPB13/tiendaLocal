@@ -56,10 +56,10 @@ export const DashboardAdmin = () => {
   /* Paleta de colores para los gráficos */
   const COLORES = ['#6d28d9', '#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed'];
 
-  const cargarMetricas = async () => {
+  const cargarMetricas = async (fecha = null) => {
     try {
       setCargando(true);
-      const res = await reportesService.obtenerDashboard();
+      const res = await reportesService.obtenerDashboard(fecha);
       if (res.ok) {
         setMetricas(res.data);
       }
@@ -75,10 +75,10 @@ export const DashboardAdmin = () => {
     // Evita actualizaciones síncronas de estado en el render inicial de React
     const inicializar = async () => {
       await Promise.resolve();
-      cargarMetricas();
+      cargarMetricas(fechaCierre);
     };
     inicializar();
-  }, []);
+  }, [fechaCierre]);
 
   /**
    * Exportar Cierre de Caja como PDF:
@@ -212,7 +212,7 @@ export const DashboardAdmin = () => {
 
           {/* Botón Actualizar */}
           <button
-            onClick={cargarMetricas}
+            onClick={() => cargarMetricas(fechaCierre)}
             className="btn-secondary"
             style={{ gap: '6px' }}
           >

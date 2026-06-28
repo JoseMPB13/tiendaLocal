@@ -130,6 +130,7 @@ async def listar_envios(
     return {"ok": True, "data": respuestas}
 
 @router.put("/envios/{envio_id}", response_model=dict)
+@router.put("/envios/{envio_id}/", include_in_schema=False)
 async def actualizar_envio(
     envio_id: UUID,
     datos: EnvioActualizar,

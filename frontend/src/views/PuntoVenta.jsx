@@ -758,8 +758,8 @@ export const PuntoVenta = () => {
         }
 
         const [resProds, resClis] = await Promise.all([
-          ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); }),
-          ventaService.obtenerClientes().then(res => { if (res.ok) setClientes(res.data); })
+          ventaService.obtenerProductos(),
+          ventaService.obtenerClientes()
         ]);
         if (resProds.ok) setProductos(resProds.data);
         if (resClis.ok) setClientes(resClis.data);

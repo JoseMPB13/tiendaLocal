@@ -112,6 +112,12 @@ export const DeliveryReparto = () => {
    * INICIAR RUTA: Transición de Pendiente -> En Camino (Autoasignación)
    */
   const handleIniciarRuta = async (envioId) => {
+    // Validar si el usuario tiene rol administrativo puro y no tiene perfil de repartidor activo
+    const esAdminPuro = usuario?.rol === 'Administrador' || usuario?.rol === 'Cajero';
+    if (esAdminPuro && !repartidorId) {
+      toast.error("No tienes un perfil de repartidor activo para autoasignarte este pedido.");
+      return;
+    }
     try {
       const res = await deliveryService.actualizarEstadoEnvio(envioId, {
         estado_envio: "En Camino"
@@ -132,6 +138,11 @@ export const DeliveryReparto = () => {
    * ENTREGAR: Transición de En Camino -> Entregado
    */
   const handleConfirmarEntrega = async (envioId) => {
+    const esAdminPuro = usuario?.rol === 'Administrador' || usuario?.rol === 'Cajero';
+    if (esAdminPuro && !repartidorId) {
+      toast.error("Solo los repartidores activos pueden gestionar entregas de pedidos.");
+      return;
+    }
     try {
       const res = await deliveryService.actualizarEstadoEnvio(envioId, {
         estado_envio: "Entregado"
@@ -150,6 +161,11 @@ export const DeliveryReparto = () => {
    * CANCELAR: Abre modal personalizado para anulación
    */
   const handleAnularEntrega = (envioId) => {
+    const esAdminPuro = usuario?.rol === 'Administrador' || usuario?.rol === 'Cajero';
+    if (esAdminPuro && !repartidorId) {
+      toast.error("Solo los repartidores activos pueden anular entregas.");
+      return;
+    }
     setEnvioACancelar(envioId);
     setMotivoCancelacionText("");
     setMostrarModalCancelacion(true);
@@ -444,28 +460,40 @@ export const DeliveryReparto = () => {
                     {/* ACCIONES Y SLIDERS */}
                     <div className="pt-3 border-t border-zinc-100">
                       {env.estado_envio === 'Pendiente' && (
-                        <DeslizadorInteractivo 
-                          alDeslizar={() => handleIniciarRuta(env.id)}
-                          etiqueta="Deslizar para Iniciar Ruta"
-                          colorFondo="bg-zinc-950"
-                        />
+                        (usuario?.rol === 'Administrador' || usuario?.rol === 'Cajero') && !repartidorId ? (
+                          <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3.5 text-xs text-zinc-500 font-medium text-center">
+                            No tienes un perfil de repartidor activo para autoasignarte este pedido.
+                          </div>
+                        ) : (
+                          <DeslizadorInteractivo 
+                            alDeslizar={() => handleIniciarRuta(env.id)}
+                            etiqueta="Deslizar para Iniciar Ruta"
+                            colorFondo="bg-zinc-950"
+                          />
+                        )
                       )}
 
                       {env.estado_envio === 'En Camino' && (
-                        <div className="space-y-3">
-                          <DeslizadorInteractivo 
-                            alDeslizar={() => handleConfirmarEntrega(env.id)}
-                            etiqueta="Deslizar para Confirmar Entrega"
-                            colorFondo="bg-emerald-600"
-                          />
-                          <button
-                            onClick={() => handleAnularEntrega(env.id)}
-                            className="w-full flex items-center justify-center py-2.5 px-3.5 border border-rose-200 text-rose-600 rounded-xl text-xs font-semibold hover:bg-rose-50/50 transition-colors"
-                          >
-                            <XCircle size={14} className="mr-1.5" />
-                            Anular o Cancelar Entrega
-                          </button>
-                        </div>
+                        (usuario?.rol === 'Administrador' || usuario?.rol === 'Cajero') && !repartidorId ? (
+                          <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3.5 text-xs text-zinc-500 font-medium text-center">
+                            Solo el repartidor asignado puede gestionar la entrega de este pedido.
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <DeslizadorInteractivo 
+                              alDeslizar={() => handleConfirmarEntrega(env.id)}
+                              etiqueta="Deslizar para Confirmar Entrega"
+                              colorFondo="bg-emerald-600"
+                            />
+                            <button
+                              onClick={() => handleAnularEntrega(env.id)}
+                              className="w-full flex items-center justify-center py-2.5 px-3.5 border border-rose-200 text-rose-600 rounded-xl text-xs font-semibold hover:bg-rose-50/50 transition-colors"
+                            >
+                              <XCircle size={14} className="mr-1.5" />
+                              Anular o Cancelar Entrega
+                            </button>
+                          </div>
+                        )
                       )}
 
                       {finalizado && (

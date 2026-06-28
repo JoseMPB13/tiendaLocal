@@ -710,6 +710,8 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
 
 ### Obtener Métricas de Dashboard
 * **Ruta:** `GET /reportes/dashboard`
+* **Parámetros de Consulta (Query):**
+  - `fecha` (Fecha YYYY-MM-DD, Opcional): Filtra el resumen analítico y de ventas para un día específico.
 * **Permisos:** Solo `Administrador`
 * **Respuesta (200 OK):**
   ```json

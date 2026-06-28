@@ -16,11 +16,12 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 class ReporteService:
     @staticmethod
-    def obtener_metricas_dashboard() -> dict:
+    def obtener_metricas_dashboard(fecha: Optional[date] = None) -> dict:
         """
         Calcula y agrupa métricas clave del negocio consumiendo una función RPC en Supabase.
         """
-        resultado = supabase.rpc("obtener_metricas_dashboard").execute()
+        param_fecha = fecha.isoformat() if fecha else None
+        resultado = supabase.rpc("obtener_metricas_dashboard", {"p_fecha": param_fecha}).execute()
         if not resultado.data:
             return {
                 "total_ventas": 0.00,

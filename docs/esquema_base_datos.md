@@ -98,3 +98,21 @@ Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se 
 - **Parámetros:** `p_compra_id` (UUID)
 - **Comportamiento:** Cambia el estado de una compra a `'Cancelada'`. Itera sobre sus detalles de compra, bloquea cada producto y valida que el stock disponible no sea menor a la cantidad a restar (evitando stock negativo con código de error `P0007`). Resta del stock la cantidad comprada y registra el movimiento de tipo `'Cancelacion Compra'` en `historial_stock`.
 
+### I. Función Almacenada: actualizar_venta (SECURITY DEFINER)
+- **Tipo:** Función PL/pgSQL
+- **Parámetros:**
+  - `p_venta_id` (UUID)
+  - `p_cliente_id` (UUID)
+  - `p_tipo_pago` (Varchar)
+  - `p_items` (JSONB)
+  - `p_para_delivery` (Boolean)
+  - `p_direccion_despacho` (Text)
+  - `p_costo_envio` (Numeric)
+- **Comportamiento:** Permite actualizar de forma atómica y transaccional los detalles de una venta, revirtiendo primero el stock y deudas previas, recalculando y aplicando las nuevas cantidades y montos, y actualizando la facturación y el estado de entrega. Se ejecuta con privilegios de `SECURITY DEFINER` para evitar violaciones de RLS al escribir en `historial_stock`.
+
+### J. Función Almacenada: obtener_metricas_dashboard
+- **Tipo:** Función PL/pgSQL
+- **Parámetros:** `p_fecha` (Date, Opcional)
+- **Comportamiento:** Consolida las métricas financieras, conteo de transacciones, saldos deudores, efectividad de entregas y ventas por categoría del negocio. Si se proporciona `p_fecha`, filtra el análisis por ese día específico y calcula la tendencia comparándolo con el día anterior.
+
+
