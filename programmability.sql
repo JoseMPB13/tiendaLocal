@@ -280,48 +280,7 @@ for each row execute function fn_auditar_cambios();
 -- 5. TRIGGERS Y FUNCIONES ADICIONALES PARA INVENTARIO Y REVERSIONES
 -- -----------------------------------------------------------------------------
 
--- =============================================================================
--- FUNCIÓN: fn_controlar_stock_compra
--- DESCRIPCIÓN: Incrementa automáticamente el stock de un producto cuando se
---              registra un detalle de compra. Registra la transacción en el historial.
--- PARÁMETROS: Disparado por trigger (NEW contiene el registro de detalles_compras).
--- RETORNO: trigger (NEW)
--- =============================================================================
-create or replace function fn_controlar_stock_compra()
-returns trigger
-language plpgsql
-security definer
-as $$
-declare
-    v_nombre_prod varchar(150);
-begin
-    -- Bloquear la fila del producto para evitar condiciones de carrera (Race Conditions)
-    -- en actualizaciones concurrentes de stock.
-    select nombre 
-    into v_nombre_prod
-    from productos 
-    where id = new.producto_id
-    for update;
 
-    -- Incrementar el stock actual del producto con la cantidad comprada
-    update productos 
-    set stock_actual = stock_actual + new.cantidad
-    where id = new.producto_id;
-
-    -- Registrar el movimiento de tipo 'Compra' en el historial de stock
-    insert into historial_stock (producto_id, cantidad_cambio, tipo_movimiento, referencia_id, motivo)
-    select new.producto_id, new.cantidad, 'Compra', new.compra_id, coalesce('Compra ref: ' || codigo_referencia, 'Compra registrada')
-    from compras where id = new.compra_id;
-
-    return new;
-end;
-$$;
-
--- Trigger para ejecutar fn_controlar_stock_compra BEFORE INSERT en detalles_compras
-create or replace trigger tg_controlar_stock_compra
-before insert on detalles_compras
-for each row
-execute function fn_controlar_stock_compra();
 
 
 -- =============================================================================
@@ -548,24 +507,22 @@ end;
 $$ language plpgsql;
 
 -- -----------------------------------------------------------------------------
--- 6. PROCEDIMIENTO ALMACENADO: registrar_reabastecimiento
---    Registra la compra, detalle y actualiza el costo de catálogo atómicamente.
+-- 6. FUNCIÓN ALMACENADA: fn_ajustar_stock
 -- -----------------------------------------------------------------------------
-create or replace function registrar_reabastecimiento(
+create or replace function fn_ajustar_stock(
     p_producto_id uuid,
-    p_usuario_id uuid,
-    p_cantidad integer,
-    p_costo_compra numeric(12, 2),
-    p_codigo_referencia varchar(100)
+    p_cantidad_cambio integer,
+    p_motivo text,
+    p_usuario_id uuid
 )
-returns uuid as $$
+returns jsonb as $$
 declare
-    v_compra_id uuid;
-    v_precio_venta numeric(12, 2);
-    v_total numeric(12, 2);
+    v_stock_actual integer;
+    v_stock_nuevo integer;
+    v_nombre_prod varchar(150);
 begin
-    -- 1. Bloquear y verificar el producto
-    select precio_venta into v_precio_venta
+    -- Bloquear y verificar el producto para evitar race conditions
+    select nombre, stock_actual into v_nombre_prod, v_stock_actual
     from productos
     where id = p_producto_id
     for update;
@@ -575,30 +532,88 @@ begin
             using errcode = 'P0005';
     end if;
 
-    -- 2. Validar que el costo de compra no sea mayor al precio de venta actual
-    if p_costo_compra > v_precio_venta then
-        raise exception 'El costo de compra no puede ser mayor al precio de venta actual. Ajuste el precio de venta primero.'
-            using errcode = 'P0004';
+    -- Calcular el nuevo stock y validar que no sea negativo
+    v_stock_nuevo := v_stock_actual + p_cantidad_cambio;
+    if v_stock_nuevo < 0 then
+        raise exception 'No se puede realizar el ajuste. El stock resultante (%) no puede ser menor a cero.', v_stock_nuevo
+            using errcode = 'P0007';
     end if;
 
-    -- 3. Insertar cabecera de la compra
-    v_total := p_cantidad * p_costo_compra;
-    insert into compras (usuario_id, codigo_referencia, total, estado_compra)
-    values (p_usuario_id, p_codigo_referencia, v_total, 'Completada')
-    returning id into v_compra_id;
-
-    -- 4. Insertar detalle de la compra (esto disparará el trigger tg_controlar_stock_compra)
-    insert into detalles_compras (compra_id, producto_id, cantidad, costo_unitario, subtotal)
-    values (v_compra_id, p_producto_id, p_cantidad, p_costo_compra, v_total);
-
-    -- 5. Actualizar el costo del producto en el catálogo
+    -- Actualizar el stock actual del producto
     update productos
-    set precio_compra = p_costo_compra
+    set stock_actual = v_stock_nuevo
     where id = p_producto_id;
 
-    return p_producto_id;
+    -- Registrar en el historial de stock
+    insert into historial_stock (producto_id, cantidad_cambio, tipo_movimiento, referencia_id, motivo)
+    values (p_producto_id, p_cantidad_cambio, 'Ajuste', p_usuario_id, p_motivo);
+
+    -- Retornar el producto actualizado como JSONB
+    return (
+        select jsonb_build_object(
+            'id', id,
+            'nombre', nombre,
+            'stock_actual', stock_actual,
+            'precio_venta', precio_venta,
+            'precio_compra', precio_compra,
+            'categoria_id', categoria_id,
+            'estado', estado
+        )
+        from productos
+        where id = p_producto_id
+    );
 end;
-$$ language plpgsql;
+$$ language plpgsql security definer;
+
+-- -----------------------------------------------------------------------------
+-- 6.5. FUNCIÓN ALMACENADA: obtener_metricas_categorias
+-- -----------------------------------------------------------------------------
+create or replace function obtener_metricas_categorias()
+returns jsonb as $$
+declare
+    v_total_activas bigint;
+    v_dominante_nombre varchar(150);
+    v_dominante_stock bigint;
+    v_valorizacion_total numeric(12, 2);
+begin
+    -- Conteo total de categorías activas
+    select count(*) into v_total_activas
+    from categorias
+    where estado = 'Activo';
+
+    -- Categoría dominante en inventario (mayor stock acumulado)
+    select c.nombre, coalesce(sum(p.stock_actual), 0)
+    into v_dominante_nombre, v_dominante_stock
+    from categorias c
+    left join productos p on p.categoria_id = c.id
+    where c.estado = 'Activo' and p.estado = 'Activo'
+    group by c.id, c.nombre
+    order by sum(p.stock_actual) desc, c.nombre asc
+    limit 1;
+
+    -- Si no hay productos, establecer valores por defecto
+    if v_dominante_nombre is null then
+        v_dominante_nombre := 'Ninguna';
+        v_dominante_stock := 0;
+    end if;
+
+    -- Valorización económica total (suma de precio_venta * stock_actual de productos activos de categorías activas)
+    select coalesce(sum(p.precio_venta * p.stock_actual), 0.00)
+    into v_valorizacion_total
+    from productos p
+    join categorias c on c.id = p.categoria_id
+    where c.estado = 'Activo' and p.estado = 'Activo';
+
+    return jsonb_build_object(
+        'total_categorias_activas', v_total_activas,
+        'categoria_dominante', jsonb_build_object(
+            'nombre', v_dominante_nombre,
+            'total_stock', v_dominante_stock
+        ),
+        'valorizacion_total', v_valorizacion_total
+    );
+end;
+$$ language plpgsql security definer;
 
 -- -----------------------------------------------------------------------------
 -- 7. SECUENCIA Y FUNCIÓN PARA GENERACIÓN DE CÓDIGO DE FACTURA (F-YYYYMMDD-XXXXX)
@@ -894,143 +909,7 @@ $$ language plpgsql security definer;
 comment on function actualizar_venta is 'Actualiza una venta y sus detalles reajustando stock y deudas (atómico).';
 
 
--- =============================================================================
--- PROCEDIMIENTO ALMACENADO SOBRECARGADO: registrar_reabastecimiento (JSON array)
--- DESCRIPCIÓN: Registra una compra masiva con múltiples ítems en formato JSONB.
---              Dispara la actualización de precios de compra de catálogo y stock.
--- =============================================================================
-CREATE OR REPLACE FUNCTION registrar_reabastecimiento(
-    p_usuario_id uuid,
-    p_proveedor_nombre varchar(150),
-    p_codigo_referencia varchar(100),
-    p_total numeric(12, 2),
-    p_items jsonb
-)
-RETURNS uuid
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    v_compra_id uuid;
-    v_item record;
-    v_precio_venta numeric(12, 2);
-BEGIN
-    -- 1. Insertar cabecera de la compra
-    INSERT INTO compras (usuario_id, proveedor_nombre, codigo_referencia, total, estado_compra)
-    VALUES (p_usuario_id, p_proveedor_nombre, p_codigo_referencia, p_total, 'Completada')
-    RETURNING id INTO v_compra_id;
 
-    -- 2. Iterar sobre los productos ordenados por producto_id para prevenir deadlocks
-    FOR v_item IN 
-        SELECT (x.value->>'producto_id')::uuid AS prod_id,
-               (x.value->>'cantidad')::integer AS cant,
-               (x.value->>'costo_unitario')::numeric(12, 2) AS costo
-        FROM jsonb_array_elements(p_items) AS x(value)
-        ORDER BY prod_id ASC
-    LOOP
-        -- Bloquear y verificar el producto
-        SELECT precio_venta INTO v_precio_venta
-        FROM productos
-        WHERE id = v_item.prod_id
-        FOR UPDATE;
-
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'El producto con ID % no existe en el catálogo.', v_item.prod_id
-                USING ERRCODE = 'P0005';
-        END IF;
-
-        -- Validar que el costo de compra no sea mayor al precio de venta actual
-        IF v_item.costo > v_precio_venta THEN
-            RAISE EXCEPTION 'El costo de compra (%) no puede ser mayor al precio de venta actual (%) para el producto con ID %. Ajuste el precio de venta primero.',
-                v_item.costo, v_precio_venta, v_item.prod_id
-                USING ERRCODE = 'P0004';
-        END IF;
-
-        -- Insertar detalle de la compra (esto disparará el trigger tg_controlar_stock_compra)
-        INSERT INTO detalles_compras (compra_id, producto_id, cantidad, costo_unitario, subtotal)
-        VALUES (v_compra_id, v_item.prod_id, v_item.cant, v_item.costo, v_item.cant * v_item.costo);
-
-        -- Actualizar el costo del producto en el catálogo
-        UPDATE productos
-        SET precio_compra = v_item.costo
-        WHERE id = v_item.prod_id;
-    END LOOP;
-
-    RETURN v_compra_id;
-END;
-$$;
-
--- =============================================================================
--- PROCEDIMIENTO ALMACENADO: cancelar_compra
--- DESCRIPCIÓN: Cancela lógicamente una compra y revierte de forma atómica el stock.
---              Evita stock negativo validando el inventario actual.
--- =============================================================================
-CREATE OR REPLACE FUNCTION cancelar_compra(
-    p_compra_id uuid
-)
-RETURNS uuid
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    v_estado varchar(30);
-    v_item record;
-    v_stock_actual integer;
-BEGIN
-    -- 1. Verificar existencia y estado de la compra con bloqueo
-    SELECT estado_compra INTO v_estado
-    FROM compras
-    WHERE id = p_compra_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'La compra especificada no existe.'
-            USING ERRCODE = 'P0005';
-    END IF;
-
-    IF v_estado = 'Cancelada' THEN
-        RAISE EXCEPTION 'La compra ya se encuentra cancelada.'
-            USING ERRCODE = 'P0006';
-    END IF;
-
-    -- 2. Cambiar estado a Cancelada
-    UPDATE compras
-    SET estado_compra = 'Cancelada'
-    WHERE id = p_compra_id;
-
-    -- 3. Iterar sobre el detalle de compras para revertir el stock de forma segura
-    FOR v_item IN
-        SELECT producto_id, cantidad
-        FROM detalles_compras
-        WHERE compra_id = p_compra_id
-        ORDER BY producto_id ASC
-    LOOP
-        -- Bloquear el producto antes de modificar su stock
-        SELECT stock_actual INTO v_stock_actual
-        FROM productos
-        WHERE id = v_item.producto_id
-        FOR UPDATE;
-
-        -- Validar que al restar no quede stock negativo
-        IF v_stock_actual < v_item.cantidad THEN
-            RAISE EXCEPTION 'No se puede cancelar la compra. El stock actual (%) es menor que la cantidad comprada (%) para el producto con ID %.',
-                v_stock_actual, v_item.cantidad, v_item.producto_id
-                USING ERRCODE = 'P0007';
-        END IF;
-
-        -- Restar la cantidad comprada del stock actual
-        UPDATE productos
-        SET stock_actual = stock_actual - v_item.cantidad
-        WHERE id = v_item.producto_id;
-
-        -- Registrar el movimiento de reversión en historial_stock como 'Cancelacion Compra'
-        INSERT INTO historial_stock (producto_id, cantidad_cambio, tipo_movimiento, referencia_id, motivo)
-        VALUES (v_item.producto_id, -v_item.cantidad, 'Cancelacion Compra', p_compra_id, 'Cancelación de compra registrada');
-    END LOOP;
-
-    RETURN p_compra_id;
-END;
-$$;
 
 
 -- -----------------------------------------------------------------------------
