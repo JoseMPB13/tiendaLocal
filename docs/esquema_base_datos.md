@@ -78,6 +78,7 @@ Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se 
 - **Tipo:** Función PL/pgSQL
 - **Parámetros:** `p_venta_id` (UUID)
 - **Comportamiento:** Valida la existencia de la venta, cambia su estado a `'Cancelada'` y marca su factura relacionada como `'Anulada'`. Esto a su vez dispara `tg_revertir_venta_cancelada` para devolver el stock e historial (Kardex).
+- **Restricción de Negocio (Fase 2):** Valida que la venta se haya realizado el mismo día del servidor (`fecha_venta::date = current_date`). Si corresponde a un día anterior, aborta la transacción y lanza el código de error **`P0008`**.
 
 ### F. Función Almacenada: Obtener Próximo Código de Factura (`obtener_proximo_codigo_factura`)
 - **Tipo:** Función PL/pgSQL
@@ -108,6 +109,7 @@ Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se 
   - `p_direccion_despacho` (Text)
   - `p_costo_envio` (Numeric)
 - **Comportamiento:** Permite actualizar de forma atómica y transaccional los detalles de una venta, revirtiendo primero el stock y deudas previas, recalculando y aplicando las nuevas cantidades y montos, y actualizando la facturación y el estado de entrega. Se ejecuta con privilegios de `SECURITY DEFINER` para evitar violaciones de RLS al escribir en `historial_stock`.
+- **Restricción de Negocio (Fase 2):** Valida que la venta original se haya realizado el mismo día actual del servidor. Si es de una fecha previa, aborta la transacción lanzando la excepción con código **`P0007`**.
 
 ### J. Función Almacenada: obtener_metricas_dashboard
 - **Tipo:** Función PL/pgSQL
