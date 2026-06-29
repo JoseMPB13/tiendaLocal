@@ -272,6 +272,8 @@ class DashboardMetricas(BaseModel):
     deudas_activas_calle: float = Field(..., description="Suma total de saldos deudores de clientes")
     efectividad_delivery_porcentaje: float = Field(..., description="Porcentaje de entregas completadas con éxito")
     clientes_activos: int = Field(default=0, description="Cantidad de clientes activos registrados")
+    pedidos_delivery: int = Field(default=0, description="Cantidad absoluta de pedidos por delivery")
+    productos_vendidos: int = Field(default=0, description="Cantidad total de productos/unidades vendidos")
     ventas_por_categoria: list[CategoriaVentas] = Field(default=[], description="Distribución de ventas por categoría")
     tendencia_ventas: float = Field(default=0.00, description="Porcentaje de crecimiento/tendencia de ventas")
 

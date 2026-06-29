@@ -321,6 +321,10 @@ declare
     v_clientes_activos bigint;
     v_ventas_por_categoria jsonb;
     
+    -- Nuevas variables para los indicadores solicitados
+    v_pedidos_delivery bigint;
+    v_productos_vendidos bigint;
+    
     -- Variables para tendencias
     v_total_actual numeric(12, 2);
     v_total_anterior numeric(12, 2);
@@ -361,11 +365,35 @@ begin
         (p_fecha_inicio is not null and p_fecha_fin is not null and fecha_creacion::date between p_fecha_inicio and p_fecha_fin)
       );
 
+    -- 3b. Pedidos Delivery: Número absoluto de pedidos que fueron solicitados mediante delivery
+    select count(*)
+    into v_pedidos_delivery
+    from envios
+    where (
+        (p_fecha_inicio is null and p_fecha_fin is null) or
+        (p_fecha_inicio is not null and p_fecha_fin is null and fecha_creacion::date = p_fecha_inicio) or
+        (p_fecha_inicio is null and p_fecha_fin is not null and fecha_creacion::date = p_fecha_fin) or
+        (p_fecha_inicio is not null and p_fecha_fin is not null and fecha_creacion::date between p_fecha_inicio and p_fecha_fin)
+      );
+
     -- 4. Cantidad de clientes activos
     select count(*)
     into v_clientes_activos
     from clientes
     where estado = 'Activo';
+
+    -- 4b. Productos Vendidos: Cantidad total de unidades o productos que se han vendido
+    select coalesce(sum(dv.cantidad), 0)
+    into v_productos_vendidos
+    from detalles_ventas dv
+    join ventas v on v.id = dv.venta_id
+    where v.estado_venta = 'Completada'
+      and (
+        (p_fecha_inicio is null and p_fecha_fin is null) or
+        (p_fecha_inicio is not null and p_fecha_fin is null and v.fecha_venta::date = p_fecha_inicio) or
+        (p_fecha_inicio is null and p_fecha_fin is not null and v.fecha_venta::date = p_fecha_fin) or
+        (p_fecha_inicio is not null and p_fecha_fin is not null and v.fecha_venta::date between p_fecha_inicio and p_fecha_fin)
+      );
 
     -- 5. Distribución de ventas por categoría (excluye las que tienen 0.00 de ventas)
     select coalesce(jsonb_agg(t), '[]'::jsonb)
@@ -439,13 +467,15 @@ begin
         v_tendencia_ventas := round(((v_total_actual - v_total_anterior) / v_total_anterior * 100.00)::numeric, 2);
     end if;
 
-    -- Retornar el objeto JSON consolidado
+    -- Retornar el objeto JSON consolidado con los campos nuevos y viejos (para compatibilidad)
     return jsonb_build_object(
         'total_ventas', v_total_ventas,
         'cantidad_transacciones', v_cantidad_transacciones,
         'deudas_activas_calle', v_deudas_activas_calle,
         'efectividad_delivery_porcentaje', v_efectividad_delivery_porcentaje,
         'clientes_activos', v_clientes_activos,
+        'pedidos_delivery', v_pedidos_delivery,
+        'productos_vendidos', v_productos_vendidos,
         'ventas_por_categoria', v_ventas_por_categoria,
         'tendencia_ventas', v_tendencia_ventas
     );

@@ -1,8 +1,9 @@
 /**
  * Vista: DashboardAdmin.jsx
- * Panel de control ejecutivo con métricas financieras, gráficos analíticos
- * y exportación de cierre de caja en PDF autenticado.
- * Diseño premium con cards de gradiente y animaciones suaves.
+ * Propósito: Panel de control ejecutivo con métricas financieras, gráficos analíticos,
+ *            exportación de cierre de caja en PDF y KPIs en tiempo real para la Tienda Margarita.
+ * Dependencias: reportesService, react-hot-toast, recharts, lucide-react.
+ * Módulo: Dashboard de Administración
  */
 
 import { useState, useEffect } from 'react';
@@ -14,7 +15,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp, Users, Truck, Calendar, Printer, DollarSign,
-  RefreshCw, ArrowUpRight, ArrowDownRight
+  RefreshCw, ArrowUpRight, ArrowDownRight, Package
 } from 'lucide-react';
 
 /* Componente de Tooltip personalizado para los gráficos */
@@ -47,16 +48,26 @@ export const DashboardAdmin = () => {
     deudas_activas_calle: 0.00,
     efectividad_delivery_porcentaje: 0.00,
     clientes_activos: 0,
+    pedidos_delivery: 0,
+    productos_vendidos: 0,
     ventas_por_categoria: []
   });
 
   const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().split('T')[0]);
   const [fechaFin, setFechaFin] = useState(new Date().toISOString().split('T')[0]);
   const [cargando, setCargando] = useState(true);
+  const [errorFechas, setErrorFechas] = useState(null); // Control de visualización de advertencia por rango incorrecto
 
   /* Paleta de colores para los gráficos */
   const COLORES = ['#6d28d9', '#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed'];
 
+  /**
+   * Carga los indicadores agregados del negocio desde el backend en el rango de fechas especificado.
+   * 
+   * @param {string|null} fInicio - Fecha de inicio del rango (YYYY-MM-DD).
+   * @param {string|null} fFin - Fecha de fin del rango (YYYY-MM-DD).
+   * @returns {Promise<void>} Promesa sin valor de retorno que actualiza el estado local de métricas.
+   */
   const cargarMetricas = async (fInicio = null, fFin = null) => {
     try {
       setCargando(true);
@@ -72,11 +83,30 @@ export const DashboardAdmin = () => {
     }
   };
 
+  /**
+   * Valida de manera reactiva la consistencia del rango de fechas.
+   * Evita consultas inválidas al backend si la fecha de inicio es posterior a la fecha de fin.
+   * 
+   * @param {string} inicio - Fecha de inicio en formato YYYY-MM-DD.
+   * @param {string} fin - Fecha de fin en formato YYYY-MM-DD.
+   * @returns {boolean} Retorna true si el rango es válido y lógico; false si es inconsistente.
+   */
+  const validarRangoFechas = (inicio, fin) => {
+    if (inicio && fin && inicio > fin) {
+      setErrorFechas('La fecha de Inicio no puede ser posterior a la fecha de Fin.');
+      return false;
+    }
+    setErrorFechas(null);
+    return true;
+  };
+
   useEffect(() => {
     // Evita actualizaciones síncronas de estado en el render inicial de React
     const inicializar = async () => {
       await Promise.resolve();
-      cargarMetricas(fechaInicio, fechaFin);
+      if (validarRangoFechas(fechaInicio, fechaFin)) {
+        cargarMetricas(fechaInicio, fechaFin);
+      }
     };
     inicializar();
   }, [fechaInicio, fechaFin]);
@@ -113,7 +143,7 @@ export const DashboardAdmin = () => {
     }
   };
 
-  /* Datos de las tarjetas estadísticas */
+  /* Datos de las tarjetas estadísticas reestructuradas según requerimiento */
   const statsCards = [
     {
       label: 'Ventas Totales',
@@ -137,19 +167,19 @@ export const DashboardAdmin = () => {
       tendencia: null,
     },
     {
-      label: 'Efectividad Delivery',
-      valor: `${metricas.efectividad_delivery_porcentaje.toFixed(1)}%`,
-      sub: 'Despachos completados',
+      label: 'Pedidos Delivery',
+      valor: String(metricas.pedidos_delivery || 0),
+      sub: 'Solicitados por delivery',
       icono: <Truck size={22} />,
       gradient: 'linear-gradient(135deg, #059669, #10b981)',
       glow: 'rgba(5,150,105,.3)',
       tendencia: null,
     },
     {
-      label: 'Clientes Activos',
-      valor: String(metricas.clientes_activos || 0),
-      sub: 'Registrados en la tienda',
-      icono: <Users size={22} />,
+      label: 'Productos Vendidos',
+      valor: String(metricas.productos_vendidos || 0),
+      sub: 'Unidades vendidas',
+      icono: <Package size={22} />,
       gradient: 'linear-gradient(135deg, #2563eb, #3b82f6)',
       glow: 'rgba(37,99,235,.3)',
       tendencia: null,
@@ -172,6 +202,20 @@ export const DashboardAdmin = () => {
           error:   { iconTheme: { primary: '#dc2626', secondary: 'white' } },
         }}
       />
+
+      {/* Banner flotante de error para la validación de consistencia de fechas */}
+      {errorFechas && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl shadow-lg animate-fade-in-down max-w-md w-[90%] md:w-auto transition-all duration-300">
+          <div className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
+          <span className="text-xs font-semibold">{errorFechas}</span>
+          <button 
+            onClick={() => setErrorFechas(null)} 
+            className="ml-auto text-red-400 hover:text-red-600 transition-colors text-sm font-bold pl-2 focus:outline-none"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* ── CONTROLES: EXPORTAR CIERRE ── */}
       <div style={{
@@ -207,7 +251,11 @@ export const DashboardAdmin = () => {
               <input
                 type="date"
                 value={fechaInicio}
-                onChange={(e) => setFechaInicio(e.target.value)}
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  setFechaInicio(valor);
+                  validarRangoFechas(valor, fechaFin);
+                }}
                 className="form-input"
                 style={{ paddingLeft: '30px', fontSize: '0.78rem', minWidth: '135px' }}
               />
@@ -225,7 +273,11 @@ export const DashboardAdmin = () => {
               <input
                 type="date"
                 value={fechaFin}
-                onChange={(e) => setFechaFin(e.target.value)}
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  setFechaFin(valor);
+                  validarRangoFechas(fechaInicio, valor);
+                }}
                 className="form-input"
                 style={{ paddingLeft: '30px', fontSize: '0.78rem', minWidth: '135px' }}
               />
@@ -234,7 +286,11 @@ export const DashboardAdmin = () => {
 
           {/* Botón Actualizar */}
           <button
-            onClick={() => cargarMetricas(fechaInicio, fechaFin)}
+            onClick={() => {
+              if (validarRangoFechas(fechaInicio, fechaFin)) {
+                cargarMetricas(fechaInicio, fechaFin);
+              }
+            }}
             className="btn-secondary"
             style={{ gap: '6px' }}
           >
