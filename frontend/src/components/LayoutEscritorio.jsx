@@ -50,10 +50,11 @@ export const LayoutEscritorio = () => {
   const badgeStyle = rolBadgeStyle[usuario?.rol] || { background: '#374151', color: '#d1d5db' };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: 'var(--color-bg)', overflow: 'hidden' }}>
+    <div className="print:block print:h-auto print:overflow-visible" style={{ display: 'flex', height: '100vh', background: 'var(--color-bg)', overflow: 'hidden' }}>
 
       {/* ──────────── SIDEBAR LATERAL ──────────── */}
       <aside
+        className="print:hidden"
         style={{
           background: 'var(--color-sidebar-bg)',
           width: colapsado ? '64px' : '240px',
@@ -253,10 +254,10 @@ export const LayoutEscritorio = () => {
       </aside>
 
       {/* ──────────── CONTENIDO PRINCIPAL ──────────── */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <main className="print:block print:h-auto print:overflow-visible" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* Barra superior */}
-        <header style={{
+        <header className="print:hidden" style={{
           background: 'white',
           borderBottom: '1px solid var(--color-border)',
           padding: '0 24px',
@@ -297,7 +298,7 @@ export const LayoutEscritorio = () => {
         </header>
 
         {/* Área de contenido */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+        <div className="print:block print:p-0 print:m-0 print:overflow-visible" style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
           <Outlet />
         </div>
       </main>

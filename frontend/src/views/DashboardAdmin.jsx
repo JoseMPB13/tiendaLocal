@@ -187,278 +187,402 @@ export const DashboardAdmin = () => {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: {
-            fontFamily: 'Inter, sans-serif',
-            fontSize: '0.8125rem',
-            fontWeight: 500,
-            borderRadius: '12px',
-            boxShadow: '0 8px 24px rgba(30,27,75,.15)',
-          },
-          success: { iconTheme: { primary: '#059669', secondary: 'white' } },
-          error:   { iconTheme: { primary: '#dc2626', secondary: 'white' } },
-        }}
-      />
+    <>
+      {/* ── VISTA EN PANTALLA: SE OCULTA TOTALMENTE AL IMPRIMIR ── */}
+      <div className="print:hidden" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: {
+              fontFamily: 'Inter, sans-serif',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              borderRadius: '12px',
+              boxShadow: '0 8px 24px rgba(30,27,75,.15)',
+            },
+            success: { iconTheme: { primary: '#059669', secondary: 'white' } },
+            error:   { iconTheme: { primary: '#dc2626', secondary: 'white' } },
+          }}
+        />
 
-      {/* Banner flotante de error para la validación de consistencia de fechas */}
-      {errorFechas && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl shadow-lg animate-fade-in-down max-w-md w-[90%] md:w-auto transition-all duration-300">
-          <div className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
-          <span className="text-xs font-semibold">{errorFechas}</span>
-          <button 
-            onClick={() => setErrorFechas(null)} 
-            className="ml-auto text-red-400 hover:text-red-600 transition-colors text-sm font-bold pl-2 focus:outline-none"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      {/* ── CONTROLES: EXPORTAR CIERRE ── */}
-      <div style={{
-        background: 'white',
-        borderRadius: '14px',
-        padding: '20px 24px',
-        border: '1px solid var(--color-border)',
-        boxShadow: 'var(--shadow-sm)',
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '16px',
-      }}>
-        <div>
-          <h3 style={{ fontFamily: 'Outfit, sans-serif', fontSize: '1rem', fontWeight: 700, color: '#1e1b4b', margin: 0 }}>
-            Resumen Ejecutivo &amp; Reportes
-          </h3>
-          <p style={{ fontSize: '0.78rem', color: '#9ca3af', marginTop: '3px', marginBottom: 0 }}>
-            Control financiero y logístico en tiempo real
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* Fecha Inicio */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 650, color: '#4b5563' }}>Inicio:</span>
-            <div style={{ position: 'relative' }}>
-              <Calendar size={14} style={{
-                position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
-                color: '#9ca3af', pointerEvents: 'none',
-              }} />
-              <input
-                type="date"
-                value={fechaInicio}
-                onChange={(e) => {
-                  const valor = e.target.value;
-                  setFechaInicio(valor);
-                  validarRangoFechas(valor, fechaFin);
-                }}
-                className="form-input"
-                style={{ paddingLeft: '30px', fontSize: '0.78rem', minWidth: '135px' }}
-              />
-            </div>
-          </div>
-
-          {/* Fecha Fin */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 650, color: '#4b5563' }}>Fin:</span>
-            <div style={{ position: 'relative' }}>
-              <Calendar size={14} style={{
-                position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
-                color: '#9ca3af', pointerEvents: 'none',
-              }} />
-              <input
-                type="date"
-                value={fechaFin}
-                onChange={(e) => {
-                  const valor = e.target.value;
-                  setFechaFin(valor);
-                  validarRangoFechas(fechaInicio, valor);
-                }}
-                className="form-input"
-                style={{ paddingLeft: '30px', fontSize: '0.78rem', minWidth: '135px' }}
-              />
-            </div>
-          </div>
-
-          {/* Botón Actualizar */}
-          <button
-            onClick={() => {
-              if (validarRangoFechas(fechaInicio, fechaFin)) {
-                cargarMetricas(fechaInicio, fechaFin);
-              }
-            }}
-            className="btn-secondary"
-            style={{ gap: '6px' }}
-          >
-            <RefreshCw size={14} />
-            Actualizar
-          </button>
-
-          {/* Botón PDF */}
-          <button
-            onClick={handleExportarCierrePdfClick}
-            className="btn-primary"
-            style={{ gap: '6px' }}
-          >
-            <Printer size={14} />
-            Imprimir Cierre Diario
-          </button>
-        </div>
-      </div>
-
-      {/* ── CARDS DE MÉTRICAS ── */}
-      {cargando ? (
-        <div style={{
-          textAlign: 'center', padding: '48px',
-          background: 'white', borderRadius: '14px',
-          border: '1px solid var(--color-border)',
-          color: '#9ca3af', fontSize: '0.85rem', fontWeight: 500,
-        }}>
-          Cargando indicadores de negocio...
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-          {statsCards.map((card, i) => (
-            <div
-              key={i}
-              className="animate-fade-in-up"
-              style={{
-                background: 'white',
-                borderRadius: '14px',
-                padding: '20px',
-                border: '1px solid var(--color-border)',
-                boxShadow: 'var(--shadow-sm)',
-                transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
-                animationDelay: `${i * 0.07}s`,
-                cursor: 'default',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.transform = 'translateY(-3px)';
-                e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-              }}
+        {/* Banner flotante de error para la validación de consistencia de fechas */}
+        {errorFechas && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl shadow-lg animate-fade-in-down max-w-md w-[90%] md:w-auto transition-all duration-300">
+            <div className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
+            <span className="text-xs font-semibold">{errorFechas}</span>
+            <button 
+              onClick={() => setErrorFechas(null)} 
+              className="ml-auto text-red-400 hover:text-red-600 transition-colors text-sm font-bold pl-2 focus:outline-none"
             >
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '14px' }}>
-                <div style={{
-                  width: '46px', height: '46px',
-                  background: card.gradient,
-                  borderRadius: '12px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'white',
-                  boxShadow: `0 6px 20px ${card.glow}`,
-                }}>
-                  {card.icono}
-                </div>
-                {card.tendencia && (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '2px',
-                    fontSize: '0.7rem', fontWeight: 700,
-                    color: card.tendenciaValor >= 0 ? '#059669' : '#dc2626', 
-                    background: card.tendenciaValor >= 0 ? '#d1fae5' : '#fee2e2',
-                    padding: '3px 8px', borderRadius: '9999px',
-                  }}>
-                    {card.tendenciaValor >= 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
-                    {card.tendencia}
-                  </span>
-                )}
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* ── CONTROLES: EXPORTAR CIERRE ── */}
+        <div style={{
+          background: 'white',
+          borderRadius: '14px',
+          padding: '20px 24px',
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-sm)',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
+        }}>
+          <div>
+            <h3 style={{ fontFamily: 'Outfit, sans-serif', fontSize: '1rem', fontWeight: 700, color: '#1e1b4b', margin: 0 }}>
+              Resumen Ejecutivo &amp; Reportes
+            </h3>
+            <p style={{ fontSize: '0.78rem', color: '#9ca3af', marginTop: '3px', marginBottom: 0 }}>
+              Control financiero y logístico en tiempo real
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {/* Fecha Inicio */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 650, color: '#4b5563' }}>Inicio:</span>
+              <div style={{ position: 'relative' }}>
+                <Calendar size={14} style={{
+                  position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
+                  color: '#9ca3af', pointerEvents: 'none',
+                }} />
+                <input
+                  type="date"
+                  value={fechaInicio}
+                  onChange={(e) => {
+                    const valor = e.target.value;
+                    setFechaInicio(valor);
+                    validarRangoFechas(valor, fechaFin);
+                  }}
+                  className="form-input"
+                  style={{ paddingLeft: '30px', fontSize: '0.78rem', minWidth: '135px' }}
+                />
               </div>
-              <p style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9ca3af', margin: '0 0 4px' }}>
-                {card.label}
-              </p>
-              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: '1.375rem', fontWeight: 800, color: '#1e1b4b', margin: '0 0 4px' }}>
-                {card.valor}
-              </p>
-              <p style={{ fontSize: '0.72rem', color: '#9ca3af', margin: 0, fontWeight: 500 }}>
-                {card.sub}
+            </div>
+
+            {/* Fecha Fin */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 650, color: '#4b5563' }}>Fin:</span>
+              <div style={{ position: 'relative' }}>
+                <Calendar size={14} style={{
+                  position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
+                  color: '#9ca3af', pointerEvents: 'none',
+                }} />
+                <input
+                  type="date"
+                  value={fechaFin}
+                  onChange={(e) => {
+                    const valor = e.target.value;
+                    setFechaFin(valor);
+                    validarRangoFechas(fechaInicio, valor);
+                  }}
+                  className="form-input"
+                  style={{ paddingLeft: '30px', fontSize: '0.78rem', minWidth: '135px' }}
+                />
+              </div>
+            </div>
+
+            {/* Botón Actualizar */}
+            <button
+              onClick={() => {
+                if (validarRangoFechas(fechaInicio, fechaFin)) {
+                  cargarMetricas(fechaInicio, fechaFin);
+                }
+              }}
+              className="btn-secondary"
+              style={{ gap: '6px' }}
+            >
+              <RefreshCw size={14} />
+              Actualizar
+            </button>
+
+            {/* Botón Imprimir (Nativo) */}
+            <button
+              onClick={() => window.print()}
+              className="btn-primary"
+              style={{ gap: '6px' }}
+            >
+              <Printer size={14} />
+              Imprimir Cierre Diario
+            </button>
+          </div>
+        </div>
+
+        {/* ── CARDS DE MÉTRICAS ── */}
+        {cargando ? (
+          <div style={{
+            textAlign: 'center', padding: '48px',
+            background: 'white', borderRadius: '14px',
+            border: '1px solid var(--color-border)',
+            color: '#9ca3af', fontSize: '0.85rem', fontWeight: 500,
+          }}>
+            Cargando indicadores de negocio...
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+            {statsCards.map((card, i) => (
+              <div
+                key={i}
+                className="animate-fade-in-up"
+                style={{
+                  background: 'white',
+                  borderRadius: '14px',
+                  padding: '20px',
+                  border: '1px solid var(--color-border)',
+                  boxShadow: 'var(--shadow-sm)',
+                  transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
+                  animationDelay: `${i * 0.07}s`,
+                  cursor: 'default',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = 'translateY(-3px)';
+                  e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <div style={{
+                    width: '46px', height: '46px',
+                    background: card.gradient,
+                    borderRadius: '12px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'white',
+                    boxShadow: `0 6px 20px ${card.glow}`,
+                  }}>
+                    {card.icono}
+                  </div>
+                  {card.tendencia && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '2px',
+                      fontSize: '0.7rem', fontWeight: 700,
+                      color: card.tendenciaValor >= 0 ? '#059669' : '#dc2626', 
+                      background: card.tendenciaValor >= 0 ? '#d1fae5' : '#fee2e2',
+                      padding: '3px 8px', borderRadius: '9999px',
+                    }}>
+                      {card.tendenciaValor >= 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+                      {card.tendencia}
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9ca3af', margin: '0 0 4px' }}>
+                  {card.label}
+                </p>
+                <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: '1.375rem', fontWeight: 800, color: '#1e1b4b', margin: '0 0 4px' }}>
+                  {card.valor}
+                </p>
+                <p style={{ fontSize: '0.72rem', color: '#9ca3af', margin: 0, fontWeight: 500 }}>
+                  {card.sub}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── GRÁFICOS ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
+
+          {/* Gráfico de Barras: Ventas por Categoría */}
+          <div style={{
+            background: 'white', borderRadius: '14px', padding: '22px',
+            border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)',
+          }}>
+            <div style={{ marginBottom: '18px' }}>
+              <h4 style={{ fontFamily: 'Outfit, sans-serif', fontSize: '0.9rem', fontWeight: 700, color: '#1e1b4b', margin: 0 }}>
+                Distribución de Ventas (Bs.)
+              </h4>
+              <p style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: '4px', marginBottom: 0 }}>
+                Total recaudado por categoría de inventario
               </p>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* ── GRÁFICOS ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
-
-        {/* Gráfico de Barras: Ventas por Categoría */}
-        <div style={{
-          background: 'white', borderRadius: '14px', padding: '22px',
-          border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)',
-        }}>
-          <div style={{ marginBottom: '18px' }}>
-            <h4 style={{ fontFamily: 'Outfit, sans-serif', fontSize: '0.9rem', fontWeight: 700, color: '#1e1b4b', margin: 0 }}>
-              Distribución de Ventas (Bs.)
-            </h4>
-            <p style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: '4px', marginBottom: 0 }}>
-              Total recaudado por categoría de inventario
-            </p>
+            <div style={{ height: '300px', minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={metricas.ventas_por_categoria} barSize={36}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af', fontFamily: 'Inter' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#9ca3af', fontFamily: 'Inter' }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(109,40,217,.05)' }} />
+                  <Bar dataKey="valor" radius={[6, 6, 0, 0]}>
+                    {metricas.ventas_por_categoria.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORES[index % COLORES.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div style={{ height: '300px', minWidth: 0 }}>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={metricas.ventas_por_categoria} barSize={36}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af', fontFamily: 'Inter' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#9ca3af', fontFamily: 'Inter' }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(109,40,217,.05)' }} />
-                <Bar dataKey="valor" radius={[6, 6, 0, 0]}>
-                  {metricas.ventas_por_categoria.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORES[index % COLORES.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
 
-        {/* Gráfico de Torta: Participación de Ventas */}
-        <div style={{
-          background: 'white', borderRadius: '14px', padding: '22px',
-          border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)',
-        }}>
-          <div style={{ marginBottom: '18px' }}>
-            <h4 style={{ fontFamily: 'Outfit, sans-serif', fontSize: '0.9rem', fontWeight: 700, color: '#1e1b4b', margin: 0 }}>
-              Participación de Mercado
-            </h4>
-            <p style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: '4px', marginBottom: 0 }}>
-              Porcentaje de ventas según tipo de producto
-            </p>
-          </div>
-          <div style={{ height: '300px', minWidth: 0 }}>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={metricas.ventas_por_categoria}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={65}
-                  outerRadius={95}
-                  paddingAngle={4}
-                  dataKey="valor"
-                >
-                  {metricas.ventas_por_categoria.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORES[index % COLORES.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => [`Bs. ${Number(value).toFixed(2)}`, 'Ventas']} />
-                <Legend
-                  verticalAlign="bottom"
-                  height={36}
-                  iconType="circle"
-                  iconSize={8}
-                  wrapperStyle={{ fontSize: '0.72rem', fontFamily: 'Inter' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+          {/* Gráfico de Torta: Participación de Ventas */}
+          <div style={{
+            background: 'white', borderRadius: '14px', padding: '22px',
+            border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)',
+          }}>
+            <div style={{ marginBottom: '18px' }}>
+              <h4 style={{ fontFamily: 'Outfit, sans-serif', fontSize: '0.9rem', fontWeight: 700, color: '#1e1b4b', margin: 0 }}>
+                Participación de Mercado
+              </h4>
+              <p style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: '4px', marginBottom: 0 }}>
+                Porcentaje de ventas según tipo de producto
+              </p>
+            </div>
+            <div style={{ height: '300px', minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={metricas.ventas_por_categoria}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={65}
+                    outerRadius={95}
+                    paddingAngle={4}
+                    dataKey="valor"
+                  >
+                    {metricas.ventas_por_categoria.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORES[index % COLORES.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`Bs. ${Number(value).toFixed(2)}`, 'Ventas']} />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
+                    iconType="circle"
+                    iconSize={8}
+                    wrapperStyle={{ fontSize: '0.72rem', fontFamily: 'Inter' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {/* ── SECCIÓN DE IMPRESIÓN EXCLUSIVA (CIERRE DIARIO) ── */}
+      {/* 
+        Esta sección se renderiza únicamente cuando se activa el flujo de impresión del navegador.
+        Se eliminan los colores vibrantes de pantalla, empleando una escala limpia de grises,
+        y se formatea simulando una hoja de auditoría formal o ticket de cierre detallado.
+      */}
+      <div className="hidden print:block w-full text-black font-sans px-8 py-6 bg-white">
+        {/* Encabezado Corporativo Formal */}
+        <div className="text-center border-b-2 border-black pb-4 mb-6">
+          <h1 className="text-2xl font-bold tracking-wide uppercase">TIENDA MARGARITA</h1>
+          <h2 className="text-md font-bold tracking-widest text-gray-800 mt-1">REPORTE DE CIERRE DIARIO</h2>
+          <p className="text-[10px] text-gray-500 mt-1 italic">Hoja Oficial de Auditoría y Control de Operaciones</p>
+        </div>
+
+        {/* Rango de Fechas Auditado e Información de Emisión */}
+        <div className="grid grid-cols-2 gap-4 border border-black p-4 rounded-lg mb-6 bg-gray-50 text-xs">
+          <div>
+            <p className="font-bold uppercase tracking-wider text-gray-700">Rango de Fechas Auditado</p>
+            <p className="mt-1 font-semibold">
+              Fecha de Inicio: <span className="font-normal">{fechaInicio}</span>
+            </p>
+            <p className="font-semibold">
+              Fecha de Fin: <span className="font-normal">{fechaFin}</span>
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="font-bold uppercase tracking-wider text-gray-700">Fecha y Hora de Emisión</p>
+            <p className="mt-1 font-semibold">
+              {new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              {" - "}
+              {new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </p>
+            <p className="text-[9px] text-gray-500 italic mt-0.5">Generado digitalmente por el Sistema</p>
+          </div>
+        </div>
+
+        {/* Bloque de Métricas Clave */}
+        <div className="mb-6">
+          <h3 className="text-xs font-bold uppercase tracking-wider border-b border-black pb-1 mb-3">
+            I. RESUMEN DE MÉTRICAS CLAVE
+          </h3>
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="border border-gray-300 p-2.5 rounded">
+              <p className="font-bold text-gray-600 uppercase text-[10px]">Ventas Totales</p>
+              <p className="text-sm font-extrabold mt-0.5">Bs. {metricas.total_ventas.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</p>
+              <p className="text-[9px] text-gray-500 mt-0.5">{metricas.cantidad_transacciones} transacciones completadas</p>
+            </div>
+            <div className="border border-gray-300 p-2.5 rounded">
+              <p className="font-bold text-gray-600 uppercase text-[10px]">Deudas en la Calle</p>
+              <p className="text-sm font-extrabold mt-0.5">Bs. {metricas.deudas_activas_calle.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</p>
+              <p className="text-[9px] text-gray-500 mt-0.5">Total fiado en cuentas corrientes</p>
+            </div>
+            <div className="border border-gray-300 p-2.5 rounded">
+              <p className="font-bold text-gray-600 uppercase text-[10px]">Pedidos por Delivery</p>
+              <p className="text-sm font-extrabold mt-0.5">{metricas.pedidos_delivery || 0} pedidos</p>
+              <p className="text-[9px] text-gray-500 mt-0.5">Solicitudes absolutas de reparto</p>
+            </div>
+            <div className="border border-gray-300 p-2.5 rounded">
+              <p className="font-bold text-gray-600 uppercase text-[10px]">Total de Productos Vendidos</p>
+              <p className="text-sm font-extrabold mt-0.5">{metricas.productos_vendidos || 0} unidades</p>
+              <p className="text-[9px] text-gray-500 mt-0.5">Cantidad física de unidades entregadas</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Sección de Distribución de Ventas (Adaptada a Tabla Estructurada para Impresión) */}
+        <div className="mb-8">
+          <h3 className="text-xs font-bold uppercase tracking-wider border-b border-black pb-1 mb-3">
+            II. DISTRIBUCIÓN DE VENTAS POR CATEGORÍA
+          </h3>
+          <table className="w-full border-collapse border border-gray-400 text-left text-xs">
+            <thead>
+              <tr className="bg-gray-100 border-b border-gray-400">
+                <th className="p-2 border border-gray-400 font-bold uppercase text-[9px]">Nombre de Categoría</th>
+                <th className="p-2 border border-gray-400 text-right font-bold uppercase text-[9px]">Monto Recaudado (Bs.)</th>
+                <th className="p-2 border border-gray-400 text-right font-bold uppercase text-[9px]">Participación (%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {metricas.ventas_por_categoria && metricas.ventas_por_categoria.length > 0 ? (
+                metricas.ventas_por_categoria.map((cat, idx) => {
+                  const totalVentasVal = metricas.total_ventas || 1;
+                  const porcentaje = ((cat.valor / totalVentasVal) * 100).toFixed(1);
+                  return (
+                    <tr key={idx} className="border-b border-gray-300">
+                      <td className="p-2 border border-gray-300">{cat.name}</td>
+                      <td className="p-2 border border-gray-300 text-right font-semibold">
+                        Bs. {cat.valor.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-2 border border-gray-300 text-right">{porcentaje}%</td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="3" className="p-3 text-center text-gray-500 italic">
+                    No se registraron ventas en este período.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pie de Reporte y Firmas de Validación */}
+        <div className="mt-16 pt-8 border-t border-dashed border-gray-400">
+          <div className="grid grid-cols-2 gap-8 text-center text-xs">
+            <div className="flex flex-col items-center">
+              <div className="w-44 border-b border-black mb-2" />
+              <p className="font-bold uppercase text-[10px]">Administrador Principal</p>
+              <p className="text-[9px] text-gray-500">Firma y Sello de Autorización</p>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="w-44 border-b border-black mb-2" />
+              <p className="font-bold uppercase text-[10px]">Auditor de Caja</p>
+              <p className="text-[9px] text-gray-500">Firma de Validación de Saldos</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 };
 
