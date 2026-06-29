@@ -12,7 +12,7 @@ import ModalDesactivar from '../components/ModalDesactivar';
 import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import useAuthStore from '../store/authStore';
 import toast, { Toaster } from 'react-hot-toast';
-import { Plus, Edit3, Trash2, X, Package, AlertTriangle } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Package, AlertTriangle, Layers } from 'lucide-react';
 
 /* ── Estilos de modal compartidos ── */
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
@@ -234,19 +234,18 @@ export const GestionProductos = () => {
   const indexInicio = (paginaEfectiva - 1) * itemsPorPagina;
   const productosPaginados = productosFiltrados.slice(indexInicio, indexInicio + itemsPorPagina);
 
-  // Cálculos del Mini-Dashboard de Inventario en tiempo real (sobre productos cargados)
+  // Cálculos del Mini-Dashboard de Inventario en tiempo real (en español)
   const stockBajoCount = productos.filter(p => p.estado === 'Activo' && p.stock_actual <= p.stock_minimo).length;
   
   const valorTotalInventario = productos
     .filter(p => p.estado === 'Activo')
     .reduce((acc, p) => acc + (p.stock_actual * p.precio_compra), 0);
 
-  const productosMargen = productos.filter(p => p.estado === 'Activo' && p.precio_compra > 0);
-  const margenPromedio = productosMargen.length > 0
-    ? productosMargen.reduce((acc, p) => acc + (((p.precio_venta - p.precio_compra) / p.precio_compra) * 100), 0) / productosMargen.length
-    : 0;
+  // Conteo total absoluto de productos activos
+  const productosTotalesCount = productos.filter(p => p.estado === 'Activo').length;
 
-  const variedadCatalogoCount = productos.filter(p => p.estado === 'Activo').length;
+  // Variedad de categorías distintas con productos activos
+  const variedadCategoriasCount = new Set(productos.filter(p => p.estado === 'Activo' && p.categoria_id).map(p => p.categoria_id)).size;
 
   // Validación de costo no requerida para Ajustes de Inventario
 
@@ -350,7 +349,7 @@ export const GestionProductos = () => {
             </div>
           </div>
 
-          {/* Tarjeta 3: Margen Promedio */}
+          {/* Tarjeta 3: Productos Totales */}
           <div style={{
             background: 'white',
             border: '1px solid #e2e8f0',
@@ -366,14 +365,13 @@ export const GestionProductos = () => {
               background: '#f0f9ff',
               color: '#0284c7',
               borderRadius: '10px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'Inter, sans-serif'
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
-              <span style={{ fontSize: '1.1rem', fontWeight: 800 }}>%</span>
+              <Package size={20} />
             </div>
             <div>
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Margen Ganancia</span>
-              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', fontFamily: 'Inter, sans-serif' }}>{margenPromedio.toFixed(1)}%</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Productos Totales</span>
+              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', fontFamily: 'Inter, sans-serif' }}>{productosTotalesCount} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>prods</span></span>
             </div>
           </div>
 
@@ -395,11 +393,11 @@ export const GestionProductos = () => {
               borderRadius: '10px',
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
-              <Package size={20} />
+              <Layers size={20} />
             </div>
             <div>
               <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Variedad Catálogo</span>
-              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', fontFamily: 'Inter, sans-serif' }}>{variedadCatalogoCount} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>ítems</span></span>
+              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', fontFamily: 'Inter, sans-serif' }}>{variedadCategoriasCount} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>cats</span></span>
             </div>
           </div>
         </div>
@@ -417,81 +415,82 @@ export const GestionProductos = () => {
             placeholder="Buscar por nombre de producto o código de barras..."
             etiquetaCategoria="Filtrar por Categoría"
           />
-          <div className="table-wrapper">
-          <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ minWidth: '700px' }}>
-              <thead>
+          {/* Vista para pantallas grandes (Tabla estructurada y alineada) */}
+          <div className="hidden lg:block overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs">
+            <table className="min-w-full divide-y divide-slate-200 text-left text-xs font-medium text-slate-600">
+              <thead className="bg-slate-50 font-bold text-slate-700 uppercase tracking-wider">
                 <tr>
-                  <th>Código Barras</th>
-                  <th>Nombre del Producto</th>
-                  <th style={{ textAlign: 'right' }}>Precio Venta</th>
-                  <th style={{ textAlign: 'right' }}>Stock</th>
-                  <th>Estado</th>
-                  <th style={{ textAlign: 'center' }}>Acciones</th>
+                  <th className="text-left px-4 py-3">Código Barras</th>
+                  <th className="text-left px-4 py-3">Nombre del Producto</th>
+                  <th className="text-right px-4 py-3">Precio Venta</th>
+                  <th className="text-right px-4 py-3">Stock</th>
+                  <th className="text-center px-4 py-3">Estado</th>
+                  <th className="text-center px-4 py-3">Acciones</th>
                 </tr>
               </thead>
 
               {cargando ? (
-                <tbody>
+                <tbody className="divide-y divide-slate-100 bg-white">
                   <tr>
-                    <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#9ca3af', fontWeight: 500 }}>
+                    <td colSpan="6" className="text-center py-10 text-slate-400 font-medium">
                       Cargando catálogo de productos...
                     </td>
                   </tr>
                 </tbody>
-              ) : productos.length === 0 ? (
-                <tbody>
+              ) : productosPaginados.length === 0 ? (
+                <tbody className="divide-y divide-slate-100 bg-white">
                   <tr>
-                    <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                    <td colSpan="6" className="text-center py-10 text-slate-400 font-medium">
                       No se registran productos en el catálogo.
                     </td>
                   </tr>
                 </tbody>
               ) : (
-                <tbody>
+                <tbody className="divide-y divide-slate-100 bg-white">
                   {productosPaginados.map((prod) => (
-                    <tr key={prod.id}>
-                      <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#6b7280' }}>
+                    <tr key={prod.id} className="hover:bg-slate-50/50 transition duration-150">
+                      <td className="text-left px-4 py-3 font-mono text-xs text-slate-500">
                         {prod.codigo_barras || '—'}
                       </td>
-                      <td className="bold">{prod.nombre}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#1e1b4b' }}>
+                      <td className="text-left px-4 py-3 font-bold text-slate-800">
+                        {prod.nombre}
+                      </td>
+                      <td className="text-right px-4 py-3 font-extrabold text-slate-900">
                         Bs. {prod.precio_venta.toFixed(2)}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, color: prod.stock_actual <= prod.stock_minimo ? '#dc2626' : '#374151' }}>
+                      <td className={`text-right px-4 py-3 font-semibold ${prod.stock_actual <= prod.stock_minimo ? 'text-red-600' : 'text-slate-700'}`}>
                         {prod.stock_actual} uds
                       </td>
-                      <td>
+                      <td className="text-center px-4 py-3">
                         <span className={`badge ${prod.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
                           {prod.estado}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                      <td className="text-center px-4 py-3">
+                        <div className="flex items-center justify-center gap-1.5">
                           {prod.estado === 'Activo' && (
                             <button
                               onClick={() => abrirAjustarStock(prod)}
-                              className="btn-icon"
-                              style={{ color: '#6366f1' }}
+                              className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
                               title="Ajustar stock manual"
                             >
-                              <Plus size={15} />
+                              <Plus size={14} />
                             </button>
                           )}
                           <button
                             onClick={() => abrirEditar(prod)}
-                            className="btn-icon"
+                            className="text-amber-600 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
                             title="Editar producto"
                           >
-                            <Edit3 size={15} />
+                            <Edit3 size={14} />
                           </button>
                           {prod.estado === 'Activo' && (
                             <button
                               onClick={() => abrirDesactivar(prod.id)}
-                              className="btn-icon danger"
+                              className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
                               title="Desactivar producto"
                             >
-                              <Trash2 size={15} />
+                              <Trash2 size={14} />
                             </button>
                           )}
                         </div>
@@ -503,13 +502,91 @@ export const GestionProductos = () => {
             </table>
           </div>
 
+          {/* Vista para pantallas móviles (Tarjetas independientes responsivas) */}
+          <div className="block lg:hidden space-y-3">
+            {cargando ? (
+              <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 font-medium">
+                Cargando catálogo de productos...
+              </div>
+            ) : productosPaginados.length === 0 ? (
+              <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 font-medium">
+                No se registran productos en el catálogo.
+              </div>
+            ) : (
+              productosPaginados.map((prod) => (
+                <div key={prod.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-col gap-2.5">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-800 leading-tight">
+                        {prod.nombre}
+                      </h4>
+                      {prod.descripcion && (
+                        <p className="text-[10px] text-slate-500 mt-1 leading-tight">
+                          {prod.descripcion}
+                        </p>
+                      )}
+                    </div>
+                    <span className={`badge ${prod.estado === 'Activo' ? 'badge-success' : 'badge-danger'} shrink-0`}>
+                      {prod.estado}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-50 border border-slate-100 rounded-lg p-2 font-medium text-slate-600">
+                    <div>
+                      <span className="text-[8px] text-slate-400 uppercase block font-bold">Código Barras</span>
+                      <span className="font-mono text-slate-700">{prod.codigo_barras || '—'}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[8px] text-slate-400 uppercase block font-bold">Precio Venta</span>
+                      <span className="font-extrabold text-slate-900">Bs. {prod.precio_venta.toFixed(2)}</span>
+                    </div>
+                    <div className="mt-1">
+                      <span className="text-[8px] text-slate-400 uppercase block font-bold">Stock Mínimo</span>
+                      <span className="text-slate-700">{prod.stock_minimo} uds</span>
+                    </div>
+                    <div className="text-right mt-1">
+                      <span className="text-[8px] text-slate-400 uppercase block font-bold">Stock Disponible</span>
+                      <span className={`font-bold ${prod.stock_actual <= prod.stock_minimo ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {prod.stock_actual} uds
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-1.5 border-t border-slate-50 pt-2">
+                    {prod.estado === 'Activo' && (
+                      <button
+                        onClick={() => abrirAjustarStock(prod)}
+                        className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus size={12} /> Stock
+                      </button>
+                    )}
+                    <button
+                      onClick={() => abrirEditar(prod)}
+                      className="bg-amber-50 hover:bg-amber-100 text-amber-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                    >
+                      <Edit3 size={12} /> Editar
+                    </button>
+                    {prod.estado === 'Activo' && (
+                      <button
+                        onClick={() => abrirDesactivar(prod.id)}
+                        className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                      >
+                        <Trash2 size={12} /> Desactivar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
           <PaginadorTablas
             totalItems={productosFiltrados.length}
             itemsPorPagina={itemsPorPagina}
             paginaActual={paginaEfectiva}
             alCambiarPagina={setPagina}
           />
-        </div>
         </>
       )}
 
