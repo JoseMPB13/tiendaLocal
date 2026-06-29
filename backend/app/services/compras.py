@@ -17,8 +17,8 @@ class CompraService:
     def registrar_reabastecimiento(compra: CompraCrear, usuario_id: UUID) -> dict:
         """
         Registra una compra/reabastecimiento.
-        Valida que el usuario y productos existan y que los costos sean válidos
-        antes de ejecutar el SP de registro en Supabase.
+        Las validaciones de existencia de productos, estado activo y control de costos
+        son delegadas directamente a la base de datos (DB-First) mediante excepciones SQLSTATE.
         """
         # 1. Validar existencia del usuario/operador
         usr_check = supabase.table("usuarios").select("id").eq("id", str(usuario_id)).execute()
@@ -28,49 +28,18 @@ class CompraService:
                 detail="El operador/usuario autenticado no existe."
             )
 
-        # 2. Validar productos en lote: existencia, estado activo y control de costos
-        prod_ids = [str(item.producto_id) for item in compra.detalles]
-        res_prods = supabase.table("productos").select("id, nombre, precio_venta, estado").in_("id", prod_ids).execute()
-        prods_dict = {p["id"]: p for p in res_prods.data} if res_prods.data else {}
+        # 2. Sanitización JSON Crítica de UUIDs y construcción del listado de detalles
+        items_json = [
+            {
+                "producto_id": str(item.producto_id),
+                "cantidad": int(item.cantidad),
+                "costo_unitario": float(item.costo_unitario)
+            }
+            for item in compra.detalles
+        ]
 
-        total_recalculado = 0.00
-        items_json = []
-
-        for item in compra.detalles:
-            prod_id_str = str(item.producto_id)
-
-            if prod_id_str not in prods_dict:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"El producto con ID {prod_id_str} no existe en el catálogo."
-                )
-
-            db_prod = prods_dict[prod_id_str]
-
-            # Verificar que el producto esté activo
-            if db_prod["estado"] != "Activo":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"El producto '{db_prod['nombre']}' no está activo para reabastecimiento."
-                )
-
-            # Validar que el costo de compra no sea mayor al precio de venta actual
-            precio_venta = float(db_prod["precio_venta"])
-            costo_compra = float(item.costo_unitario)
-            if costo_compra > precio_venta:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"El costo de compra para '{db_prod['nombre']}' (Bs. {costo_compra:.2f}) no puede ser mayor que su precio de venta actual (Bs. {precio_venta:.2f})."
-                )
-
-            total_recalculado += item.cantidad * costo_compra
-
-            # Estructurar ítem para el JSON del RPC
-            items_json.append({
-                "producto_id": prod_id_str,
-                "cantidad": item.cantidad,
-                "costo_unitario": costo_compra
-            })
+        # Calcular total acumulado de la compra
+        total_compra = sum(float(item.cantidad) * float(item.costo_unitario) for item in compra.detalles)
 
         # 3. Invocar RPC para registrar el reabastecimiento de forma transaccional
         try:
@@ -78,7 +47,7 @@ class CompraService:
                 "p_usuario_id": str(usuario_id),
                 "p_proveedor_nombre": compra.proveedor_nombre,
                 "p_codigo_referencia": compra.codigo_referencia,
-                "p_total": total_recalculado,
+                "p_total": total_compra,
                 "p_items": items_json
             }).execute()
 
@@ -93,6 +62,11 @@ class CompraService:
 
         except APIError as ex:
             if ex.code == "P0004":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ex.message
+                )
+            elif ex.code == "P0009":
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=ex.message
