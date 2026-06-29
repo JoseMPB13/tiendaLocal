@@ -800,18 +800,25 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
 
 ---
 
-## 9. Módulo de Compras (Reabastecimiento) [DESMANTELADO PERMANENTEMENTE]
+## 9. Módulo de Compras (Reabastecimiento) [DESMANTELADO EN ROUTER / SERVICIO ACTIVO]
 
-Este módulo ha sido desmantelado y reemplazado por la funcionalidad de Ajustes de Inventario Manuales. Cualquier petición a los endpoints bajo el prefijo `/compras` retornará un error `410 Gone`.
+> [!NOTE]
+> Aunque los endpoints del controlador `/compras` se encuentran deshabilitados en el router de producción retornando de forma predeterminada `HTTP 410 Gone`, el servicio de negocio `compras.py` e integración transaccional con Supabase/PostgreSQL han sido optimizados y se documentan para propósitos de consistencia técnica del core.
 
-* **Ruta de Acceso:** `* /compras/{path:path}`
-* **Efecto:** Retorna `HTTP 410 Gone`.
-* **Cuerpo de Respuesta:**
-  ```json
-  {
-    "detail": "El módulo de compras físicas ha sido desmantelado y reemplazado por Ajustes de Inventario Manuales."
-  }
-  ```
+### A. Registrar Reabastecimiento / Compra
+* **Endpoint:** `POST /api/compras`
+* **Descripción:** Registra una nueva compra de productos en el inventario. El servicio de backend ahora delega de manera directa el control de costos y estado activo del producto a la base de datos (DB-First).
+* **Parámetros del Payload (JSON):**
+  * `proveedor_nombre` (String, Obligatorio)
+  * `codigo_referencia` (String, Obligatorio)
+  * `detalles` (Array): Lista de productos, cantidades y costo unitario.
+* **Control de Errores y Excepciones (Fase 2):**
+  * Si la base de datos levanta una excepción `P0009` (producto inactivo), el backend captura la excepción de Postgrest y responde con un estado **`HTTP 400 Bad Request`** con la estructura:
+    ```json
+    {
+      "detail": "El producto \"Nombre\" no está activo para reabastecimiento."
+    }
+    ```
 
 
 

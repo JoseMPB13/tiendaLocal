@@ -111,13 +111,15 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **Modal de Detalle del Reabastecimiento:** Muestra el desglose de productos adquiridos con sus nombres enriquecidos, cantidades, costos y subtotales.
 - **Anulación Lógica de Compras:** Admite la cancelación mediante el procedimiento `cancelarCompra(id)` en la base de datos (restringido a administradores), revirtiendo el stock de productos de forma segura y controlando que no resulte en inventario negativo.
 
-## 13b. Panel de Filtros y Mini-Dashboard de Inventario (`GestionProductos.jsx`)
+## 13b. Panel de Filtros, Alineación de Tabla y Mini-Dashboard de Inventario (`GestionProductos.jsx`)
 - **Panel de Filtros Modular (`PanelFiltroBusqueda.jsx`):** Se integró un componente modular en la parte superior del catálogo de productos que permite filtrar reactivamente la lista por nombre del producto o por su código de barras, así como por la categoría asociada. La tabla y el paginador se ajustan dinámicamente y reinician el contador a la página 1 al interactuar con el filtro.
 - **Mini-Dashboard de Inventario:** Se inyectó un panel horizontal antes de la tabla del catálogo con 4 tarjetas de métricas calculadas en tiempo real:
   - *Stock Bajo:* Conteo de productos activos con existencia inferior o igual al stock mínimo.
   - *Valor del Inventario:* Capital invertido acumulado (`stock_actual * precio_compra`) para todos los productos activos.
-  - *Margen de Ganancia Promedio:* Porcentaje del margen de ganancia promedio (`((precio_venta - precio_compra) / precio_compra) * 100`) para productos activos con costo de compra positivo.
-  - *Variedad del Catálogo:* Sumatoria de productos activos únicos registrados.
+  - *Productos Totales (Fase 2):* Métrica que muestra el conteo total absoluto de productos activos registrados en el catálogo. Reemplaza la antigua métrica de margen de ganancia promedio.
+  - *Variedad del Catálogo (Fase 2):* Sumatoria o conteo de categorías/familias distintas con productos activos registrados en el catálogo.
+- **Alineación de Tabla Premium (Fase 2):** Se removieron estilos inline de alineación y bordes de la tabla de productos para dar paso a un maquetado estilizado apoyado exclusivamente en clases nativas de Tailwind CSS. Las cabeceras y filas de datos están perfectamente alineadas de manera consistente (`text-left` para textos, `text-right` para columnas numéricas de stock y precio de venta, y `text-center` para el estado y las acciones).
+- **Vista de Tarjetas Móvil Responsiva (Mobile-First):** En pantallas pequeñas (`block lg:hidden`), la tabla del catálogo se oculta para desplegar tarjetas independientes e interactivas para cada producto. Estas tarjetas facilitan la visualización sin desbordamientos de datos en teléfonos inteligentes y optimizan las acciones rápidas (ajuste manual de stock, edición o desactivación) para cajeros y almaceneros.
 
 ## 14. Integración del Mapa Interactivo y Geolocalización de Clientes (`GestionClientes.jsx`, `MapaInteractivo.jsx`)
 - **Controlador del Mapa Wrapper de Leaflet (`MapaInteractivo.jsx`):**

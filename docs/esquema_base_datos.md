@@ -119,4 +119,17 @@ Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se 
   - `pedidos_delivery` (Integer): Recuento absoluto de envíos/repartos solicitados en la tabla `envios` dentro del período auditado.
   - `productos_vendidos` (Integer): Suma acumulada de las cantidades físicas (`cantidad` en `detalles_ventas`) asociadas a transacciones con estado de venta 'Completada' dentro del período.
 
+### K. Función Almacenada: registrar_reabastecimiento (SECURITY DEFINER)
+- **Tipo:** Función PL/pgSQL
+- **Parámetros:**
+  - `p_usuario_id` (UUID)
+  - `p_proveedor_nombre` (Varchar)
+  - `p_codigo_referencia` (Varchar)
+  - `p_total` (Numeric)
+  - `p_items` (JSONB)
+- **Comportamiento:** Registra la cabecera y el detalle de una compra o reabastecimiento en lote, previniendo deadlocks al ordenar los productos por ID antes del procesamiento. Actualiza el stock de los productos ingresados y reajusta automáticamente el precio de compra en el catálogo.
+- **Validaciones de Integridad (Fase 2):**
+  * Comprueba si el producto se encuentra en estado `'Activo'`.
+  * **Código de error `P0009`**: Lanzado por el motor SQL si se intenta reabastecer o ingresar stock de un producto cuyo estado es `'Inactivo'`.
+
 
