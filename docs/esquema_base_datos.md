@@ -112,6 +112,9 @@ Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se 
 ### J. Función Almacenada: obtener_metricas_dashboard
 - **Tipo:** Función PL/pgSQL
 - **Parámetros:** `p_fecha_inicio` (Date, Opcional), `p_fecha_fin` (Date, Opcional)
-- **Comportamiento:** Consolida las métricas financieras, conteo de transacciones, saldos deudores, efectividad de entregas y ventas por categoría del negocio. Si se especifican las fechas de inicio y fin, filtra el análisis para ese rango inclusivo y calcula la tendencia de ventas comparándola contra el período espejo anterior de igual duración exacta.
+- **Comportamiento:** Consolida las métricas financieras, conteo de transacciones, saldos deudores, efectividad de entregas, distribución de ventas por categoría y KPIs clave del negocio. Si se especifican las fechas de inicio y fin, filtra el análisis para ese rango inclusivo y calcula la tendencia de ventas comparándola contra el período espejo anterior de igual duración exacta.
+- **Métricas Clave Agregadas (Fase 2):**
+  - `pedidos_delivery` (Integer): Recuento absoluto de envíos/repartos solicitados en la tabla `envios` dentro del período auditado.
+  - `productos_vendidos` (Integer): Suma acumulada de las cantidades físicas (`cantidad` en `detalles_ventas`) asociadas a transacciones con estado de venta 'Completada' dentro del período.
 
 

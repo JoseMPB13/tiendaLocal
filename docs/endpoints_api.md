@@ -752,7 +752,13 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
       "total_ventas": 125430.50,
       "cantidad_transacciones": 1540,
       "deudas_activas_calle": 8450.00,
-      "efectividad_delivery_porcentaje": 94.20
+      "efectividad_delivery_porcentaje": 94.20,
+      "pedidos_delivery": 120,
+      "productos_vendidos": 1250,
+      "ventas_por_categoria": [
+        { "name": "Gaseosas", "valor": 45000.00 },
+        { "name": "Abarrotes", "valor": 80430.50 }
+      ]
     }
   }
   ```
