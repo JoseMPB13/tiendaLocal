@@ -182,6 +182,14 @@ export const PuntoVenta = () => {
 
   const inputBuscarRef = useRef(null);
 
+  // Helper para verificar si una fecha ISO corresponde al día de hoy local del cliente (en español)
+  const esMismoDia = (fechaStr) => {
+    if (!fechaStr) return false;
+    const fechaVenta = new Date(fechaStr);
+    const hoy = new Date();
+    return fechaVenta.toDateString() === hoy.toDateString();
+  };
+
   // Zustand stores
   const {
     carrito, clienteSeleccionado, metodoPago,
@@ -1313,7 +1321,7 @@ export const PuntoVenta = () => {
                             >
                               <Eye size={13} />
                             </button>
-                            {v.estado_venta !== 'Cancelada' && (
+                            {v.estado_venta !== 'Cancelada' && esMismoDia(v.fecha_venta) && (
                               <>
                                 <button
                                   onClick={() => handleCargarEdicion(v.id)}
@@ -1375,7 +1383,7 @@ export const PuntoVenta = () => {
                         >
                           <Eye size={12} /> Detalles
                         </button>
-                        {v.estado_venta !== 'Cancelada' && (
+                        {v.estado_venta !== 'Cancelada' && esMismoDia(v.fecha_venta) && (
                           <>
                             <button
                               onClick={() => handleCargarEdicion(v.id)}
@@ -1780,7 +1788,7 @@ export const PuntoVenta = () => {
                   </button>
                 ) : (
                   <>
-                    {ventaSeleccionada && ventaSeleccionada.estado_venta !== 'Cancelada' && (
+                    {ventaSeleccionada && ventaSeleccionada.estado_venta !== 'Cancelada' && esMismoDia(ventaSeleccionada.fecha_venta) && (
                       <button
                         disabled={procesandoCancelacion}
                         onClick={() => handleAnularVenta(ventaSeleccionada.id)}
