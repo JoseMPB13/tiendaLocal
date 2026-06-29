@@ -733,11 +733,21 @@ execute function fn_facturar_venta();
 -- -----------------------------------------------------------------------------
 create or replace function cancelar_venta(p_venta_id uuid)
 returns uuid as $$
+declare
+    v_fecha_venta timestamptz;
 begin
-    -- Validar existencia
-    if not exists (select 1 from ventas where id = p_venta_id) then
+    -- Validar existencia y extraer la fecha original de la venta
+    select fecha_venta into v_fecha_venta from ventas where id = p_venta_id;
+    
+    if not found then
         raise exception 'La venta especificada no existe.'
             using errcode = 'P0005';
+    end if;
+
+    -- Validar que la venta se haya realizado el mismo día actual del servidor
+    if v_fecha_venta::date <> current_date then
+        raise exception 'Solo se pueden anular ventas realizadas el mismo día.'
+            using errcode = 'P0008';
     end if;
 
     -- Actualizar estado. Esto disparará automáticamente trg_revertir_venta_cancelada
@@ -754,7 +764,7 @@ begin
 end;
 $$ language plpgsql;
 
-comment on function cancelar_venta is 'Realiza la baja lógica de una venta y actualiza su factura asociada.';
+comment on function cancelar_venta is 'Realiza la baja lógica de una venta y actualiza su factura asociada, restringido al mismo día.';
 
 
 -- -----------------------------------------------------------------------------
@@ -775,8 +785,9 @@ declare
     v_old_tipo_pago varchar(30);
     v_old_total numeric(12, 2);
     v_old_estado_venta varchar(30);
+    v_old_fecha_venta timestamptz;
     v_new_total numeric(12, 2) := 0.00;
-    v_item jsonb;
+    v_item record; -- Se cambia de jsonb a record para evitar errores DML con alias
     v_detail record;
     v_stock_actual integer;
     v_stock_minimo integer;
@@ -785,14 +796,19 @@ declare
     v_subtotal numeric(12, 2);
 begin
     -- 1. Obtener datos actuales de la venta
-    select cliente_id, tipo_pago, total, estado_venta
-    into v_old_cliente_id, v_old_tipo_pago, v_old_total, v_old_estado_venta
+    select cliente_id, tipo_pago, total, estado_venta, fecha_venta
+    into v_old_cliente_id, v_old_tipo_pago, v_old_total, v_old_estado_venta, v_old_fecha_venta
     from ventas
     where id = p_venta_id
     for update;
 
     if not found then
         raise exception 'La venta especificada no existe.' using errcode = 'P0005';
+    end if;
+
+    -- Validar restricción de edición al mismo día
+    if v_old_fecha_venta::date <> current_date then
+        raise exception 'Solo se pueden editar ventas realizadas el mismo día.' using errcode = 'P0007';
     end if;
 
     if v_old_estado_venta = 'Cancelada' then
@@ -822,13 +838,17 @@ begin
         where id = v_old_cliente_id;
     end if;
 
-    -- 3. Calcular el nuevo total y validar stock/precios
-    for v_item in select jsonb_array_elements(p_items)
+    -- 3. Calcular el nuevo total y validar stock/precios usando desempaquetamiento explícito
+    for v_item in 
+        select (x.value->>'producto_id')::uuid as producto_id, 
+               (x.value->>'cantidad')::integer as cantidad, 
+               (x.value->>'precio_unitario')::numeric as precio_unitario 
+        from jsonb_array_elements(p_items) as x(value) 
     loop
         select precio_venta, stock_actual, stock_minimo, nombre
         into v_precio_oficial, v_stock_actual, v_stock_minimo, v_nombre_prod
         from productos
-        where id = (v_item.value->>'producto_id')::uuid
+        where id = v_item.producto_id
         for update;
 
         if not found then
@@ -836,13 +856,13 @@ begin
         end if;
 
         -- Validar stock (recordando que acabamos de sumarle la cantidad anterior)
-        if v_stock_actual < (v_item.value->>'cantidad')::integer then
+        if v_stock_actual < v_item.cantidad then
             raise exception 'Stock insuficiente para el producto "%". Stock disponible: %, solicitado: %', 
-                v_nombre_prod, v_stock_actual, (v_item.value->>'cantidad')::integer
+                v_nombre_prod, v_stock_actual, v_item.cantidad
                 using errcode = 'P0001';
         end if;
 
-        v_new_total := v_new_total + ((v_item.value->>'cantidad')::integer * v_precio_oficial);
+        v_new_total := v_new_total + (v_item.cantidad * v_precio_oficial);
     end loop;
 
     -- 4. Validar límite de crédito del nuevo cliente si el pago es a crédito
@@ -869,26 +889,30 @@ begin
     -- 5. Eliminar detalles viejos
     delete from detalles_ventas where venta_id = p_venta_id;
 
-    -- 6. Insertar nuevos detalles y descontar stock
-    for v_item in select jsonb_array_elements(p_items)
+    -- 6. Insertar nuevos detalles y descontar stock usando desempaquetamiento explícito
+    for v_item in 
+        select (x.value->>'producto_id')::uuid as producto_id, 
+               (x.value->>'cantidad')::integer as cantidad, 
+               (x.value->>'precio_unitario')::numeric as precio_unitario 
+        from jsonb_array_elements(p_items) as x(value) 
     loop
-        v_subtotal := (v_item.value->>'cantidad')::integer * (v_item.value->>'precio_unitario')::numeric;
+        v_subtotal := v_item.cantidad * v_item.precio_unitario;
         
         insert into detalles_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal)
         values (
             p_venta_id, 
-            (v_item.value->>'producto_id')::uuid, 
-            (v_item.value->>'cantidad')::integer, 
-            (v_item.value->>'precio_unitario')::numeric,
+            v_item.producto_id, 
+            v_item.cantidad, 
+            v_item.precio_unitario,
             v_subtotal
         );
 
         update productos
-        set stock_actual = stock_actual - (v_item.value->>'cantidad')::integer
-        where id = (v_item.value->>'producto_id')::uuid;
+        set stock_actual = stock_actual - v_item.cantidad
+        where id = v_item.producto_id;
 
         insert into historial_stock (producto_id, cantidad_cambio, tipo_movimiento, referencia_id, motivo)
-        values ((v_item.value->>'producto_id')::uuid, -(v_item.value->>'cantidad')::integer, 'Venta', p_venta_id, 'Ajuste de cantidad en venta');
+        values (v_item.producto_id, -v_item.cantidad, 'Venta', p_venta_id, 'Ajuste de cantidad en venta');
     end loop;
 
     -- 7. Actualizar cabecera de la venta
@@ -936,7 +960,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
-comment on function actualizar_venta is 'Actualiza una venta y sus detalles reajustando stock y deudas (atómico).';
+comment on function actualizar_venta is 'Actualiza una venta y sus detalles reajustando stock y deudas (atómico), restringido al mismo día.';
 
 
 
