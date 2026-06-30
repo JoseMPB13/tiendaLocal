@@ -36,28 +36,56 @@ export const GestionEnvios = () => {
   const [pagina, setPagina] = useState(1);
   const itemsPorPagina = 5;
 
-  // Extractor universal de coordenadas dual (prioridad cliente, luego url de mapa, luego fallback)
-  const resolverCoordenadas = (envioOCliente) => {
-    if (!envioOCliente) return [-17.7833, -63.1667];
-    
-    // 1. Coordenadas explícitas en el objeto o en objeto.cliente
-    let lat = envioOCliente.latitud ?? envioOCliente.cliente?.latitud;
-    let lng = envioOCliente.longitud ?? envioOCliente.cliente?.longitud;
-    
-    if (lat !== undefined && lat !== null && lng !== undefined && lng !== null) {
-      const pLat = parseFloat(lat);
-      const pLng = parseFloat(lng);
-      if (!isNaN(pLat) && !isNaN(pLng)) {
-        return [pLat, pLng];
+  // Extractor universal de coordenadas dual con búsqueda profunda en jerarquía de objetos
+  const resolverCoordenadas = (obj) => {
+    if (!obj) return [-17.7833, -63.1667];
+
+    // Intentar encontrar latitud y longitud numéricas válidas en cualquier parte del objeto
+    const buscarCoords = (o) => {
+      if (!o || typeof o !== 'object') return null;
+      
+      let lat = o.latitud;
+      let lng = o.longitud;
+      if (lat !== undefined && lat !== null && lng !== undefined && lng !== null) {
+        const pLat = parseFloat(lat);
+        const pLng = parseFloat(lng);
+        if (!isNaN(pLat) && !isNaN(pLng) && pLat !== 0 && pLng !== 0) {
+          return [pLat, pLng];
+        }
       }
-    }
-    
-    // 2. Fallback de Enlace (regex para buscar lat/lng decimales en la URL)
-    const enlace = envioOCliente.enlace_mapa ?? envioOCliente.enlace_ubicacion ?? 
-                   envioOCliente.cliente?.enlace_mapa ?? envioOCliente.cliente?.enlace_ubicacion;
-    if (enlace && typeof enlace === 'string') {
+
+      // Buscar recursivamente en objetos hijos comunes
+      for (const key of ['cliente', 'clientes', 'venta', 'ventas']) {
+        if (o[key]) {
+          const res = buscarCoords(o[key]);
+          if (res) return res;
+        }
+      }
+      return null;
+    };
+
+    const coordsValidas = buscarCoords(obj);
+    if (coordsValidas) return coordsValidas;
+
+    // Fallback de Enlace: Buscar enlace_mapa o enlace_ubicacion en cualquier parte del objeto
+    const buscarEnlace = (o) => {
+      if (!o || typeof o !== 'object') return null;
+      let enlace = o.enlace_mapa || o.enlace_ubicacion;
+      if (enlace && typeof enlace === 'string') return enlace;
+
+      for (const key of ['cliente', 'clientes', 'venta', 'ventas']) {
+        if (o[key]) {
+          const res = buscarEnlace(o[key]);
+          if (res) return res;
+        }
+      }
+      return null;
+    };
+
+    const enlaceUrl = buscarEnlace(obj);
+    if (enlaceUrl) {
       const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)|q=(-?\d+\.\d+),(-?\d+\.\d+)|(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)/;
-      const match = enlace.match(regex);
+      const match = enlaceUrl.match(regex);
       if (match) {
         const latStr = match[1] || match[3] || match[5];
         const lngStr = match[2] || match[4] || match[6];
@@ -70,8 +98,8 @@ export const GestionEnvios = () => {
         }
       }
     }
-    
-    // 3. Coordenadas por defecto (Santa Cruz de la Sierra)
+
+    // Coordenadas por defecto (Santa Cruz de la Sierra)
     return [-17.7833, -63.1667];
   };
 
@@ -84,10 +112,10 @@ export const GestionEnvios = () => {
   const [procesandoForm, setProcesandoForm] = useState(false);
 
   // Modal para cancelación del envío con motivo obligatorio
-  const [mostrarModalCancelar, setMostrarModalCancelar] = useState(false);
-  const [envioACancelar, setEnvioACancelar] = useState(null);
-  const [motivoCancelacion, setMotivoCancelacion] = useState('');
-  const [procesandoCancelar, setProcesandoCancelar] = useState(false);
+  const [mostrarModalCancelarAdmin, setMostrarModalCancelarAdmin] = useState(false);
+  const [envioCancelarId, setEnvioCancelarId] = useState(null);
+  const [motivoCancelarAdmin, setMotivoCancelarAdmin] = useState('');
+  const [procesandoCancelarAdmin, setProcesandoCancelarAdmin] = useState(false);
 
   // Modal para ver detalles logísticos con mapa
   const [mostrarModalDetalle, setMostrarModalDetalle] = useState(false);
@@ -277,34 +305,30 @@ export const GestionEnvios = () => {
   };
 
   // Abrir modal de cancelación con motivo obligatorio
-  const abrirModalCancelar = (envioId) => {
-    setEnvioACancelar(envioId);
-    setMotivoCancelacion('');
-    setMostrarModalCancelar(true);
+  const handleAbrirModalCancelar = (envioId) => {
+    setEnvioCancelarId(envioId);
+    setMotivoCancelarAdmin('');
+    setMostrarModalCancelarAdmin(true);
   };
 
   // Confirmar cancelación con motivo obligatorio
-  const handleConfirmarCancelar = async () => {
-    if (!motivoCancelacion.trim() || !envioACancelar) return;
+  const handleCancelarEnvioAdmin = async () => {
+    if (!motivoCancelarAdmin.trim() || !envioCancelarId) return;
     try {
-      setProcesandoCancelar(true);
-      const payload = {
-        estado_envio: 'Cancelado',
-        motivo_cancelacion: motivoCancelacion.trim()
-      };
-      const res = await deliveryService.actualizarEstadoEnvio(envioACancelar, payload);
+      setProcesandoCancelarAdmin(true);
+      const res = await deliveryService.cancelarEnvio(envioCancelarId, motivoCancelarAdmin.trim());
       if (res.ok) {
         toast.success('Envío cancelado correctamente.');
-        setMostrarModalCancelar(false);
-        setEnvioACancelar(null);
-        setMotivoCancelacion('');
+        setMostrarModalCancelarAdmin(false);
+        setEnvioCancelarId(null);
+        setMotivoCancelarAdmin('');
         cargarDatos();
       }
     } catch (ex) {
       const errorMsg = ex.response?.data?.detail || 'No se pudo cancelar el envío.';
       toast.error(`Error: ${errorMsg}`);
     } finally {
-      setProcesandoCancelar(false);
+      setProcesandoCancelarAdmin(false);
     }
   };
 
@@ -657,7 +681,7 @@ export const GestionEnvios = () => {
                                     Iniciar Ruta
                                   </button>
                                   <button
-                                    onClick={() => abrirModalCancelar(env.id)}
+                                    onClick={() => handleAbrirModalCancelar(env.id)}
                                     className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-semibold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 select-none cursor-pointer"
                                     title="Cancelar envío administrativamente"
                                   >
@@ -676,7 +700,7 @@ export const GestionEnvios = () => {
                                     Entregado
                                   </button>
                                   <button
-                                    onClick={() => abrirModalCancelar(env.id)}
+                                    onClick={() => handleAbrirModalCancelar(env.id)}
                                     className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-semibold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 select-none cursor-pointer"
                                   >
                                     <Ban size={12} />
@@ -811,7 +835,7 @@ export const GestionEnvios = () => {
                               <Play size={10} /> Iniciar Ruta
                             </button>
                             <button
-                              onClick={() => abrirModalCancelar(env.id)}
+                              onClick={() => handleAbrirModalCancelar(env.id)}
                               className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[10px] font-bold px-2 py-1 rounded-lg transition flex items-center gap-0.5 select-none cursor-pointer"
                             >
                               <Ban size={10} /> Cancelar
@@ -828,7 +852,7 @@ export const GestionEnvios = () => {
                               <Check size={10} /> Entregado
                             </button>
                             <button
-                              onClick={() => abrirModalCancelar(env.id)}
+                              onClick={() => handleAbrirModalCancelar(env.id)}
                               className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[10px] font-bold px-2 py-1 rounded-lg transition flex items-center gap-0.5 select-none cursor-pointer"
                             >
                               <Ban size={10} /> Cancelar
@@ -874,11 +898,11 @@ export const GestionEnvios = () => {
                   <option value="">-- Seleccione una Venta --</option>
                   {ventas
                     .filter(v => {
-                      // Solo ventas marcadas para delivery
-                      const requiereDelivery = v.para_delivery === true;
+                      // Solo ventas en estado Completada
+                      const esCompletada = v.estado_venta === 'Completada';
                       // Evitar duplicar despachos para un mismo ticket
                       const tieneEnvioActivo = envios.some(e => e.venta_id === v.id);
-                      return requiereDelivery && !tieneEnvioActivo;
+                      return esCompletada && !tieneEnvioActivo;
                     })
                     .map(v => {
                       const cli = clientes.find(c => c.id === v.cliente_id);
@@ -931,6 +955,7 @@ export const GestionEnvios = () => {
                 <label className="block text-xs font-semibold text-zinc-700 mb-1.5">Ubicación de Destino (Verificación Visual)</label>
                 <div className="w-full h-40 rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 relative z-10">
                   <MapaInteractivo
+                    key={`${formLat}-${formLng}`}
                     lat={formLat}
                     lng={formLng}
                     soloLectura={true}
@@ -977,7 +1002,7 @@ export const GestionEnvios = () => {
       )}
 
       {/* MODAL: CANCELACIÓN CON MOTIVO OBLIGATORIO */}
-      {mostrarModalCancelar && (
+      {mostrarModalCancelarAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-zinc-200 transition-all duration-300">
             <div className="flex items-center justify-between pb-4 border-b border-zinc-100">
@@ -986,7 +1011,7 @@ export const GestionEnvios = () => {
                 Cancelar Orden de Envío
               </h3>
               <button
-                onClick={() => setMostrarModalCancelar(false)}
+                onClick={() => setMostrarModalCancelarAdmin(false)}
                 className="text-zinc-400 hover:text-zinc-600 p-1 hover:bg-zinc-100 rounded-lg transition-colors"
               >
                 <X size={20} />
@@ -1003,8 +1028,8 @@ export const GestionEnvios = () => {
                   Motivo de Cancelación <span className="text-rose-500">*</span>
                 </label>
                 <textarea
-                  value={motivoCancelacion}
-                  onChange={(e) => setMotivoCancelacion(e.target.value)}
+                  value={motivoCancelarAdmin}
+                  onChange={(e) => setMotivoCancelarAdmin(e.target.value)}
                   placeholder="Escriba la justificación detallada de la cancelación..."
                   rows="3"
                   className="w-full px-3.5 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none resize-none transition-all placeholder:text-zinc-400 font-medium text-zinc-800"
@@ -1015,20 +1040,20 @@ export const GestionEnvios = () => {
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setMostrarModalCancelar(false)}
-                  disabled={procesandoCancelar}
+                  onClick={() => setMostrarModalCancelarAdmin(false)}
+                  disabled={procesandoCancelarAdmin}
                   className="flex-1 py-2 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-sm font-medium transition-all cursor-pointer"
                 >
                   Regresar
                 </button>
                 <button
                   type="button"
-                  onClick={handleConfirmarCancelar}
-                  disabled={procesandoCancelar || !motivoCancelacion.trim()}
+                  onClick={handleCancelarEnvioAdmin}
+                  disabled={procesandoCancelarAdmin || !motivoCancelarAdmin.trim()}
                   className="flex-1 py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Ban size={15} />
-                  {procesandoCancelar ? 'Cancelando...' : 'Confirmar Cancelación'}
+                  {procesandoCancelarAdmin ? 'Cancelando...' : 'Confirmar Cancelación'}
                 </button>
               </div>
             </div>
@@ -1099,6 +1124,7 @@ export const GestionEnvios = () => {
 
                 <div className="w-full h-64 rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 shadow-inner relative z-10">
                   <MapaInteractivo
+                    key={`${resolverCoordenadas(envioSeleccionado)[0]}-${resolverCoordenadas(envioSeleccionado)[1]}`}
                     lat={resolverCoordenadas(envioSeleccionado)[0]}
                     lng={resolverCoordenadas(envioSeleccionado)[1]}
                     soloLectura={true}
@@ -1185,6 +1211,7 @@ export const GestionEnvios = () => {
                 <label className="block text-xs font-semibold text-zinc-700 mb-1.5">Ubicación de Destino (Verificación Visual)</label>
                 <div className="w-full h-40 rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 relative z-10">
                   <MapaInteractivo
+                    key={`${formLat}-${formLng}`}
                     lat={formLat}
                     lng={formLng}
                     soloLectura={true}
