@@ -106,6 +106,7 @@ export const GestionEnvios = () => {
   // Modal para registrar envío manual
   const [mostrarForm, setMostrarForm] = useState(false);
   const [ventaId, setVentaId] = useState('');
+  const [envioSeleccionadoId, setEnvioSeleccionadoId] = useState('');
   const [repartidorId, setRepartidorId] = useState('');
   const [direccion, setDireccion] = useState('');
   const [costoEnvio, setCostoEnvio] = useState('0.00');
@@ -151,6 +152,7 @@ export const GestionEnvios = () => {
       if (resVentas.ok) setVentas(resVentas.data || []);
       if (resClientes.ok) setClientes(resClientes.data || []);
       setVentaId('');
+      setEnvioSeleccionadoId('');
       setRepartidorId('');
       setDireccion('');
       setCostoEnvio('0.00');
@@ -163,31 +165,23 @@ export const GestionEnvios = () => {
     }
   };
 
-  const handleVentaChange = (vId) => {
-    setVentaId(vId);
-    if (!vId) {
+  const handleEnvioChange = (envId) => {
+    setEnvioSeleccionadoId(envId);
+    if (!envId) {
+      setVentaId('');
       setDireccion('');
       setFormLat(-17.7833);
       setFormLng(-63.1667);
+      setCostoEnvio('0.00');
       return;
     }
-    const selectedVenta = ventas.find(v => v.id === vId);
-    if (selectedVenta) {
-      const cli = clientes.find(c => c.id === selectedVenta.cliente_id);
-      
-      // Auto-rellenar la dirección física de entrega (direccion_despacho de venta o del cliente)
-      const dirEntrega = selectedVenta.direccion_despacho || cli?.direccion || '';
-      setDireccion(dirEntrega);
-
-      // Combinar venta y cliente para resolver sus coordenadas de forma robusta
-      const ventaConCliente = {
-        ...selectedVenta,
-        cliente: cli
-      };
-
-      const [resolvedLat, resolvedLng] = resolverCoordenadas(ventaConCliente);
-      setFormLat(resolvedLat);
-      setFormLng(resolvedLng);
+    const selectedEnvio = envios.find(e => e.id === envId);
+    if (selectedEnvio) {
+      setVentaId(selectedEnvio.venta_id);
+      setDireccion(selectedEnvio.direccion_despacho);
+      setCostoEnvio(selectedEnvio.costo_envio.toString());
+      setFormLat(selectedEnvio.latitud || -17.7833);
+      setFormLng(selectedEnvio.longitud || -63.1667);
     }
   };
 
@@ -214,7 +208,9 @@ export const GestionEnvios = () => {
     const payload = {
       direccion_despacho: editDireccion.trim(),
       costo_envio: parseFloat(editCostoEnvio) || 0.00,
-      repartidor_id: editRepartidorId || null
+      repartidor_id: editRepartidorId || null,
+      latitud: formLat || null,
+      longitud: formLng || null
     };
 
     try {
@@ -335,8 +331,8 @@ export const GestionEnvios = () => {
   // Guardar Envío Creado Manuelmente
   const handleGuardarEnvio = async (e) => {
     e.preventDefault();
-    if (!ventaId.trim()) {
-      toast.error("El UUID de la venta es requerido.");
+    if (!envioSeleccionadoId) {
+      toast.error("Debe seleccionar una orden en espera.");
       return;
     }
     if (!direccion.trim()) {
@@ -346,18 +342,21 @@ export const GestionEnvios = () => {
 
     setProcesandoForm(true);
     const payload = {
-      venta_id: ventaId.trim(),
+      estado_envio: 'Pendiente',
       repartidor_id: repartidorId || null,
       direccion_despacho: direccion,
-      costo_envio: parseFloat(costoEnvio) || 0.00
+      costo_envio: parseFloat(costoEnvio) || 0.00,
+      latitud: formLat || null,
+      longitud: formLng || null
     };
 
     try {
-      const res = await deliveryService.crearEnvio(payload);
+      const res = await deliveryService.actualizarEnvio(envioSeleccionadoId, payload);
       if (res.ok) {
-        toast.success("Orden de delivery registrada.");
+        toast.success("Despacho iniciado y asignado.");
         setMostrarForm(false);
         setVentaId('');
+        setEnvioSeleccionadoId('');
         setRepartidorId('');
         setDireccion('');
         setCostoEnvio('0.00');
@@ -374,6 +373,7 @@ export const GestionEnvios = () => {
   // Filtrado y Ordenación descendente por fecha de creación (los más recientes primero)
   const enviosFiltrados = envios
     .filter(env => {
+      if (env.estado_envio === 'Por Despachar') return false;
       const coincideBuscar = env.venta_id.toLowerCase().includes(buscarVenta.toLowerCase());
       const coincideEstado = filtroEstado === 'Todos' || env.estado_envio === filtroEstado;
       return coincideBuscar && coincideEstado;
@@ -888,29 +888,25 @@ export const GestionEnvios = () => {
 
             <form onSubmit={handleGuardarEnvio} className="my-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1">Seleccionar Venta <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">Seleccionar Orden en Espera <span className="text-red-500">*</span></label>
                 <select
                   required
-                  value={ventaId}
-                  onChange={(e) => handleVentaChange(e.target.value)}
+                  value={envioSeleccionadoId}
+                  onChange={(e) => handleEnvioChange(e.target.value)}
                   className="w-full border border-zinc-200 rounded-xl text-sm py-2 px-3 bg-white focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none transition-all cursor-pointer font-medium text-zinc-700"
                 >
-                  <option value="">-- Seleccione una Venta --</option>
-                  {ventas
-                    .filter(v => {
-                      // Solo ventas en estado Completada
-                      const esCompletada = v.estado_venta === 'Completada';
-                      // Evitar duplicar despachos para un mismo ticket
-                      const tieneEnvioActivo = envios.some(e => e.venta_id === v.id);
-                      return esCompletada && !tieneEnvioActivo;
-                    })
-                    .map(v => {
-                      const cli = clientes.find(c => c.id === v.cliente_id);
+                  <option value="">-- Seleccione una Orden --</option>
+                  {envios
+                    .filter(e => e.estado_envio === 'Por Despachar')
+                    .map(env => {
+                      const v = ventas.find(vent => vent.id === env.venta_id);
+                      const cli = clientes.find(c => c.id === v?.cliente_id);
                       const clienteNombre = cli ? cli.nombre : 'Cliente Desconocido';
-                      const totalStr = v.total.toFixed(2);
+                      const totalStr = v ? v.total.toFixed(2) : '0.00';
+                      const facturaStr = v ? v.codigo_factura : 'Sin Código';
                       return (
-                        <option key={v.id} value={v.id}>
-                          [{v.codigo_factura || 'Sin Código'}] - {clienteNombre} - Bs. {totalStr}
+                        <option key={env.id} value={env.id}>
+                          [{facturaStr}] - {clienteNombre} - Bs. {totalStr}
                         </option>
                       );
                     })}
