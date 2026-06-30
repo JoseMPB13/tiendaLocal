@@ -850,6 +850,13 @@ alter table historial_stock enable row level security;
 create policy "Permitir select de historial_stock a todos"
 on historial_stock for select to anon, authenticated using (true);
 
+-- Política de INSERT necesaria para que los triggers y stored procedures
+-- (fn_controlar_stock_venta, fn_revertir_venta_cancelada, fn_ajustar_stock)
+-- puedan poblar esta tabla sin ser bloqueados por el RLS.
+drop policy if exists "Permitir insert de historial_stock a autenticados" on historial_stock;
+create policy "Permitir insert de historial_stock a autenticados"
+on historial_stock for insert to anon, authenticated with check (true);
+
 
 -- -----------------------------------------------------------------------------
 -- 12. TABLA Y POLÍTICAS: bitacora_usuarios (Paso 9)

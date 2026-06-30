@@ -991,22 +991,39 @@ returns table (
     total_salidas numeric,
     balance_neto numeric,
     cantidad_movimientos bigint
-) as $$
+)
+language plpgsql
+security definer
+as $$
 declare
-    v_trunc_period text;
+    v_trunc_period   text;
+    v_inicio_periodo timestamptz;
+    v_fin_periodo    timestamptz;
 begin
+    -- Calcular inicio y fin del período activo en UTC
     if p_periodo = 'dia' then
-        v_trunc_period := 'day';
+        v_trunc_period   := 'day';
+        v_inicio_periodo := date_trunc('day',   now() at time zone 'UTC');
+        v_fin_periodo    := v_inicio_periodo + interval '1 day';
+
     elsif p_periodo = 'semana' then
-        v_trunc_period := 'week';
+        v_trunc_period   := 'week';
+        v_inicio_periodo := date_trunc('week',  now() at time zone 'UTC');
+        v_fin_periodo    := v_inicio_periodo + interval '1 week';
+
     elsif p_periodo = 'mes' then
-        v_trunc_period := 'month';
+        v_trunc_period   := 'month';
+        v_inicio_periodo := date_trunc('month', now() at time zone 'UTC');
+        v_fin_periodo    := v_inicio_periodo + interval '1 month';
+
     else
-        v_trunc_period := 'day';
+        v_trunc_period   := 'day';
+        v_inicio_periodo := date_trunc('day',   now() at time zone 'UTC');
+        v_fin_periodo    := v_inicio_periodo + interval '1 day';
     end if;
 
     return query
-    select 
+    select
         date_trunc(v_trunc_period, hs.fecha_movimiento)::timestamp with time zone as periodo_fecha,
         hs.producto_id,
         p.nombre as producto_nombre,
@@ -1017,12 +1034,14 @@ begin
         count(*)::bigint as cantidad_movimientos
     from historial_stock hs
     join productos p on p.id = hs.producto_id
+    where hs.fecha_movimiento >= v_inicio_periodo   -- Solo el período activo
+      and hs.fecha_movimiento <  v_fin_periodo       -- Límite superior exclusivo
     group by 1, hs.producto_id, p.nombre, hs.tipo_movimiento
     order by 1 desc, p.nombre asc;
 end;
-$$ language plpgsql;
+$$ language plpgsql security definer;
 
-comment on function obtener_movimientos_stock_agrupados(text) is 'Retorna movimientos de stock agrupados y consolidados por día, semana o mes.';
+comment on function obtener_movimientos_stock_agrupados(text) is 'Retorna movimientos de stock del período activo (dia/semana/mes) desde ahora en UTC. SECURITY DEFINER garantiza bypass de RLS para la consulta.';
 
 
 -- -----------------------------------------------------------------------------
