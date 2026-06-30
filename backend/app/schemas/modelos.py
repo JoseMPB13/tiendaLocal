@@ -177,6 +177,9 @@ class VentaRespuesta(VentaBase):
     total: float
     estado_venta: str
     fecha_venta: datetime
+    para_delivery: bool = False
+    direccion_despacho: Optional[str] = None
+    costo_envio: float = 0.00
 
     class Config:
         from_attributes = True

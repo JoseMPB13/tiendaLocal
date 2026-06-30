@@ -16,7 +16,7 @@ import PaginadorTablas from '../components/PaginadorTablas';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Truck, Plus, Search, Filter, MapPin, 
-  CheckCircle2, Clock, X, ShieldAlert, Ban, Eye, Edit3
+  CheckCircle2, Clock, X, ShieldAlert, Ban, Eye, Edit3, Play, Check
 } from 'lucide-react';
 import MapaInteractivo from '../components/MapaInteractivo';
 import ventaService from '../services/ventaService';
@@ -65,6 +65,10 @@ export const GestionEnvios = () => {
   const [editRepartidorId, setEditRepartidorId] = useState('');
   const [procesandoEdit, setProcesandoEdit] = useState(false);
 
+  // Coordenadas geográficas locales para el mapa en los formularios de creación/edición
+  const [formLat, setFormLat] = useState(-17.7833);
+  const [formLng, setFormLng] = useState(-63.1667);
+
   const abrirDetalleEnvio = (env) => {
     setEnvioSeleccionado(env);
     setMostrarModalDetalle(true);
@@ -83,6 +87,8 @@ export const GestionEnvios = () => {
       setRepartidorId('');
       setDireccion('');
       setCostoEnvio('0.00');
+      setFormLat(-17.7833);
+      setFormLng(-63.1667);
       setMostrarForm(true);
     } catch (err) {
       console.error(err);
@@ -94,15 +100,26 @@ export const GestionEnvios = () => {
     setVentaId(vId);
     if (!vId) {
       setDireccion('');
+      setFormLat(-17.7833);
+      setFormLng(-63.1667);
       return;
     }
     const selectedVenta = ventas.find(v => v.id === vId);
     if (selectedVenta) {
       const cli = clientes.find(c => c.id === selectedVenta.cliente_id);
-      if (cli && cli.direccion) {
-        setDireccion(cli.direccion);
-      } else {
-        setDireccion('');
+      if (cli) {
+        if (cli.direccion) {
+          setDireccion(cli.direccion);
+        } else {
+          setDireccion('');
+        }
+        if (cli.latitud && cli.longitud) {
+          setFormLat(Number(cli.latitud));
+          setFormLng(Number(cli.longitud));
+        } else {
+          setFormLat(-17.7833);
+          setFormLng(-63.1667);
+        }
       }
     }
   };
@@ -113,6 +130,13 @@ export const GestionEnvios = () => {
     setEditDireccion(env.direccion_despacho);
     setEditCostoEnvio(env.costo_envio.toString());
     setEditRepartidorId(env.repartidor_id || '');
+    if (env.cliente?.latitud && env.cliente?.longitud) {
+      setFormLat(Number(env.cliente.latitud));
+      setFormLng(Number(env.cliente.longitud));
+    } else {
+      setFormLat(-17.7833);
+      setFormLng(-63.1667);
+    }
     setMostrarModalEditar(true);
   };
 
@@ -586,16 +610,18 @@ export const GestionEnvios = () => {
                                   <button
                                     onClick={() => handleActualizarEstado(env.id, 'En Camino')}
                                     disabled={!env.repartidor_id}
-                                    className="py-1.5 px-3 bg-zinc-950 hover:bg-zinc-800 text-white rounded-lg text-xs font-semibold transition-all disabled:opacity-40 shadow-sm cursor-pointer"
+                                    className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-semibold px-3 py-1.5 rounded-xl transition shadow-xs flex items-center gap-1.5 disabled:opacity-45 select-none cursor-pointer"
                                   >
+                                    <Play size={12} />
                                     Iniciar Ruta
                                   </button>
                                   <button
                                     onClick={() => abrirModalCancelarAdmin(env.id)}
-                                    className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition duration-150 cursor-pointer flex items-center gap-1"
+                                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-semibold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 select-none cursor-pointer"
                                     title="Cancelar envío administrativamente"
                                   >
-                                    <Ban size={13} />
+                                    <Ban size={12} />
+                                    Cancelar
                                   </button>
                                 </>
                               )}
@@ -603,14 +629,16 @@ export const GestionEnvios = () => {
                                 <>
                                   <button
                                     onClick={() => handleActualizarEstado(env.id, 'Entregado')}
-                                    className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-xl transition shadow-xs flex items-center gap-1.5 select-none cursor-pointer"
                                   >
+                                    <Check size={12} />
                                     Entregado
                                   </button>
                                   <button
                                     onClick={() => handleActualizarEstado(env.id, 'Cancelado')}
-                                    className="py-1.5 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer"
+                                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-semibold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 select-none cursor-pointer"
                                   >
+                                    <Ban size={12} />
                                     Cancelar
                                   </button>
                                 </>
@@ -737,15 +765,15 @@ export const GestionEnvios = () => {
                             <button
                               onClick={() => handleActualizarEstado(env.id, 'En Camino')}
                               disabled={!env.repartidor_id}
-                              className="bg-zinc-950 hover:bg-zinc-800 text-white px-2.5 py-1 rounded-lg font-bold text-[10px] transition disabled:opacity-40"
+                              className="bg-zinc-950 hover:bg-zinc-800 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg transition disabled:opacity-40 flex items-center gap-1 select-none cursor-pointer"
                             >
-                              Iniciar Ruta
+                              <Play size={10} /> Iniciar Ruta
                             </button>
                             <button
                               onClick={() => abrirModalCancelarAdmin(env.id)}
-                              className="border border-rose-200 text-rose-600 hover:bg-rose-50 px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center gap-0.5"
+                              className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[10px] font-bold px-2 py-1 rounded-lg transition flex items-center gap-0.5 select-none cursor-pointer"
                             >
-                              <Ban size={12} /> Cancelar
+                              <Ban size={10} /> Cancelar
                             </button>
                           </>
                         )}
@@ -754,15 +782,15 @@ export const GestionEnvios = () => {
                           <>
                             <button
                               onClick={() => handleActualizarEstado(env.id, 'Entregado')}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg font-bold text-[10px] transition"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1 select-none cursor-pointer"
                             >
-                              Entregado
+                              <Check size={10} /> Entregado
                             </button>
                             <button
                               onClick={() => handleActualizarEstado(env.id, 'Cancelado')}
-                              className="bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 rounded-lg font-bold text-[10px] transition"
+                              className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[10px] font-bold px-2 py-1 rounded-lg transition flex items-center gap-0.5 select-none cursor-pointer"
                             >
-                              Cancelar
+                              <Ban size={10} /> Cancelar
                             </button>
                           </>
                         )}
@@ -803,16 +831,24 @@ export const GestionEnvios = () => {
                   className="w-full border border-zinc-200 rounded-xl text-sm py-2 px-3 bg-white focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none transition-all cursor-pointer font-medium text-zinc-700"
                 >
                   <option value="">-- Seleccione una Venta --</option>
-                  {ventas.map(v => {
-                    const cli = clientes.find(c => c.id === v.cliente_id);
-                    const clienteNombre = cli ? cli.nombre : 'Cliente Desconocido';
-                    const totalStr = v.total.toFixed(2);
-                    return (
-                      <option key={v.id} value={v.id}>
-                        [{v.codigo_factura || 'Sin Código'}] - {clienteNombre} - Bs. {totalStr}
-                      </option>
-                    );
-                  })}
+                  {ventas
+                    .filter(v => {
+                      // Solo ventas que requieren delivery
+                      const esParaDelivery = v.para_delivery === true;
+                      // Evitar duplicar despachos para un mismo ticket
+                      const tieneEnvioActivo = envios.some(e => e.venta_id === v.id);
+                      return esParaDelivery && !tieneEnvioActivo;
+                    })
+                    .map(v => {
+                      const cli = clientes.find(c => c.id === v.cliente_id);
+                      const clienteNombre = cli ? cli.nombre : 'Cliente Desconocido';
+                      const totalStr = v.total.toFixed(2);
+                      return (
+                        <option key={v.id} value={v.id}>
+                          [{v.codigo_factura || 'Sin Código'}] - {clienteNombre} - Bs. {totalStr}
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
 
@@ -845,8 +881,20 @@ export const GestionEnvios = () => {
                   onChange={(e) => setDireccion(e.target.value)}
                   placeholder="Ej: Av. Brasil 4510, Dpto 402, Jesús María"
                   rows="3"
-                  className="w-full px-3.5 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none resize-none"
+                  className="w-full px-3.5 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none resize-none font-medium text-zinc-800"
                 />
+              </div>
+
+              {/* Ubicación de Destino en Mapa (Verificación Visual) */}
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">Ubicación de Destino (Verificación Visual)</label>
+                <div className="w-full h-40 rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 relative z-10">
+                  <MapaInteractivo
+                    lat={formLat}
+                    lng={formLng}
+                    soloLectura={true}
+                  />
+                </div>
               </div>
 
               <div>
@@ -1086,6 +1134,18 @@ export const GestionEnvios = () => {
                   rows="3"
                   className="w-full px-3.5 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none resize-none font-medium text-zinc-800"
                 />
+              </div>
+
+              {/* Ubicación de Destino en Mapa (Verificación Visual) */}
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">Ubicación de Destino (Verificación Visual)</label>
+                <div className="w-full h-40 rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 relative z-10">
+                  <MapaInteractivo
+                    lat={formLat}
+                    lng={formLng}
+                    soloLectura={true}
+                  />
+                </div>
               </div>
 
               <div>
