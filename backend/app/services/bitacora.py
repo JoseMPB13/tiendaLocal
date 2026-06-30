@@ -119,7 +119,9 @@ class BitacoraService:
         fecha_inicio: Optional[date] = None,
         fecha_fin: Optional[date] = None,
         tabla_afectada: Optional[str] = None,
-        operacion: Optional[str] = None
+        operacion: Optional[str] = None,
+        accion: Optional[str] = None,
+        nombre_usuario: Optional[str] = None
     ) -> List[dict]:
         """
         Retorna el historial de auditoría de usuarios con filtros delegados al motor
@@ -132,6 +134,8 @@ class BitacoraService:
             fecha_fin      (date): Fin del rango temporal (inclusive, fin del día).
             tabla_afectada (str): Filtra por tabla SQL (ej: 'ventas', 'clientes').
             operacion      (str): Filtra por tipo DML: INSERT, UPDATE, DELETE.
+            accion         (str): Filtra por acción semántica: CREAR, MODIFICAR, etc.
+            nombre_usuario (str): Búsqueda parcial por nombre del operador (post-query).
 
         Retorna:
             List[dict]: Historial de auditoría enriquecido con datos del operador.
@@ -157,10 +161,27 @@ class BitacoraService:
             if operacion and operacion.strip():
                 query = query.eq("operacion", operacion.strip().upper())
 
-            # Aplicar paginación
-            resultado = query.range(skip, skip + limit - 1).execute()
+            if accion and accion.strip():
+                query = query.eq("accion", accion.strip().upper())
 
-            return resultado.data or []
+            # Aplicar paginación — recuperamos un bloque generoso para poder filtrar
+            # por nombre_usuario en memoria sin perder registros en el slice final
+            effective_limit = limit if not nombre_usuario else min(limit * 10, 500)
+            resultado = query.range(skip, skip + effective_limit - 1).execute()
+            datos = resultado.data or []
+
+            # Filtro post-query en memoria por nombre de operador (no soportado en PostgREST join)
+            if nombre_usuario and nombre_usuario.strip():
+                termino = nombre_usuario.strip().lower()
+                datos = [
+                    r for r in datos
+                    if r.get("usuarios") and
+                    termino in (r["usuarios"].get("nombre_completo") or "").lower()
+                ]
+                # Reaplicar el limit real tras el filtro en memoria
+                datos = datos[:limit]
+
+            return datos
         except APIError as ex:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -171,3 +192,4 @@ class BitacoraService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error inesperado al consultar la bitácora de usuarios: {str(ex)}"
             )
+

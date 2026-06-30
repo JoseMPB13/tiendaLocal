@@ -36,6 +36,8 @@ async def listar_bitacora_usuarios(
     fecha_fin: Optional[date] = Query(None, description="Fecha de fin del rango (YYYY-MM-DD, inclusiva hasta las 23:59:59)"),
     tabla_afectada: Optional[str] = Query(None, description="Tabla SQL afectada: ventas, productos, clientes, envios, compras"),
     operacion: Optional[str] = Query(None, description="Tipo de operación DML: INSERT, UPDATE, DELETE"),
+    accion: Optional[str] = Query(None, description="Acción semántica: CREAR, MODIFICAR, DESACTIVAR, ANULAR, CANCELAR"),
+    nombre_usuario: Optional[str] = Query(None, description="Búsqueda parcial por nombre completo del operador"),
     usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
 ):
     """
@@ -46,6 +48,8 @@ async def listar_bitacora_usuarios(
         - fecha_inicio / fecha_fin: Rango de fechas (ISO 8601).
         - tabla_afectada: ventas, productos, clientes, envios, compras.
         - operacion: INSERT, UPDATE, DELETE.
+        - accion: CREAR, MODIFICAR, DESACTIVAR, ANULAR, CANCELAR.
+        - nombre_usuario: Búsqueda parcial por nombre del operador (filtro en memoria).
     """
     resultado = BitacoraService.listar_bitacora_usuarios(
         skip=skip,
@@ -53,8 +57,11 @@ async def listar_bitacora_usuarios(
         fecha_inicio=fecha_inicio,
         fecha_fin=fecha_fin,
         tabla_afectada=tabla_afectada,
-        operacion=operacion
+        operacion=operacion,
+        accion=accion,
+        nombre_usuario=nombre_usuario
     )
     respuestas = [BitacoraUsuarioRespuesta.model_validate(r) for r in resultado]
     return {"ok": True, "data": respuestas}
+
 
