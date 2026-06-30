@@ -253,7 +253,20 @@ export const PuntoVenta = () => {
   };
 
   useEffect(() => {
-    (async () => { await inicializarPOS(); })();
+    (async () => {
+      await inicializarPOS();
+      const vId = localStorage.getItem('editar_venta_id');
+      if (vId) {
+        localStorage.removeItem('editar_venta_id');
+        const resClis = await ventaService.obtenerClientes();
+        const resProds = await ventaService.obtenerProductos();
+        await handleCargarEdicion(
+          vId,
+          resClis.ok ? resClis.data : null,
+          resProds.ok ? resProds.data : null
+        );
+      }
+    })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Consulta el historial de ventas paginado con filtros */
@@ -552,7 +565,9 @@ export const PuntoVenta = () => {
         })),
         para_delivery: requiereDelivery,
         direccion_despacho: requiereDelivery ? direccionDespacho : null,
-        costo_envio: requiereDelivery ? parseFloat(costoEnvio) || 0.00 : 0.00
+        costo_envio: requiereDelivery ? parseFloat(costoEnvio) || 0.00 : 0.00,
+        latitud: requiereDelivery ? parseFloat(deliveryLat) || null : null,
+        longitud: requiereDelivery ? parseFloat(deliveryLng) || null : null
       };
 
       const respuesta = await ventaService.registrarVenta(payload);
@@ -619,7 +634,9 @@ export const PuntoVenta = () => {
         })),
         para_delivery: requiereDelivery,
         direccion_despacho: requiereDelivery ? direccionDespacho : null,
-        costo_envio: requiereDelivery ? parseFloat(costoEnvio) || 0.00 : 0.00
+        costo_envio: requiereDelivery ? parseFloat(costoEnvio) || 0.00 : 0.00,
+        latitud: requiereDelivery ? parseFloat(deliveryLat) || null : null,
+        longitud: requiereDelivery ? parseFloat(deliveryLng) || null : null
       };
 
       const respuesta = await ventaService.actualizarVenta(editandoVentaId, payload);
@@ -657,15 +674,18 @@ export const PuntoVenta = () => {
   };
 
   /** Carga los datos de una venta existente en el carrito del POS para editarla */
-  const handleCargarEdicion = async (ventaId) => {
+  const handleCargarEdicion = async (ventaId, fallbackClientes = null, fallbackProductos = null) => {
     try {
       toast.loading("Cargando datos para edición...", { id: "carga-edicion" });
       const res = await ventaService.obtenerVentaDetalle(ventaId);
       if (res.ok) {
         toast.dismiss("carga-edicion");
         
+        const clisList = fallbackClientes || clientes || [];
+        const prodsList = fallbackProductos || productos || [];
+
         // Establecer el cliente original de la venta
-        const cli = clientes.find(c => c.id === res.data.cliente_id);
+        const cli = clisList.find(c => c.id === res.data.cliente_id);
         if (cli) {
           setCliente(cli);
           setBuscarCliente(cli.nombre);
@@ -678,7 +698,7 @@ export const PuntoVenta = () => {
         
         // Cargar los productos a la interfaz del carrito
         const itemsParaCarrito = res.data.detalles.map(d => {
-          const prod = productos.find(p => p.id === d.producto_id);
+          const prod = prodsList.find(p => p.id === d.producto_id);
           return {
             id: d.producto_id,
             nombre: prod ? prod.nombre : 'Producto desconocido',
