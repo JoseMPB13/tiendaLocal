@@ -36,6 +36,41 @@ export const GestionEnvios = () => {
   const [pagina, setPagina] = useState(1);
   const itemsPorPagina = 5;
 
+  // Extractor universal de coordenadas dual (prioridad cliente, luego url de mapa, luego fallback)
+  const resolverCoordenadas = (envioOCliente) => {
+    if (!envioOCliente) return [-17.7833, -63.1667];
+    
+    // 1. Coordenadas explícitas en el objeto o en objeto.cliente
+    let lat = envioOCliente.latitud ?? envioOCliente.cliente?.latitud;
+    let lng = envioOCliente.longitud ?? envioOCliente.cliente?.longitud;
+    
+    if (lat !== undefined && lat !== null && lng !== undefined && lng !== null) {
+      const pLat = parseFloat(lat);
+      const pLng = parseFloat(lng);
+      if (!isNaN(pLat) && !isNaN(pLng)) {
+        return [pLat, pLng];
+      }
+    }
+    
+    // 2. Fallback de Enlace (regex para buscar lat/lng decimales en la URL)
+    const enlace = envioOCliente.enlace_mapa ?? envioOCliente.enlace_ubicacion ?? 
+                   envioOCliente.cliente?.enlace_mapa ?? envioOCliente.cliente?.enlace_ubicacion;
+    if (enlace && typeof enlace === 'string') {
+      const regex = /(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/;
+      const match = enlace.match(regex);
+      if (match) {
+        const pLat = parseFloat(match[1]);
+        const pLng = parseFloat(match[2]);
+        if (!isNaN(pLat) && !isNaN(pLng)) {
+          return [pLat, pLng];
+        }
+      }
+    }
+    
+    // 3. Coordenadas por defecto (Santa Cruz de la Sierra)
+    return [-17.7833, -63.1667];
+  };
+
   // Modal para registrar envío manual
   const [mostrarForm, setMostrarForm] = useState(false);
   const [ventaId, setVentaId] = useState('');
@@ -113,13 +148,9 @@ export const GestionEnvios = () => {
         } else {
           setDireccion('');
         }
-        if (cli.latitud && cli.longitud) {
-          setFormLat(Number(cli.latitud));
-          setFormLng(Number(cli.longitud));
-        } else {
-          setFormLat(-17.7833);
-          setFormLng(-63.1667);
-        }
+        const [resolvedLat, resolvedLng] = resolverCoordenadas(cli);
+        setFormLat(resolvedLat);
+        setFormLng(resolvedLng);
       }
     }
   };
@@ -130,13 +161,9 @@ export const GestionEnvios = () => {
     setEditDireccion(env.direccion_despacho);
     setEditCostoEnvio(env.costo_envio.toString());
     setEditRepartidorId(env.repartidor_id || '');
-    if (env.cliente?.latitud && env.cliente?.longitud) {
-      setFormLat(Number(env.cliente.latitud));
-      setFormLng(Number(env.cliente.longitud));
-    } else {
-      setFormLat(-17.7833);
-      setFormLng(-63.1667);
-    }
+    const [resolvedLat, resolvedLng] = resolverCoordenadas(env);
+    setFormLat(resolvedLat);
+    setFormLng(resolvedLng);
     setMostrarModalEditar(true);
   };
 
@@ -308,12 +335,14 @@ export const GestionEnvios = () => {
     }
   };
 
-  // Filtrado
-  const enviosFiltrados = envios.filter(env => {
-    const coincideBuscar = env.venta_id.toLowerCase().includes(buscarVenta.toLowerCase());
-    const coincideEstado = filtroEstado === 'Todos' || env.estado_envio === filtroEstado;
-    return coincideBuscar && coincideEstado;
-  });
+  // Filtrado y Ordenación descendente por fecha de creación (los más recientes primero)
+  const enviosFiltrados = envios
+    .filter(env => {
+      const coincideBuscar = env.venta_id.toLowerCase().includes(buscarVenta.toLowerCase());
+      const coincideEstado = filtroEstado === 'Todos' || env.estado_envio === filtroEstado;
+      return coincideBuscar && coincideEstado;
+    })
+    .sort((a, b) => new Date(b.fecha_creacion) - new Date(a.fecha_creacion));
 
   // Métricas del Delivery
   const totalPendientes = envios.filter(e => e.estado_envio === 'Pendiente').length;
@@ -833,11 +862,9 @@ export const GestionEnvios = () => {
                   <option value="">-- Seleccione una Venta --</option>
                   {ventas
                     .filter(v => {
-                      // Solo ventas que requieren delivery
-                      const esParaDelivery = v.para_delivery === true;
                       // Evitar duplicar despachos para un mismo ticket
                       const tieneEnvioActivo = envios.some(e => e.venta_id === v.id);
-                      return esParaDelivery && !tieneEnvioActivo;
+                      return !tieneEnvioActivo;
                     })
                     .map(v => {
                       const cli = clientes.find(c => c.id === v.cliente_id);
@@ -1047,25 +1074,29 @@ export const GestionEnvios = () => {
               {/* Geolocalización / Mapa */}
               <div>
                 <span className="text-[9px] text-zinc-400 uppercase font-bold block mb-1.5">Geolocalización de Entrega</span>
-                {envioSeleccionado.cliente?.latitud && envioSeleccionado.cliente?.longitud ? (
-                  <div className="w-full h-64 rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 shadow-inner relative z-10">
-                    <MapaInteractivo
-                      lat={envioSeleccionado.cliente.latitud}
-                      lng={envioSeleccionado.cliente.longitud}
-                      soloLectura={true}
-                    />
+                
+                {/* Dirección real de entrega para guía del operador */}
+                <div className="mb-2 bg-zinc-950 text-white rounded-xl p-3.5 text-xs font-semibold leading-relaxed flex items-start gap-2 shadow-sm border border-zinc-900">
+                  <MapPin size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-[8px] text-zinc-400 uppercase font-extrabold block mb-0.5">Destino de Ruta (Guía del Operador)</span>
+                    <span>{envioSeleccionado.direccion_despacho}</span>
                   </div>
-                ) : (
-                  <div className="bg-zinc-50 border border-dashed border-zinc-300 rounded-xl p-8 text-center text-zinc-400 text-xs font-semibold">
-                    📍 No se dispone de coordenadas geográficas para este cliente.
-                  </div>
-                )}
-                {envioSeleccionado.cliente?.enlace_ubicacion && (
+                </div>
+
+                <div className="w-full h-64 rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 shadow-inner relative z-10">
+                  <MapaInteractivo
+                    lat={resolverCoordenadas(envioSeleccionado)[0]}
+                    lng={resolverCoordenadas(envioSeleccionado)[1]}
+                    soloLectura={true}
+                  />
+                </div>
+                {(envioSeleccionado.cliente?.enlace_ubicacion || envioSeleccionado.cliente?.enlace_mapa) && (
                   <a
-                    href={envioSeleccionado.cliente.enlace_ubicacion}
+                    href={envioSeleccionado.cliente.enlace_ubicacion || envioSeleccionado.cliente.enlace_mapa}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] text-indigo-600 font-bold hover:underline mt-2 flex items-center gap-1"
+                    className="text-[10px] text-indigo-600 font-bold hover:underline mt-2 flex items-center gap-1 inline-block"
                   >
                     🔗 Abrir ubicación externa en mapas
                   </a>
