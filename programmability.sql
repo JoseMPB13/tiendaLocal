@@ -144,7 +144,7 @@ begin
         end if;
 
         insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio)
-        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Pendiente');
+        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Por Despachar');
     end if;
 
     return v_venta_id;
@@ -210,7 +210,7 @@ begin
         end if;
 
         insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio)
-        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Pendiente');
+        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Por Despachar');
     end if;
 
     return v_venta_id;
@@ -777,7 +777,9 @@ create or replace function actualizar_venta(
     p_items jsonb,
     p_para_delivery boolean default false,
     p_direccion_despacho text default null,
-    p_costo_envio numeric default 0.00
+    p_costo_envio numeric default 0.00,
+    p_latitud numeric default null,
+    p_longitud numeric default null
 )
 returns uuid as $$
 declare
@@ -787,7 +789,7 @@ declare
     v_old_estado_venta varchar(30);
     v_old_fecha_venta timestamptz;
     v_new_total numeric(12, 2) := 0.00;
-    v_item record; -- Se cambia de jsonb a record para evitar errores DML con alias
+    v_item record; 
     v_detail record;
     v_stock_actual integer;
     v_stock_minimo integer;
@@ -945,15 +947,17 @@ begin
         if exists (select 1 from envios where venta_id = p_venta_id) then
             update envios 
             set direccion_despacho = p_direccion_despacho,
-                costo_envio = p_costo_envio
+                costo_envio = p_costo_envio,
+                latitud = p_latitud,
+                longitud = p_longitud
             where venta_id = p_venta_id;
         else
-            insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio)
-            values (p_venta_id, p_direccion_despacho, p_costo_envio, 'Pendiente');
+            insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio, latitud, longitud)
+            values (p_venta_id, p_direccion_despacho, p_costo_envio, 'Por Despachar', p_latitud, p_longitud);
         end if;
     else
-        -- Si ya no requiere delivery, eliminamos el registro si estaba en estado Pendiente
-        delete from envios where venta_id = p_venta_id and estado_envio = 'Pendiente';
+        -- Si ya no requiere delivery, eliminamos el registro si estaba en estado Pendiente o Por Despachar
+        delete from envios where venta_id = p_venta_id and estado_envio in ('Por Despachar', 'Pendiente');
     end if;
 
     return p_venta_id;
@@ -1152,4 +1156,152 @@ END;
 $$;
 
 COMMENT ON FUNCTION registrar_reabastecimiento IS 'Registra una compra y actualiza el costo de los productos correspondientes con validaciones de negocio en la BD.';
+
+
+-- -----------------------------------------------------------------------------
+-- PROCEDIMIENTOS ALMACENADOS DE VENTAS
+-- -----------------------------------------------------------------------------
+create or replace function registrar_venta_credito(
+    p_cliente_id uuid,
+    p_usuario_id uuid,
+    p_total numeric(12, 2),
+    p_items jsonb,
+    p_para_delivery boolean DEFAULT false,
+    p_direccion_despacho text DEFAULT NULL,
+    p_costo_envio numeric DEFAULT 0.00,
+    p_latitud numeric DEFAULT NULL,
+    p_longitud numeric DEFAULT NULL
+)
+returns uuid as $$
+declare
+    v_venta_id uuid;
+    v_codigo_factura varchar(50);
+    v_saldo_deudor numeric(12, 2);
+    v_limite_credito numeric(12, 2);
+    v_nombre_cliente varchar(150);
+    v_item record;
+    v_subtotal numeric(12, 2);
+begin
+    -- Generar el código de factura de forma segura y transaccional
+    v_codigo_factura := generar_codigo_factura();
+
+    -- 1. Validar límite de crédito del cliente
+    select saldo_deudor, limite_credito, nombre
+    into v_saldo_deudor, v_limite_credito, v_nombre_cliente
+    from clientes
+    where id = p_cliente_id
+    for update;
+
+    if (v_saldo_deudor + p_total) > v_limite_credito then
+        raise exception 'Límite de crédito excedido para el cliente %. Saldo actual: %, Venta solicitada: %, Límite máximo: %',
+            v_nombre_cliente, v_saldo_deudor, p_total, v_limite_credito
+            using errcode = 'P0002';
+    end if;
+
+    -- 2. Insertar cabecera de la venta con tipo de pago 'Credito'
+    insert into ventas (cliente_id, usuario_id, codigo_factura, total, tipo_pago, estado_venta)
+    values (p_cliente_id, p_usuario_id, v_codigo_factura, p_total, 'Credito', 'Completada')
+    returning id into v_venta_id;
+
+    -- 3. Iterar sobre los productos ordenados por producto_id para prevenir deadlocks
+    for v_item in 
+        select (x.value->>'producto_id')::uuid as prod_id,
+               (x.value->>'cantidad')::integer as cant,
+               (x.value->>'precio_unitario')::numeric(12, 2) as precio
+        from jsonb_array_elements(p_items) as x(value)
+        order by prod_id asc
+    loop
+        v_subtotal := v_item.cant * v_item.precio;
+        
+        insert into detalles_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal)
+        values (
+            v_venta_id, 
+            v_item.prod_id, 
+            v_item.cant, 
+            v_item.precio,
+            v_subtotal
+        );
+    end loop;
+
+    -- 4. Actualizar el saldo deudor del cliente
+    update clientes
+    set saldo_deudor = saldo_deudor + p_total
+    where id = p_cliente_id;
+
+    -- 5. Registrar envío de delivery si se requiere
+    if p_para_delivery then
+        if p_direccion_despacho is null or p_direccion_despacho = '' then
+            raise exception 'La dirección de despacho es obligatoria para pedidos con delivery.'
+                using errcode = 'P0003';
+        end if;
+
+        insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio, latitud, longitud)
+        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Por Despachar', p_latitud, p_longitud);
+    end if;
+
+    return v_venta_id;
+end;
+$$ language plpgsql;
+
+create or replace function registrar_venta_contado(
+    p_cliente_id uuid,
+    p_usuario_id uuid,
+    p_total numeric(12, 2),
+    p_tipo_pago varchar(30),
+    p_items jsonb,
+    p_para_delivery boolean DEFAULT false,
+    p_direccion_despacho text DEFAULT NULL,
+    p_costo_envio numeric DEFAULT 0.00,
+    p_latitud numeric DEFAULT NULL,
+    p_longitud numeric DEFAULT NULL
+)
+returns uuid as $$
+declare
+    v_venta_id uuid;
+    v_codigo_factura varchar(50);
+    v_item record;
+    v_subtotal numeric(12, 2);
+begin
+    -- Generar el código de factura de forma segura y transaccional
+    v_codigo_factura := generar_codigo_factura();
+
+    -- 1. Insertar cabecera de la venta al contado
+    insert into ventas (cliente_id, usuario_id, codigo_factura, total, tipo_pago, estado_venta)
+    values (p_cliente_id, p_usuario_id, v_codigo_factura, p_total, p_tipo_pago, 'Completada')
+    returning id into v_venta_id;
+
+    -- 2. Iterar sobre los productos e insertarlos en el detalle
+    for v_item in 
+        select (x.value->>'producto_id')::uuid as prod_id,
+               (x.value->>'cantidad')::integer as cant,
+               (x.value->>'precio_unitario')::numeric(12, 2) as precio
+        from jsonb_array_elements(p_items) as x(value)
+        order by prod_id asc
+    loop
+        v_subtotal := v_item.cant * v_item.precio;
+        
+        insert into detalles_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal)
+        values (
+            v_venta_id, 
+            v_item.prod_id, 
+            v_item.cant, 
+            v_item.precio,
+            v_subtotal
+        );
+    end loop;
+
+    -- 3. Registrar envío de delivery si se requiere
+    if p_para_delivery then
+        if p_direccion_despacho is null or p_direccion_despacho = '' then
+            raise exception 'La dirección de despacho es obligatoria para pedidos con delivery.'
+                using errcode = 'P0003';
+        end if;
+
+        insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio, latitud, longitud)
+        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Por Despachar', p_latitud, p_longitud);
+    end if;
+
+    return v_venta_id;
+end;
+$$ language plpgsql;
 

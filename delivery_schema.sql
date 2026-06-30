@@ -27,7 +27,9 @@ create table if not exists envios (
     repartidor_id uuid references repartidores(id) on delete restrict,
     direccion_despacho text not null,
     costo_envio numeric(12, 2) default 0.00 not null check (costo_envio >= 0),
-    estado_envio varchar(30) default 'Pendiente' not null check (estado_envio in ('Pendiente', 'En Camino', 'Entregado', 'Cancelado')),
+    estado_envio varchar(30) default 'Pendiente' not null check (estado_envio in ('Por Despachar', 'Pendiente', 'En Camino', 'Entregado', 'Cancelado')),
+    latitud numeric(10, 8) default null check (latitud is null or (latitud >= -90.00000000 and latitud <= 90.00000000)),
+    longitud numeric(11, 8) default null check (longitud is null or (longitud >= -180.00000000 and longitud <= 180.00000000)),
     fecha_despacho timestamp with time zone,
     fecha_entrega timestamp with time zone,
     motivo_cancelacion text,
@@ -39,6 +41,7 @@ comment on table envios is 'Información detallada para el reparto a domicilio d
 create index if not exists idx_envios_estado on envios(estado_envio);
 create index if not exists idx_envios_repartidor on envios(repartidor_id);
 create index if not exists idx_envios_repartidor_estado on envios(repartidor_id, estado_envio);
+create index if not exists idx_envios_coordenadas on envios(latitud, longitud);
 create index if not exists idx_envios_pendientes_libres on envios(id) where estado_envio = 'Pendiente' and repartidor_id is null;
 
 -- -----------------------------------------------------------------------------

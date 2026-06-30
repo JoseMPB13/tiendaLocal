@@ -488,22 +488,27 @@ $$ language plpgsql;
 create or replace function registrar_venta_credito(
     p_cliente_id uuid,
     p_usuario_id uuid,
-    p_codigo_factura varchar(50),
     p_total numeric(12, 2),
     p_items jsonb,
     p_para_delivery boolean DEFAULT false,
     p_direccion_despacho text DEFAULT NULL,
-    p_costo_envio numeric DEFAULT 0.00
+    p_costo_envio numeric DEFAULT 0.00,
+    p_latitud numeric DEFAULT NULL,
+    p_longitud numeric DEFAULT NULL
 )
 returns uuid as $$
 declare
     v_venta_id uuid;
+    v_codigo_factura varchar(50);
     v_saldo_deudor numeric(12, 2);
     v_limite_credito numeric(12, 2);
     v_nombre_cliente varchar(150);
     v_item record;
     v_subtotal numeric(12, 2);
 begin
+    -- Generar el código de factura de forma segura y transaccional
+    v_codigo_factura := generar_codigo_factura();
+
     -- 1. Validar límite de crédito del cliente
     select saldo_deudor, limite_credito, nombre
     into v_saldo_deudor, v_limite_credito, v_nombre_cliente
@@ -519,7 +524,7 @@ begin
 
     -- 2. Insertar cabecera de la venta con tipo de pago 'Credito'
     insert into ventas (cliente_id, usuario_id, codigo_factura, total, tipo_pago, estado_venta)
-    values (p_cliente_id, p_usuario_id, p_codigo_factura, p_total, 'Credito', 'Completada')
+    values (p_cliente_id, p_usuario_id, v_codigo_factura, p_total, 'Credito', 'Completada')
     returning id into v_venta_id;
 
     -- 3. Iterar sobre los productos ordenados por producto_id para prevenir deadlocks
@@ -552,10 +557,10 @@ begin
         if p_direccion_despacho is null or p_direccion_despacho = '' then
             raise exception 'La dirección de despacho es obligatoria para pedidos con delivery.'
                 using errcode = 'P0003';
-        end if;
+        END if;
 
-        insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio)
-        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Pendiente');
+        insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio, latitud, longitud)
+        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Por Despachar', p_latitud, p_longitud);
     end if;
 
     return v_venta_id;
@@ -565,23 +570,28 @@ $$ language plpgsql;
 create or replace function registrar_venta_contado(
     p_cliente_id uuid,
     p_usuario_id uuid,
-    p_codigo_factura varchar(50),
     p_total numeric(12, 2),
     p_tipo_pago varchar(30),
     p_items jsonb,
     p_para_delivery boolean DEFAULT false,
     p_direccion_despacho text DEFAULT NULL,
-    p_costo_envio numeric DEFAULT 0.00
+    p_costo_envio numeric DEFAULT 0.00,
+    p_latitud numeric DEFAULT NULL,
+    p_longitud numeric DEFAULT NULL
 )
 returns uuid as $$
 declare
     v_venta_id uuid;
+    v_codigo_factura varchar(50);
     v_item record;
     v_subtotal numeric(12, 2);
 begin
+    -- Generar el código de factura de forma segura y transaccional
+    v_codigo_factura := generar_codigo_factura();
+
     -- 1. Insertar cabecera de la venta al contado
     insert into ventas (cliente_id, usuario_id, codigo_factura, total, tipo_pago, estado_venta)
-    values (p_cliente_id, p_usuario_id, p_codigo_factura, p_total, p_tipo_pago, 'Completada')
+    values (p_cliente_id, p_usuario_id, v_codigo_factura, p_total, p_tipo_pago, 'Completada')
     returning id into v_venta_id;
 
     -- 2. Iterar sobre los productos e insertarlos en el detalle
@@ -613,8 +623,8 @@ begin
                 using errcode = 'P0003';
         end if;
 
-        insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio)
-        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Pendiente');
+        insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio, latitud, longitud)
+        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Por Despachar', p_latitud, p_longitud);
     end if;
 
     return v_venta_id;
