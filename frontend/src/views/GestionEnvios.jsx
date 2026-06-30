@@ -5,8 +5,9 @@ import PaginadorTablas from '../components/PaginadorTablas';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Truck, Plus, Search, Filter, MapPin, 
-  CheckCircle2, Clock, X, ShieldAlert, Ban
+  CheckCircle2, Clock, X, ShieldAlert, Ban, Eye
 } from 'lucide-react';
+import MapaInteractivo from '../components/MapaInteractivo';
 
 export const GestionEnvios = () => {
   const [envios, setEnvios] = useState([]);
@@ -35,6 +36,15 @@ export const GestionEnvios = () => {
   const [envioCancelarId, setEnvioCancelarId] = useState(null);
   const [motivoCancelarAdmin, setMotivoCancelarAdmin] = useState('');
   const [procesandoCancelarAdmin, setProcesandoCancelarAdmin] = useState(false);
+
+  // Modal para ver detalles logísticos con mapa
+  const [mostrarModalDetalle, setMostrarModalDetalle] = useState(false);
+  const [envioSeleccionado, setEnvioSeleccionado] = useState(null);
+
+  const abrirDetalleEnvio = (env) => {
+    setEnvioSeleccionado(env);
+    setMostrarModalDetalle(true);
+  };
 
   const cargarDatos = async () => {
     try {
@@ -196,75 +206,160 @@ export const GestionEnvios = () => {
     <div className="space-y-6">
       <Toaster position="top-right" />
 
-      {/* METRICAS RAPIDAS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex items-center">
-          <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
+      {/* ── METRICAS RAPIDAS (Estilo unificado) ── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: '16px',
+        marginBottom: '5px'
+      }}>
+        {/* Tarjeta 1: Pendientes */}
+        <div style={{
+          background: 'white',
+          border: '1px solid #fef3c7',
+          borderRadius: '12px',
+          padding: '16px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div style={{
+            width: '40px', height: '40px',
+            background: '#fffbeb',
+            color: '#d97706',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
             <Clock size={20} />
           </div>
-          <div className="ml-4">
-            <p className="text-xs font-medium text-zinc-500">Pendientes</p>
-            <h4 className="text-2xl font-bold text-zinc-950 mt-0.5">{totalPendientes}</h4>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Pendientes</span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#d97706', fontFamily: 'Inter, sans-serif' }}>{totalPendientes} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>envíos</span></span>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex items-center">
-          <div className="p-2.5 bg-sky-50 text-sky-600 rounded-xl">
+
+        {/* Tarjeta 2: En Camino */}
+        <div style={{
+          background: 'white',
+          border: '1px solid #e0f2fe',
+          borderRadius: '12px',
+          padding: '16px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div style={{
+            width: '40px', height: '40px',
+            background: '#f0f9ff',
+            color: '#0284c7',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
             <Truck size={20} />
           </div>
-          <div className="ml-4">
-            <p className="text-xs font-medium text-zinc-500">En Camino</p>
-            <h4 className="text-2xl font-bold text-zinc-950 mt-0.5">{totalEnCamino}</h4>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>En Camino</span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0284c7', fontFamily: 'Inter, sans-serif' }}>{totalEnCamino} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>rutas</span></span>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex items-center">
-          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+
+        {/* Tarjeta 3: Entregados */}
+        <div style={{
+          background: 'white',
+          border: '1px solid #dcfce7',
+          borderRadius: '12px',
+          padding: '16px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div style={{
+            width: '40px', height: '40px',
+            background: '#f0fdf4',
+            color: '#16a34a',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
             <CheckCircle2 size={20} />
           </div>
-          <div className="ml-4">
-            <p className="text-xs font-medium text-zinc-500">Entregados</p>
-            <h4 className="text-2xl font-bold text-zinc-950 mt-0.5">{totalEntregados}</h4>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Entregados</span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#16a34a', fontFamily: 'Inter, sans-serif' }}>{totalEntregados} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>éxitos</span></span>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex items-center">
-          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl">
-            <ShieldAlert size={20} />
+
+        {/* Tarjeta 4: Cancelados */}
+        <div style={{
+          background: 'white',
+          border: '1px solid #fee2e2',
+          borderRadius: '12px',
+          padding: '16px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div style={{
+            width: '40px', height: '40px',
+            background: '#fef2f2',
+            color: '#e11d48',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Ban size={20} />
           </div>
-          <div className="ml-4">
-            <p className="text-xs font-medium text-zinc-500">Cancelados</p>
-            <h4 className="text-2xl font-bold text-zinc-950 mt-0.5">{totalCancelados}</h4>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Cancelados</span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#e11d48', fontFamily: 'Inter, sans-serif' }}>{totalCancelados} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>bajas</span></span>
           </div>
         </div>
       </div>
 
-      {/* CABECERA Y FILTROS */}
-      <div className="bg-white rounded-2xl p-6 border border-zinc-200 shadow-sm flex flex-col lg:flex-row gap-4 items-center justify-between">
-        <div className="w-full lg:w-auto">
-          <h3 className="font-bold text-zinc-900 text-lg">Monitoreo de Envíos & Delivery</h3>
-          <p className="text-sm text-zinc-500 mt-0.5">Asignación de repartidores y control de estados de ruta.</p>
+      {/* ── CABECERA ── */}
+      <div className="page-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '40px', height: '40px',
+            background: 'linear-gradient(135deg, #6d28d9, #4338ca)',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Truck size={20} style={{ color: 'white' }} />
+          </div>
+          <div>
+            <h3 className="page-title">Monitoreo de Envíos & Delivery</h3>
+            <p className="page-subtitle">
+              Asignación de repartidores, visualización de mapas y control de estados de ruta en tiempo real
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── BARRA DE BÚSQUEDA Y FILTROS ── */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="relative flex-1 w-full">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={buscarVenta}
+            onChange={(e) => setBuscarVenta(e.target.value)}
+            placeholder="Buscar por ID de Venta..."
+            className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-xl py-2 pl-10 pr-4 text-xs font-medium placeholder-slate-400 transition-all duration-150"
+          />
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto shrink-0 flex-wrap sm:flex-nowrap">
           <div className="relative flex-1 sm:flex-initial">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400">
-              <Search size={16} />
-            </span>
-            <input
-              type="text"
-              value={buscarVenta}
-              onChange={(e) => setBuscarVenta(e.target.value)}
-              placeholder="Buscar por ID de Venta..."
-              className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none transition-all"
-            />
-          </div>
-
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400">
-              <Filter size={16} />
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none">
+              <Filter size={14} />
             </span>
             <select
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value)}
-              className="w-full pl-9 pr-8 border border-zinc-200 rounded-xl text-sm py-2 bg-white focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none transition-all appearance-none cursor-pointer"
+              className="w-full pl-8 pr-8 border border-slate-200 rounded-xl text-xs py-2 bg-white focus:ring-1 focus:ring-indigo-500 outline-none transition-all cursor-pointer font-medium text-slate-600 appearance-none"
             >
               <option value="Todos">Todos los estados</option>
               <option value="Pendiente">Pendientes</option>
@@ -276,33 +371,33 @@ export const GestionEnvios = () => {
 
           <button
             onClick={() => setMostrarForm(true)}
-            className="flex items-center justify-center py-2 px-4 bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl text-sm font-medium transition-all shadow-sm"
+            className="btn-primary flex items-center justify-center py-2 px-4 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex-1 sm:flex-initial"
           >
-            <Plus size={16} className="mr-1.5" />
+            <Plus size={14} className="mr-1" />
             Nuevo Despacho
           </button>
         </div>
       </div>
 
-      {/* TABLA DE ENVÍOS */}
-      <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+      {/* Vista para pantallas grandes (Tabla estructurada y alineada) */}
+      <div className="hidden lg:block bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
+          <table className="w-full text-left border-collapse text-xs font-medium text-slate-600">
             <thead>
-              <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium">
-                <th className="py-3.5 px-6 font-semibold">ID Venta</th>
-                <th className="py-3.5 px-6 font-semibold">Dirección Despacho</th>
-                <th className="py-3.5 px-6 font-semibold text-right">Recargo</th>
-                <th className="py-3.5 px-6 font-semibold">Repartidor Asignado</th>
-                <th className="py-3.5 px-6 font-semibold">Estado</th>
-                <th className="py-3.5 px-6 font-semibold text-center">Gestión Directa</th>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                <th className="py-3.5 px-6 text-left">ID Venta</th>
+                <th className="py-3.5 px-6 text-left">Dirección Despacho</th>
+                <th className="py-3.5 px-6 text-right">Recargo</th>
+                <th className="py-3.5 px-6 text-center">Repartidor Asignado</th>
+                <th className="py-3.5 px-6 text-center">Estado</th>
+                <th className="py-3.5 px-6 text-center">Gestión Directa</th>
               </tr>
             </thead>
 
             {cargando ? (
               <tbody>
                 <tr>
-                  <td colSpan="6" className="text-center py-12 text-zinc-500 font-medium">
+                  <td colSpan="6" className="text-center py-12 text-slate-400 font-medium">
                     Cargando órdenes de envío...
                   </td>
                 </tr>
@@ -310,39 +405,39 @@ export const GestionEnvios = () => {
             ) : enviosFiltrados.length === 0 ? (
               <tbody>
                 <tr>
-                  <td colSpan="6" className="text-center py-12 text-zinc-400">
+                  <td colSpan="6" className="text-center py-12 text-slate-400">
                     No se encontraron despachos registrados en el sistema.
                   </td>
                 </tr>
               </tbody>
             ) : (
-              <tbody className="divide-y divide-zinc-100 text-zinc-700">
+              <tbody className="divide-y divide-slate-100 bg-white">
                 {enviosPaginados.map((env) => {
                   const completado = env.estado_envio === 'Entregado' || env.estado_envio === 'Cancelado';
                   return (
-                    <tr key={env.id} className="hover:bg-zinc-50/50 transition-colors">
-                      <td className="py-4 px-6 font-mono font-medium" title={env.venta_id}>
-                        <span className="bg-zinc-100 text-zinc-800 px-2 py-0.5 rounded border border-zinc-200 text-xs">
+                    <tr key={env.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 px-6 text-left font-mono font-medium" title={env.venta_id}>
+                        <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200 text-xs">
                           {env.venta_id.substring(0, 8)}
                         </span>
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-4 px-6 text-left">
                         <div className="flex items-start">
-                          <MapPin size={16} className="text-zinc-400 mr-2 mt-0.5 flex-shrink-0" />
-                          <span className="line-clamp-1 text-zinc-600 font-medium">{env.direccion_despacho}</span>
+                          <MapPin size={15} className="text-slate-400 mr-2 mt-0.5 flex-shrink-0" />
+                          <span className="line-clamp-1 text-slate-600 font-medium">{env.direccion_despacho}</span>
                         </div>
                       </td>
-                      <td className="py-4 px-6 text-right font-semibold text-zinc-900">Bs. {env.costo_envio.toFixed(2)}</td>
-                      <td className="py-4 px-6">
+                      <td className="py-4 px-6 text-right font-extrabold text-slate-900">Bs. {env.costo_envio.toFixed(2)}</td>
+                      <td className="py-4 px-6 text-center">
                         {completado ? (
-                          <span className="font-medium text-zinc-500">
+                          <span className="font-medium text-slate-500">
                             {obtenerNombreRepartidor(env.repartidor_id)}
                           </span>
                         ) : (
                           <select
                             value={env.repartidor_id || ''}
                             onChange={(e) => handleAsignarRepartidor(env.id, e.target.value)}
-                            className="border border-zinc-200 rounded-xl text-xs py-1.5 px-3 bg-white focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none transition-all cursor-pointer font-medium text-zinc-700"
+                            className="border border-slate-200 rounded-xl text-xs py-1.5 px-3 bg-white focus:ring-1 focus:ring-indigo-500 outline-none transition-all cursor-pointer font-bold text-slate-600"
                           >
                             <option value="">Seleccionar Repartidor</option>
                             {repartidores
@@ -358,8 +453,8 @@ export const GestionEnvios = () => {
                           </select>
                         )}
                       </td>
-                      <td className="py-4 px-6">
-                        <span className={`px-2.5 py-1 rounded-full font-medium text-xs ${
+                      <td className="py-4 px-6 text-center">
+                        <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] border ${
                           env.estado_envio === 'Pendiente' ? 'bg-amber-50 text-amber-700 border border-amber-200/50' :
                           env.estado_envio === 'En Camino' ? 'bg-sky-50 text-sky-700 border border-sky-200/50' :
                           env.estado_envio === 'Entregado' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50' : 
@@ -369,48 +464,57 @@ export const GestionEnvios = () => {
                         </span>
                       </td>
                       <td className="py-4 px-6 text-center">
-                        {completado ? (
-                          <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Finalizado</span>
-                        ) : (
-                          <div className="flex items-center justify-center space-x-2">
-                            {env.estado_envio === 'Pendiente' && (
-                              <>
-                                <button
-                                  onClick={() => handleActualizarEstado(env.id, 'En Camino')}
-                                  disabled={!env.repartidor_id}
-                                  className="py-1.5 px-3 bg-zinc-950 hover:bg-zinc-800 text-white rounded-lg text-xs font-semibold transition-all disabled:opacity-40 shadow-sm"
-                                >
-                                  Iniciar Ruta
-                                </button>
-                                {/* Botón de cancelación administrativa (baja lógica) */}
-                                <button
-                                  onClick={() => abrirModalCancelarAdmin(env.id)}
-                                  className="py-1.5 px-2.5 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
-                                  title="Cancelar envío administrativamente"
-                                >
-                                  <Ban size={13} />
-                                  Cancelar
-                                </button>
-                              </>
-                            )}
-                            {env.estado_envio === 'En Camino' && (
-                              <>
-                                <button
-                                  onClick={() => handleActualizarEstado(env.id, 'Entregado')}
-                                  className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm"
-                                >
-                                  Entregado
-                                </button>
-                                <button
-                                  onClick={() => handleActualizarEstado(env.id, 'Cancelado')}
-                                  className="py-1.5 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm"
-                                >
-                                  Cancelar
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => abrirDetalleEnvio(env)}
+                            className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                            title="Ver mapa e información del envío"
+                          >
+                            <Eye size={13} />
+                          </button>
+                          
+                          {!completado && (
+                            <>
+                              {env.estado_envio === 'Pendiente' && (
+                                <>
+                                  <button
+                                    onClick={() => handleActualizarEstado(env.id, 'En Camino')}
+                                    disabled={!env.repartidor_id}
+                                    className="py-1.5 px-3 bg-zinc-950 hover:bg-zinc-800 text-white rounded-lg text-xs font-semibold transition-all disabled:opacity-40 shadow-sm cursor-pointer"
+                                  >
+                                    Iniciar Ruta
+                                  </button>
+                                  <button
+                                    onClick={() => abrirModalCancelarAdmin(env.id)}
+                                    className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition duration-150 cursor-pointer flex items-center gap-1"
+                                    title="Cancelar envío administrativamente"
+                                  >
+                                    <Ban size={13} />
+                                  </button>
+                                </>
+                              )}
+                              {env.estado_envio === 'En Camino' && (
+                                <>
+                                  <button
+                                    onClick={() => handleActualizarEstado(env.id, 'Entregado')}
+                                    className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer"
+                                  >
+                                    Entregado
+                                  </button>
+                                  <button
+                                    onClick={() => handleActualizarEstado(env.id, 'Cancelado')}
+                                    className="py-1.5 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </>
+                              )}
+                            </>
+                          )}
+                          {completado && (
+                            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Finalizado</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -426,6 +530,134 @@ export const GestionEnvios = () => {
           paginaActual={pagina}
           alCambiarPagina={setPagina}
         />
+      </div>
+
+      {/* Vista para pantallas móviles (Tarjetas independientes responsivas Mobile-First) */}
+      <div className="block lg:hidden space-y-3">
+        {cargando ? (
+          <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 font-medium">
+            Cargando órdenes de envío...
+          </div>
+        ) : enviosFiltrados.length === 0 ? (
+          <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 font-medium">
+            No se encontraron despachos registrados en el sistema.
+          </div>
+        ) : (
+          enviosPaginados.map((env) => {
+            const completado = env.estado_envio === 'Entregado' || env.estado_envio === 'Cancelado';
+            return (
+              <div key={env.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-col gap-2.5">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200 text-xs font-mono font-bold">
+                      Venta: {env.venta_id.substring(0, 8)}
+                    </span>
+                    {env.fecha_creacion && (
+                      <span className="text-[10px] text-slate-400 block mt-1 font-medium">
+                        {new Date(env.fecha_creacion).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
+                      </span>
+                    )}
+                  </div>
+                  <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] border ${
+                    env.estado_envio === 'Pendiente' ? 'bg-amber-50 text-amber-700 border border-amber-200/50' :
+                    env.estado_envio === 'En Camino' ? 'bg-sky-50 text-sky-700 border border-sky-200/50' :
+                    env.estado_envio === 'Entregado' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50' : 
+                    'bg-rose-50 text-rose-700 border border-rose-200/50'
+                  }`}>
+                    {env.estado_envio}
+                  </span>
+                </div>
+
+                <div className="flex items-start text-xs text-slate-600 gap-1.5 py-0.5">
+                  <MapPin size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                  <span>{env.direccion_despacho}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-50 border border-slate-100 rounded-lg p-2 font-medium text-slate-600">
+                  <div>
+                    <span className="text-[8px] text-slate-400 uppercase block font-bold">Costo Envío</span>
+                    <span className="font-extrabold text-slate-900">Bs. {env.costo_envio.toFixed(2)}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[8px] text-slate-400 uppercase block font-bold">Repartidor</span>
+                    <span className="font-bold text-slate-700 truncate max-w-[120px] inline-block">
+                      {obtenerNombreRepartidor(env.repartidor_id)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center border-t border-slate-50 pt-2 gap-2 flex-wrap">
+                  <button
+                    onClick={() => abrirDetalleEnvio(env)}
+                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                  >
+                    <Eye size={12} /> Detalle
+                  </button>
+
+                  <div className="flex gap-1.5">
+                    {!completado && (
+                      <>
+                        {/* Selector de asignación rápida para repartidor */}
+                        <select
+                          value={env.repartidor_id || ''}
+                          onChange={(e) => handleAsignarRepartidor(env.id, e.target.value)}
+                          className="border border-slate-200 rounded-lg text-[10px] py-1 px-2 bg-white outline-none cursor-pointer font-bold text-slate-600"
+                        >
+                          <option value="">Asignar Repartidor</option>
+                          {repartidores
+                            .filter(r => r.estado_repartidor === 'Disponible' || r.id === env.repartidor_id)
+                            .map(rep => {
+                              const usr = usuarios.find(u => u.id === rep.usuario_id);
+                              return (
+                                <option key={rep.id} value={rep.id}>
+                                  {usr ? usr.nombre_completo : 'Repartidor'} ({rep.placa})
+                                </option>
+                              );
+                            })}
+                        </select>
+
+                        {env.estado_envio === 'Pendiente' && (
+                          <>
+                            <button
+                              onClick={() => handleActualizarEstado(env.id, 'En Camino')}
+                              disabled={!env.repartidor_id}
+                              className="bg-zinc-950 hover:bg-zinc-800 text-white px-2.5 py-1 rounded-lg font-bold text-[10px] transition disabled:opacity-40"
+                            >
+                              Iniciar Ruta
+                            </button>
+                            <button
+                              onClick={() => abrirModalCancelarAdmin(env.id)}
+                              className="border border-rose-200 text-rose-600 hover:bg-rose-50 px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center gap-0.5"
+                            >
+                              <Ban size={12} /> Cancelar
+                            </button>
+                          </>
+                        )}
+
+                        {env.estado_envio === 'En Camino' && (
+                          <>
+                            <button
+                              onClick={() => handleActualizarEstado(env.id, 'Entregado')}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg font-bold text-[10px] transition"
+                            >
+                              Entregado
+                            </button>
+                            <button
+                              onClick={() => handleActualizarEstado(env.id, 'Cancelado')}
+                              className="bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 rounded-lg font-bold text-[10px] transition"
+                            >
+                              Cancelar
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* MODAL REGISTRAR ENVIO MANUAL */}
@@ -585,6 +817,95 @@ export const GestionEnvios = () => {
                   {procesandoCancelarAdmin ? 'Cancelando...' : 'Confirmar Cancelación'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: VER DETALLE DEL ENVÍO CON MAPA INTERACTIVO ── */}
+      {mostrarModalDetalle && envioSeleccionado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden border border-zinc-200 animate-fade-in-up">
+            <div className="h-1 bg-gradient-to-r from-indigo-600 to-sky-500" />
+            
+            <div className="flex justify-between items-center px-5 py-4 border-b border-zinc-100">
+              <h3 className="font-bold text-zinc-950 text-base flex items-center gap-1.5 font-display">
+                <Truck size={18} className="text-indigo-600" />
+                Detalles Logísticos del Envío
+              </h3>
+              <button 
+                onClick={() => setMostrarModalDetalle(false)} 
+                className="text-zinc-400 hover:text-zinc-600 p-1 hover:bg-zinc-100 rounded-lg transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 max-h-[80vh] overflow-y-auto space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-xs font-medium text-zinc-600">
+                <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
+                  <span className="text-[9px] text-zinc-400 uppercase font-bold block mb-1">Cliente Destinatario</span>
+                  <p className="font-bold text-zinc-900 text-sm">{envioSeleccionado.cliente?.nombre_completo || 'No registrado'}</p>
+                  <p className="text-zinc-500 mt-1">📞 Teléfono: {envioSeleccionado.cliente?.telefono || 'N/A'}</p>
+                </div>
+                <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
+                  <span className="text-[9px] text-zinc-400 uppercase font-bold block mb-1">Información de Ruta</span>
+                  <p className="mt-0.5">
+                    <span className="font-semibold text-zinc-500">Costo:</span> Bs. {envioSeleccionado.costo_envio.toFixed(2)}
+                  </p>
+                  <p className="mt-0.5">
+                    <span className="font-semibold text-zinc-500">Estado:</span> <span className="font-bold text-indigo-600">{envioSeleccionado.estado_envio}</span>
+                  </p>
+                  <p className="mt-0.5">
+                    <span className="font-semibold text-zinc-500">Repartidor:</span> {obtenerNombreRepartidor(envioSeleccionado.repartidor_id)}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[9px] text-zinc-400 uppercase font-bold block mb-1.5">Dirección de Despacho</span>
+                <p className="text-xs bg-zinc-50 border border-zinc-100 rounded-xl p-3 text-zinc-700 font-medium leading-relaxed flex gap-2">
+                  <MapPin size={16} className="text-indigo-600 shrink-0 mt-0.5" />
+                  {envioSeleccionado.direccion_despacho}
+                </p>
+              </div>
+
+              {/* Geolocalización / Mapa */}
+              <div>
+                <span className="text-[9px] text-zinc-400 uppercase font-bold block mb-1.5">Geolocalización de Entrega</span>
+                {envioSeleccionado.cliente?.latitud && envioSeleccionado.cliente?.longitud ? (
+                  <div className="w-full h-64 rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 shadow-inner relative z-10">
+                    <MapaInteractivo
+                      lat={envioSeleccionado.cliente.latitud}
+                      lng={envioSeleccionado.cliente.longitud}
+                      soloLectura={true}
+                    />
+                  </div>
+                ) : (
+                  <div className="bg-zinc-50 border border-dashed border-zinc-300 rounded-xl p-8 text-center text-zinc-400 text-xs font-semibold">
+                    📍 No se dispone de coordenadas geográficas para este cliente.
+                  </div>
+                )}
+                {envioSeleccionado.cliente?.enlace_ubicacion && (
+                  <a
+                    href={envioSeleccionado.cliente.enlace_ubicacion}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-indigo-600 font-bold hover:underline mt-2 flex items-center gap-1"
+                  >
+                    🔗 Abrir ubicación externa en mapas
+                  </a>
+                )}
+              </div>
+            </div>
+
+            <div className="px-5 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end">
+              <button
+                onClick={() => setMostrarModalDetalle(false)}
+                className="py-2 px-5 bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+              >
+                Cerrar Detalle
+              </button>
             </div>
           </div>
         </div>
