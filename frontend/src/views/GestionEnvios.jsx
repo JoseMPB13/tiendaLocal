@@ -56,13 +56,17 @@ export const GestionEnvios = () => {
     const enlace = envioOCliente.enlace_mapa ?? envioOCliente.enlace_ubicacion ?? 
                    envioOCliente.cliente?.enlace_mapa ?? envioOCliente.cliente?.enlace_ubicacion;
     if (enlace && typeof enlace === 'string') {
-      const regex = /(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/;
+      const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)|q=(-?\d+\.\d+),(-?\d+\.\d+)|(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)/;
       const match = enlace.match(regex);
       if (match) {
-        const pLat = parseFloat(match[1]);
-        const pLng = parseFloat(match[2]);
-        if (!isNaN(pLat) && !isNaN(pLng)) {
-          return [pLat, pLng];
+        const latStr = match[1] || match[3] || match[5];
+        const lngStr = match[2] || match[4] || match[6];
+        if (latStr && lngStr) {
+          const pLat = parseFloat(latStr);
+          const pLng = parseFloat(lngStr);
+          if (!isNaN(pLat) && !isNaN(pLng)) {
+            return [pLat, pLng];
+          }
         }
       }
     }
@@ -79,11 +83,11 @@ export const GestionEnvios = () => {
   const [costoEnvio, setCostoEnvio] = useState('0.00');
   const [procesandoForm, setProcesandoForm] = useState(false);
 
-  // Modal para cancelación administrativa de un envío (baja lógica)
-  const [mostrarModalCancelarAdmin, setMostrarModalCancelarAdmin] = useState(false);
-  const [envioCancelarId, setEnvioCancelarId] = useState(null);
-  const [motivoCancelarAdmin, setMotivoCancelarAdmin] = useState('');
-  const [procesandoCancelarAdmin, setProcesandoCancelarAdmin] = useState(false);
+  // Modal para cancelación del envío con motivo obligatorio
+  const [mostrarModalCancelar, setMostrarModalCancelar] = useState(false);
+  const [envioACancelar, setEnvioACancelar] = useState(null);
+  const [motivoCancelacion, setMotivoCancelacion] = useState('');
+  const [procesandoCancelar, setProcesandoCancelar] = useState(false);
 
   // Modal para ver detalles logísticos con mapa
   const [mostrarModalDetalle, setMostrarModalDetalle] = useState(false);
@@ -142,16 +146,20 @@ export const GestionEnvios = () => {
     const selectedVenta = ventas.find(v => v.id === vId);
     if (selectedVenta) {
       const cli = clientes.find(c => c.id === selectedVenta.cliente_id);
-      if (cli) {
-        if (cli.direccion) {
-          setDireccion(cli.direccion);
-        } else {
-          setDireccion('');
-        }
-        const [resolvedLat, resolvedLng] = resolverCoordenadas(cli);
-        setFormLat(resolvedLat);
-        setFormLng(resolvedLng);
-      }
+      
+      // Auto-rellenar la dirección física de entrega (direccion_despacho de venta o del cliente)
+      const dirEntrega = selectedVenta.direccion_despacho || cli?.direccion || '';
+      setDireccion(dirEntrega);
+
+      // Combinar venta y cliente para resolver sus coordenadas de forma robusta
+      const ventaConCliente = {
+        ...selectedVenta,
+        cliente: cli
+      };
+
+      const [resolvedLat, resolvedLng] = resolverCoordenadas(ventaConCliente);
+      setFormLat(resolvedLat);
+      setFormLng(resolvedLng);
     }
   };
 
@@ -268,31 +276,35 @@ export const GestionEnvios = () => {
     }
   };
 
-  // Abrir modal de cancelación administrativa (baja lógica)
-  const abrirModalCancelarAdmin = (envioId) => {
-    setEnvioCancelarId(envioId);
-    setMotivoCancelarAdmin('');
-    setMostrarModalCancelarAdmin(true);
+  // Abrir modal de cancelación con motivo obligatorio
+  const abrirModalCancelar = (envioId) => {
+    setEnvioACancelar(envioId);
+    setMotivoCancelacion('');
+    setMostrarModalCancelar(true);
   };
 
-  // Confirmar cancelación administrativa con motivo obligatorio
-  const handleCancelarEnvioAdmin = async () => {
-    if (!motivoCancelarAdmin.trim() || !envioCancelarId) return;
+  // Confirmar cancelación con motivo obligatorio
+  const handleConfirmarCancelar = async () => {
+    if (!motivoCancelacion.trim() || !envioACancelar) return;
     try {
-      setProcesandoCancelarAdmin(true);
-      const res = await deliveryService.cancelarEnvio(envioCancelarId, motivoCancelarAdmin.trim());
+      setProcesandoCancelar(true);
+      const payload = {
+        estado_envio: 'Cancelado',
+        motivo_cancelacion: motivoCancelacion.trim()
+      };
+      const res = await deliveryService.actualizarEstadoEnvio(envioACancelar, payload);
       if (res.ok) {
-        toast.success('Envío cancelado administrativamente. El registro se conserva en el historial.');
-        setMostrarModalCancelarAdmin(false);
-        setEnvioCancelarId(null);
-        setMotivoCancelarAdmin('');
+        toast.success('Envío cancelado correctamente.');
+        setMostrarModalCancelar(false);
+        setEnvioACancelar(null);
+        setMotivoCancelacion('');
         cargarDatos();
       }
     } catch (ex) {
       const errorMsg = ex.response?.data?.detail || 'No se pudo cancelar el envío.';
       toast.error(`Error: ${errorMsg}`);
     } finally {
-      setProcesandoCancelarAdmin(false);
+      setProcesandoCancelar(false);
     }
   };
 
@@ -645,7 +657,7 @@ export const GestionEnvios = () => {
                                     Iniciar Ruta
                                   </button>
                                   <button
-                                    onClick={() => abrirModalCancelarAdmin(env.id)}
+                                    onClick={() => abrirModalCancelar(env.id)}
                                     className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-semibold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 select-none cursor-pointer"
                                     title="Cancelar envío administrativamente"
                                   >
@@ -664,7 +676,7 @@ export const GestionEnvios = () => {
                                     Entregado
                                   </button>
                                   <button
-                                    onClick={() => handleActualizarEstado(env.id, 'Cancelado')}
+                                    onClick={() => abrirModalCancelar(env.id)}
                                     className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-semibold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 select-none cursor-pointer"
                                   >
                                     <Ban size={12} />
@@ -799,7 +811,7 @@ export const GestionEnvios = () => {
                               <Play size={10} /> Iniciar Ruta
                             </button>
                             <button
-                              onClick={() => abrirModalCancelarAdmin(env.id)}
+                              onClick={() => abrirModalCancelar(env.id)}
                               className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[10px] font-bold px-2 py-1 rounded-lg transition flex items-center gap-0.5 select-none cursor-pointer"
                             >
                               <Ban size={10} /> Cancelar
@@ -816,7 +828,7 @@ export const GestionEnvios = () => {
                               <Check size={10} /> Entregado
                             </button>
                             <button
-                              onClick={() => handleActualizarEstado(env.id, 'Cancelado')}
+                              onClick={() => abrirModalCancelar(env.id)}
                               className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[10px] font-bold px-2 py-1 rounded-lg transition flex items-center gap-0.5 select-none cursor-pointer"
                             >
                               <Ban size={10} /> Cancelar
@@ -862,9 +874,11 @@ export const GestionEnvios = () => {
                   <option value="">-- Seleccione una Venta --</option>
                   {ventas
                     .filter(v => {
+                      // Solo ventas marcadas para delivery
+                      const requiereDelivery = v.para_delivery === true;
                       // Evitar duplicar despachos para un mismo ticket
                       const tieneEnvioActivo = envios.some(e => e.venta_id === v.id);
-                      return !tieneEnvioActivo;
+                      return requiereDelivery && !tieneEnvioActivo;
                     })
                     .map(v => {
                       const cli = clientes.find(c => c.id === v.cliente_id);
@@ -962,17 +976,17 @@ export const GestionEnvios = () => {
         </div>
       )}
 
-      {/* MODAL: CANCELACIÓN ADMINISTRATIVA DE ENVÍO (BAJA LÓGICA) */}
-      {mostrarModalCancelarAdmin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-sm p-4">
+      {/* MODAL: CANCELACIÓN CON MOTIVO OBLIGATORIO */}
+      {mostrarModalCancelar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-zinc-200 transition-all duration-300">
             <div className="flex items-center justify-between pb-4 border-b border-zinc-100">
               <h3 className="font-bold text-zinc-900 text-base flex items-center">
                 <Ban className="text-rose-600 mr-2" size={20} />
-                Cancelar Envío (Baja Lógica)
+                Cancelar Orden de Envío
               </h3>
               <button
-                onClick={() => setMostrarModalCancelarAdmin(false)}
+                onClick={() => setMostrarModalCancelar(false)}
                 className="text-zinc-400 hover:text-zinc-600 p-1 hover:bg-zinc-100 rounded-lg transition-colors"
               >
                 <X size={20} />
@@ -980,21 +994,20 @@ export const GestionEnvios = () => {
             </div>
 
             <div className="my-4 space-y-4">
-              <p className="text-sm text-zinc-600">
-                El envío se marcará como <span className="font-semibold text-rose-600">Cancelado</span> y se conservará
-                en el historial del sistema. Esta acción no elimina el registro.
+              <p className="text-sm text-zinc-600 leading-relaxed font-medium">
+                El envío se marcará en estado <span className="font-bold text-rose-600">Cancelado</span>. Esta operación requiere especificar un motivo justificativo para su registro.
               </p>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
                   Motivo de Cancelación <span className="text-rose-500">*</span>
                 </label>
                 <textarea
-                  value={motivoCancelarAdmin}
-                  onChange={(e) => setMotivoCancelarAdmin(e.target.value)}
-                  placeholder="Ej: Error en la dirección, cliente no disponible, pedido duplicado..."
+                  value={motivoCancelacion}
+                  onChange={(e) => setMotivoCancelacion(e.target.value)}
+                  placeholder="Escriba la justificación detallada de la cancelación..."
                   rows="3"
-                  className="w-full px-3.5 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none resize-none transition-all placeholder:text-zinc-400"
+                  className="w-full px-3.5 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none resize-none transition-all placeholder:text-zinc-400 font-medium text-zinc-800"
                   required
                 />
               </div>
@@ -1002,20 +1015,20 @@ export const GestionEnvios = () => {
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setMostrarModalCancelarAdmin(false)}
-                  disabled={procesandoCancelarAdmin}
-                  className="flex-1 py-2 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-sm font-medium transition-all"
+                  onClick={() => setMostrarModalCancelar(false)}
+                  disabled={procesandoCancelar}
+                  className="flex-1 py-2 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-sm font-medium transition-all cursor-pointer"
                 >
-                  Atrás
+                  Regresar
                 </button>
                 <button
                   type="button"
-                  onClick={handleCancelarEnvioAdmin}
-                  disabled={procesandoCancelarAdmin || !motivoCancelarAdmin.trim()}
-                  className="flex-1 py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-50 shadow-sm flex items-center justify-center gap-2"
+                  onClick={handleConfirmarCancelar}
+                  disabled={procesandoCancelar || !motivoCancelacion.trim()}
+                  className="flex-1 py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Ban size={15} />
-                  {procesandoCancelarAdmin ? 'Cancelando...' : 'Confirmar Cancelación'}
+                  {procesandoCancelar ? 'Cancelando...' : 'Confirmar Cancelación'}
                 </button>
               </div>
             </div>

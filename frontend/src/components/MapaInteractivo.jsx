@@ -80,21 +80,18 @@ export const MapaInteractivo = ({ lat, lng, onChange, soloLectura = false }) => 
         }
       }, 100);
     } else {
-      // Si el mapa ya existe, actualizamos su vista e indicador únicamente si cambiaron externamente
+      // Si el mapa ya existe, actualizamos su vista e indicador de forma imperativa
       const map = mapInstanceRef.current;
       const marker = markerInstanceRef.current;
 
       if (map && marker) {
-        const actualLatLng = marker.getLatLng();
-        
-        // Usamos una tolerancia para evitar problemas con precisión decimal (punto flotante de JS)
-        const diffLat = Math.abs(actualLatLng.lat - latVal);
-        const diffLng = Math.abs(actualLatLng.lng - lngVal);
-
-        if (diffLat > 0.00001 || diffLng > 0.00001) {
-          marker.setLatLng([latVal, lngVal]);
-          map.setView([latVal, lngVal], map.getZoom());
-        }
+        marker.setLatLng([latVal, lngVal]);
+        map.setView([latVal, lngVal], 15);
+        setTimeout(() => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize();
+          }
+        }, 100);
       }
     }
   }, [lat, lng, soloLectura]); // eslint-disable-line react-hooks/exhaustive-deps
