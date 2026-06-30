@@ -17,7 +17,8 @@ import PaginadorTablas from '../components/PaginadorTablas';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Truck, Plus, Search, Filter, MapPin, 
-  CheckCircle2, Clock, X, ShieldAlert, Ban, Eye, Edit3, Play, Check
+  CheckCircle2, Clock, X, ShieldAlert, Ban, Eye, Edit3, Play, Check,
+  ShoppingCart
 } from 'lucide-react';
 import MapaInteractivo from '../components/MapaInteractivo';
 import ventaService from '../services/ventaService';
@@ -677,6 +678,15 @@ export const GestionEnvios = () => {
                               >
                                 <Edit3 size={13} />
                               </button>
+                              {['Por Despachar', 'Pendiente'].includes(env.estado_envio) && (
+                                <button
+                                  onClick={() => handleRedirigirEditarVenta(env.venta_id)}
+                                  className="text-orange-600 hover:text-orange-950 bg-orange-50 hover:bg-orange-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                                  title="Editar venta original en POS"
+                                >
+                                  <ShoppingCart size={13} />
+                                </button>
+                              )}
                               {env.estado_envio === 'Pendiente' && (
                                 <>
                                   <button
@@ -801,12 +811,23 @@ export const GestionEnvios = () => {
                       <Eye size={12} /> Detalle
                     </button>
                     {!completado && (
-                      <button
-                        onClick={() => abrirEditarEnvio(env)}
-                        className="bg-amber-50 hover:bg-amber-100 text-amber-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
-                      >
-                        <Edit3 size={12} /> Editar
-                      </button>
+                      <>
+                        <button
+                          onClick={() => abrirEditarEnvio(env)}
+                          className="bg-amber-50 hover:bg-amber-100 text-amber-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                        >
+                          <Edit3 size={12} /> Editar
+                        </button>
+                        {['Por Despachar', 'Pendiente'].includes(env.estado_envio) && (
+                          <button
+                            onClick={() => handleRedirigirEditarVenta(env.venta_id)}
+                            className="bg-orange-50 hover:bg-orange-100 text-orange-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                            title="Editar venta original en POS"
+                          >
+                            <ShoppingCart size={12} /> Venta
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
 
