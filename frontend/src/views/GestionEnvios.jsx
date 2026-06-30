@@ -1,3 +1,14 @@
+// =============================================================================
+// COMPONENTE: GestionEnvios.jsx
+// Propósito: Vista administrativa para el control logístico de despachos y repartos.
+//            Permite asociar órdenes a ventas, cambiar repartidores y monitorear
+//            rutas en tiempo real.
+// Integración Leaflet: Hace uso del componente de mapas interactivos del proyecto
+//                      para geolocalizar de forma visual e inmediata la dirección
+//                      de entrega de los clientes registrados.
+// Idioma: Español
+// =============================================================================
+
 import { useState, useEffect } from 'react';
 import deliveryService from '../services/deliveryService';
 import usuarioService from '../services/usuarioService';
@@ -5,9 +16,11 @@ import PaginadorTablas from '../components/PaginadorTablas';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Truck, Plus, Search, Filter, MapPin, 
-  CheckCircle2, Clock, X, ShieldAlert, Ban, Eye
+  CheckCircle2, Clock, X, ShieldAlert, Ban, Eye, Edit3
 } from 'lucide-react';
 import MapaInteractivo from '../components/MapaInteractivo';
+import ventaService from '../services/ventaService';
+import clienteService from '../services/clienteService';
 
 export const GestionEnvios = () => {
   const [envios, setEnvios] = useState([]);
@@ -41,9 +54,95 @@ export const GestionEnvios = () => {
   const [mostrarModalDetalle, setMostrarModalDetalle] = useState(false);
   const [envioSeleccionado, setEnvioSeleccionado] = useState(null);
 
+  const [ventas, setVentas] = useState([]);
+  const [clientes, setClientes] = useState([]);
+
+  // Modal para la edición de envío
+  const [mostrarModalEditar, setMostrarModalEditar] = useState(false);
+  const [envioEditar, setEnvioEditar] = useState(null);
+  const [editDireccion, setEditDireccion] = useState('');
+  const [editCostoEnvio, setEditCostoEnvio] = useState('0.00');
+  const [editRepartidorId, setEditRepartidorId] = useState('');
+  const [procesandoEdit, setProcesandoEdit] = useState(false);
+
   const abrirDetalleEnvio = (env) => {
     setEnvioSeleccionado(env);
     setMostrarModalDetalle(true);
+  };
+
+  // Cargar ventas y clientes al abrir el modal de nuevo despacho
+  const abrirNuevoDespacho = async () => {
+    try {
+      const [resVentas, resClientes] = await Promise.all([
+        ventaService.obtenerVentas({ limit: 200 }),
+        clienteService.obtenerTodos(true)
+      ]);
+      if (resVentas.ok) setVentas(resVentas.data || []);
+      if (resClientes.ok) setClientes(resClientes.data || []);
+      setVentaId('');
+      setRepartidorId('');
+      setDireccion('');
+      setCostoEnvio('0.00');
+      setMostrarForm(true);
+    } catch (err) {
+      console.error(err);
+      toast.error("Error al cargar ventas o clientes.");
+    }
+  };
+
+  const handleVentaChange = (vId) => {
+    setVentaId(vId);
+    if (!vId) {
+      setDireccion('');
+      return;
+    }
+    const selectedVenta = ventas.find(v => v.id === vId);
+    if (selectedVenta) {
+      const cli = clientes.find(c => c.id === selectedVenta.cliente_id);
+      if (cli && cli.direccion) {
+        setDireccion(cli.direccion);
+      } else {
+        setDireccion('');
+      }
+    }
+  };
+
+  // Edición de envíos
+  const abrirEditarEnvio = async (env) => {
+    setEnvioEditar(env);
+    setEditDireccion(env.direccion_despacho);
+    setEditCostoEnvio(env.costo_envio.toString());
+    setEditRepartidorId(env.repartidor_id || '');
+    setMostrarModalEditar(true);
+  };
+
+  const handleGuardarEdicion = async (e) => {
+    e.preventDefault();
+    if (!editDireccion.trim()) {
+      toast.error("La dirección de despacho es requerida.");
+      return;
+    }
+
+    setProcesandoEdit(true);
+    const payload = {
+      direccion_despacho: editDireccion.trim(),
+      costo_envio: parseFloat(editCostoEnvio) || 0.00,
+      repartidor_id: editRepartidorId || null
+    };
+
+    try {
+      const res = await deliveryService.actualizarEstadoEnvio(envioEditar.id, payload);
+      if (res.ok) {
+        toast.success("Envío actualizado correctamente.");
+        setMostrarModalEditar(false);
+        cargarDatos();
+      }
+    } catch (ex) {
+      const errorMsg = ex.response?.data?.detail || "Error al actualizar el envío.";
+      toast.error(errorMsg);
+    } finally {
+      setProcesandoEdit(false);
+    }
   };
 
   const cargarDatos = async () => {
@@ -206,7 +305,35 @@ export const GestionEnvios = () => {
     <div className="space-y-6">
       <Toaster position="top-right" />
 
-      {/* ── METRICAS RAPIDAS (Estilo unificado) ── */}
+      {/* ── 1. CABECERA DE PÁGINA ── */}
+      <div className="page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '40px', height: '40px',
+            background: 'linear-gradient(135deg, #6d28d9, #4338ca)',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <Truck size={20} style={{ color: 'white' }} />
+          </div>
+          <div>
+            <h3 className="page-title">Monitoreo de Envíos & Delivery</h3>
+            <p className="page-subtitle">
+              Asignación de repartidores, visualización de mapas y control de estados de ruta en tiempo real
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={abrirNuevoDespacho}
+          className="flex items-center justify-center py-2 px-4 bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm shrink-0 select-none cursor-pointer w-full sm:w-auto self-stretch sm:self-auto"
+        >
+          <Plus size={14} className="mr-1" />
+          Nuevo Despacho
+        </button>
+      </div>
+
+      {/* ── 2. MINI-DASHBOARD METRICAS (Estilo unificado) ── */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -313,32 +440,12 @@ export const GestionEnvios = () => {
           </div>
           <div>
             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', fontFamily: 'Inter, sans-serif' }}>Cancelados</span>
-            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#e11d48', fontFamily: 'Inter, sans-serif' }}>{totalCancelados} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>bajas</span></span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#e11d48', fontFamily: 'Inter, sans-serif' }}>{totalCancelados} <span style={{ fontSize: '0.8rem', fontfontFamily: 'Inter, sans-serif' }}>bajas</span></span>
           </div>
         </div>
       </div>
 
-      {/* ── CABECERA ── */}
-      <div className="page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '40px', height: '40px',
-            background: 'linear-gradient(135deg, #6d28d9, #4338ca)',
-            borderRadius: '10px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Truck size={20} style={{ color: 'white' }} />
-          </div>
-          <div>
-            <h3 className="page-title">Monitoreo de Envíos & Delivery</h3>
-            <p className="page-subtitle">
-              Asignación de repartidores, visualización de mapas y control de estados de ruta en tiempo real
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* ── BARRA DE BÚSQUEDA Y FILTROS ── */}
+      {/* ── 3. PANEL DE FILTROS ── */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
         <div className="relative flex-1 w-full">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -368,14 +475,6 @@ export const GestionEnvios = () => {
               <option value="Cancelado">Cancelados</option>
             </select>
           </div>
-
-          <button
-            onClick={() => setMostrarForm(true)}
-            className="btn-primary flex items-center justify-center py-2 px-4 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex-1 sm:flex-initial"
-          >
-            <Plus size={14} className="mr-1" />
-            Nuevo Despacho
-          </button>
         </div>
       </div>
 
@@ -475,6 +574,13 @@ export const GestionEnvios = () => {
                           
                           {!completado && (
                             <>
+                              <button
+                                onClick={() => abrirEditarEnvio(env)}
+                                className="text-amber-600 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                                title="Editar datos del envío"
+                              >
+                                <Edit3 size={13} />
+                              </button>
                               {env.estado_envio === 'Pendiente' && (
                                 <>
                                   <button
@@ -587,12 +693,22 @@ export const GestionEnvios = () => {
                 </div>
 
                 <div className="flex justify-between items-center border-t border-slate-50 pt-2 gap-2 flex-wrap">
-                  <button
-                    onClick={() => abrirDetalleEnvio(env)}
-                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
-                  >
-                    <Eye size={12} /> Detalle
-                  </button>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => abrirDetalleEnvio(env)}
+                      className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                    >
+                      <Eye size={12} /> Detalle
+                    </button>
+                    {!completado && (
+                      <button
+                        onClick={() => abrirEditarEnvio(env)}
+                        className="bg-amber-50 hover:bg-amber-100 text-amber-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                      >
+                        <Edit3 size={12} /> Editar
+                      </button>
+                    )}
+                  </div>
 
                   <div className="flex gap-1.5">
                     {!completado && (
@@ -679,15 +795,25 @@ export const GestionEnvios = () => {
 
             <form onSubmit={handleGuardarEnvio} className="my-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1">ID de Venta (UUID)</label>
-                <input
-                  type="text"
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">Seleccionar Venta <span className="text-red-500">*</span></label>
+                <select
                   required
                   value={ventaId}
-                  onChange={(e) => setVentaId(e.target.value)}
-                  placeholder="Ingrese el UUID de la venta"
-                  className="w-full px-3.5 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none font-mono"
-                />
+                  onChange={(e) => handleVentaChange(e.target.value)}
+                  className="w-full border border-zinc-200 rounded-xl text-sm py-2 px-3 bg-white focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none transition-all cursor-pointer font-medium text-zinc-700"
+                >
+                  <option value="">-- Seleccione una Venta --</option>
+                  {ventas.map(v => {
+                    const cli = clientes.find(c => c.id === v.cliente_id);
+                    const clienteNombre = cli ? cli.nombre : 'Cliente Desconocido';
+                    const totalStr = v.total.toFixed(2);
+                    return (
+                      <option key={v.id} value={v.id}>
+                        [{v.codigo_factura || 'Sin Código'}] - {clienteNombre} - Bs. {totalStr}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
 
               <div>
@@ -907,6 +1033,95 @@ export const GestionEnvios = () => {
                 Cerrar Detalle
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: EDITAR ENVÍO ── */}
+      {mostrarModalEditar && envioEditar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-zinc-200 transition-all duration-300">
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-100">
+              <h3 className="font-bold text-zinc-900 text-base flex items-center">
+                <Edit3 className="text-indigo-600 mr-2" size={20} />
+                Editar Datos de Delivery
+              </h3>
+              <button 
+                onClick={() => setMostrarModalEditar(false)} 
+                className="text-zinc-400 hover:text-zinc-600 p-1 hover:bg-zinc-100 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleGuardarEdicion} className="my-4 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">Repartidor Asignado</label>
+                <select
+                  value={editRepartidorId}
+                  onChange={(e) => setEditRepartidorId(e.target.value)}
+                  className="w-full border border-zinc-200 rounded-xl text-sm py-2 px-3 bg-white focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none transition-all cursor-pointer font-medium text-zinc-700"
+                >
+                  <option value="">Sin asignar repartidor</option>
+                  {repartidores
+                    .filter(r => r.estado_repartidor === 'Disponible' || r.id === envioEditar.repartidor_id)
+                    .map(rep => {
+                      const usr = usuarios.find(u => u.id === rep.usuario_id);
+                      return (
+                        <option key={rep.id} value={rep.id}>
+                          {usr ? usr.nombre_completo : 'Repartidor'} ({rep.placa})
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">Dirección de Despacho</label>
+                <textarea
+                  required
+                  value={editDireccion}
+                  onChange={(e) => setEditDireccion(e.target.value)}
+                  placeholder="Ej: Av. Brasil 4510, Dpto 402, Jesús María"
+                  rows="3"
+                  className="w-full px-3.5 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none resize-none font-medium text-zinc-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">Costo de Envío / Recargo (Bs.)</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-zinc-400 text-sm">
+                    Bs.
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={editCostoEnvio}
+                    onChange={(e) => setEditCostoEnvio(e.target.value)}
+                    className="w-full pl-8 pr-3.5 py-2 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-zinc-950 focus:border-zinc-950 outline-none font-semibold text-zinc-800"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4 border-t border-zinc-100">
+                <button
+                  type="button"
+                  onClick={() => setMostrarModalEditar(false)}
+                  className="py-2 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-sm font-medium transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={procesandoEdit}
+                  className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-50 shadow-sm cursor-pointer"
+                >
+                  {procesandoEdit ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
