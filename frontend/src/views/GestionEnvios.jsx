@@ -351,7 +351,7 @@ export const GestionEnvios = () => {
     };
 
     try {
-      const res = await deliveryService.actualizarEnvio(envioSeleccionadoId, payload);
+      const res = await deliveryService.actualizarEstadoEnvio(envioSeleccionadoId, payload);
       if (res.ok) {
         toast.success("Despacho iniciado y asignado.");
         setMostrarForm(false);
