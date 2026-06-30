@@ -129,45 +129,91 @@ export const BitacoraSistema = () => {
     toast.success("Filtros restablecidos");
   };
 
-  // --- Renderizador de JSON Premium con resaltado sintáctico por tipo de valor ---
-  const renderJsonColoreado = (data) => {
+  // --- Renderizador de JSON Premium con resaltado sintáctico y Diff Visual ---
+
+  // Formatea un valor JSON individual con colores por tipo
+  const renderValorJson = (val) => {
+    if (val === 'null') return <span className="text-zinc-400 italic">null</span>;
+    if (val === 'true')  return <span className="text-amber-600 font-bold">true</span>;
+    if (val === 'false') return <span className="text-amber-600 font-bold">false</span>;
+    if (val !== '' && !isNaN(Number(val))) return <span className="text-blue-600 font-semibold">{val}</span>;
+    if (val.startsWith('"')) return <span className="text-emerald-600">{val}</span>;
+    return <span className="text-zinc-600">{val}</span>;
+  };
+
+  // Renderiza un objeto JSON con resaltado sintáctico + indicador de diff por clave
+  // diffMap: objeto { clave: 'changed' | 'added' | 'removed' } — si null, no aplica diff
+  const renderJsonColoreado = (data, diffMap = null) => {
     if (!data) return null;
     const lines = JSON.stringify(data, null, 2).split('\n');
     return (
       <div className="font-mono text-xs leading-relaxed">
         {lines.map((line, i) => {
-          // Claves JSON
-          const keyMatch = line.match(/^(\s*)("[^"]+")(:)(.*)$/);
+          const keyMatch = line.match(/^(\s*)("[^"]+")(: ?)(.*)$/);
           if (keyMatch) {
             const [, indent, key, colon, rest] = keyMatch;
-            let valueNode;
+            const rawKey = key.replace(/"/g, '');
             const val = rest.trim().replace(/,$/, '');
-            if (val === 'null') {
-              valueNode = <span className="text-zinc-400 italic">null</span>;
-            } else if (val === 'true' || val === 'false') {
-              valueNode = <span className="text-amber-600 font-bold">{val}</span>;
-            } else if (!isNaN(Number(val))) {
-              valueNode = <span className="text-blue-600 font-semibold">{val}</span>;
-            } else if (val.startsWith('"')) {
-              valueNode = <span className="text-emerald-600">{val}</span>;
-            } else {
-              valueNode = <span className="text-zinc-600">{val}</span>;
+            const trailingComma = rest.trim().endsWith(',');
+
+            // Determinar clase de fondo según el diff
+            let rowBg = '';
+            if (diffMap) {
+              if (diffMap[rawKey] === 'changed') rowBg = 'bg-amber-50 rounded';
+              else if (diffMap[rawKey] === 'added')   rowBg = 'bg-emerald-50 rounded';
+              else if (diffMap[rawKey] === 'removed')  rowBg = 'bg-rose-50 rounded';
             }
+
             return (
-              <div key={i}>
+              <div key={i} className={`px-0.5 ${rowBg}`}>
                 <span className="text-zinc-400">{indent}</span>
-                <span className="text-indigo-600 font-semibold">{key}</span>
-                <span className="text-zinc-500">{colon} </span>
-                {valueNode}{rest.trim().endsWith(',') ? <span className="text-zinc-400">,</span> : null}
+                <span className={`font-semibold ${diffMap && diffMap[rawKey] ? 'text-indigo-700' : 'text-indigo-600'}`}>{key}</span>
+                <span className="text-zinc-500">{colon}</span>
+                {renderValorJson(val)}
+                {trailingComma ? <span className="text-zinc-400">,</span> : null}
+                {diffMap && diffMap[rawKey] === 'changed' && (
+                  <span className="ml-2 text-[9px] font-bold bg-amber-200 text-amber-800 px-1 rounded-sm">modificado</span>
+                )}
+                {diffMap && diffMap[rawKey] === 'added' && (
+                  <span className="ml-2 text-[9px] font-bold bg-emerald-200 text-emerald-800 px-1 rounded-sm">nuevo</span>
+                )}
               </div>
             );
           }
-          // Líneas de apertura/cierre de objetos y arrays
           return <div key={i} className="text-zinc-500">{line}</div>;
         })}
       </div>
     );
   };
+
+  // Calcula el mapa de diferencias entre datos_anteriores y datos_nuevos
+  const calcularDiffMap = (anterior, nuevo) => {
+    if (!anterior || !nuevo) return null;
+    const diffMap = {};
+    const todasLasClaves = new Set([...Object.keys(anterior), ...Object.keys(nuevo)]);
+    todasLasClaves.forEach(clave => {
+      const valAnterior = anterior[clave];
+      const valNuevo   = nuevo[clave];
+      if (!(clave in anterior)) {
+        diffMap[clave] = 'added';
+      } else if (!(clave in nuevo)) {
+        diffMap[clave] = 'removed';
+      } else if (JSON.stringify(valAnterior) !== JSON.stringify(valNuevo)) {
+        diffMap[clave] = 'changed';
+      }
+    });
+    return Object.keys(diffMap).length > 0 ? diffMap : null;
+  };
+
+  // Leyenda visual de colores del diff
+  const LeyendaDiff = () => (
+    <div className="flex flex-wrap items-center gap-3 text-[10px] font-semibold pb-2 border-b border-zinc-100 mb-2">
+      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-300 inline-block"></span><span className="text-zinc-500">Modificado</span></span>
+      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-100 border border-emerald-300 inline-block"></span><span className="text-zinc-500">Nuevo</span></span>
+      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-rose-100 border border-rose-300 inline-block"></span><span className="text-zinc-500">Eliminado</span></span>
+    </div>
+  );
+
 
   // --- Filtrado y Procesamiento en Memoria (Pestaña 1) ---
   const movimientosFiltrados = movimientos
@@ -739,38 +785,49 @@ export const BitacoraSistema = () => {
                           {filaExpandida === item.id && (
                             <tr className="bg-zinc-50/50">
                               <td colSpan={6} className="p-6">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
-                                  <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
-                                    <p className="font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center">
-                                      <span className="h-2 w-2 rounded-full bg-rose-500 mr-2"></span>
-                                      Estado Anterior (Antes de la modificación)
-                                    </p>
-                                    {item.datos_anteriores ? (
-                                      <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-150 overflow-auto max-h-56 leading-relaxed">
-                                        {renderJsonColoreado(item.datos_anteriores)}
-                                      </div>
-                                    ) : (
-                                      <p className="text-zinc-400 italic bg-zinc-50/50 p-4 rounded-xl border border-dashed border-zinc-200">
-                                        No hay datos anteriores (Operación de creación / registro inicial)
-                                      </p>
-                                    )}
+                                {/* Leyenda y paneles de diff */}
+                                {(item.datos_anteriores && item.datos_nuevos) && (
+                                  <div className="mb-4">
+                                    <LeyendaDiff />
                                   </div>
-                                  <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
-                                    <p className="font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center">
-                                      <span className="h-2 w-2 rounded-full bg-emerald-500 mr-2"></span>
-                                      Estado Nuevo (Después de la modificación)
-                                    </p>
-                                    {item.datos_nuevos ? (
-                                      <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-150 overflow-auto max-h-56 leading-relaxed">
-                                        {renderJsonColoreado(item.datos_nuevos)}
+                                )}
+                                {(() => {
+                                  const diffMap = calcularDiffMap(item.datos_anteriores, item.datos_nuevos);
+                                  return (
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
+                                      <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+                                        <p className="font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center">
+                                          <span className="h-2 w-2 rounded-full bg-rose-500 mr-2"></span>
+                                          Estado Anterior (Antes de la modificación)
+                                        </p>
+                                        {item.datos_anteriores ? (
+                                          <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-150 overflow-auto max-h-56 leading-relaxed">
+                                            {renderJsonColoreado(item.datos_anteriores, diffMap)}
+                                          </div>
+                                        ) : (
+                                          <p className="text-zinc-400 italic bg-zinc-50/50 p-4 rounded-xl border border-dashed border-zinc-200">
+                                            No hay datos anteriores (Operación de creación / registro inicial)
+                                          </p>
+                                        )}
                                       </div>
-                                    ) : (
-                                      <p className="text-zinc-400 italic bg-zinc-50/50 p-4 rounded-xl border border-dashed border-zinc-200">
-                                        No hay datos nuevos (Operación de anulación o eliminación física)
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
+                                      <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+                                        <p className="font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center">
+                                          <span className="h-2 w-2 rounded-full bg-emerald-500 mr-2"></span>
+                                          Estado Nuevo (Después de la modificación)
+                                        </p>
+                                        {item.datos_nuevos ? (
+                                          <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-150 overflow-auto max-h-56 leading-relaxed">
+                                            {renderJsonColoreado(item.datos_nuevos, diffMap)}
+                                          </div>
+                                        ) : (
+                                          <p className="text-zinc-400 italic bg-zinc-50/50 p-4 rounded-xl border border-dashed border-zinc-200">
+                                            No hay datos nuevos (Operación de anulación o eliminación física)
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </td>
                             </tr>
                           )}
@@ -826,30 +883,34 @@ export const BitacoraSistema = () => {
                             </button>
                           </div>
 
-                          {filaExpandida === item.id && (
-                            <div className="space-y-3 pt-3 border-t border-zinc-200/60 mt-3 text-[10px] font-mono leading-normal bg-white p-3 rounded-xl border border-zinc-150">
-                              <div>
-                                <p className="font-bold text-rose-600 mb-1">ANTES:</p>
-                                {item.datos_anteriores ? (
-                                  <div className="overflow-auto max-h-36 bg-zinc-50 p-2 rounded border border-zinc-100 max-w-full">
-                                    {renderJsonColoreado(item.datos_anteriores)}
-                                  </div>
-                                ) : (
-                                  <span className="text-zinc-400 italic">Sin datos previos</span>
-                                )}
+                          {filaExpandida === item.id && (() => {
+                            const diffMap = calcularDiffMap(item.datos_anteriores, item.datos_nuevos);
+                            return (
+                              <div className="space-y-3 pt-3 border-t border-zinc-200/60 mt-3 text-[10px] font-mono leading-normal bg-white p-3 rounded-xl border border-zinc-150">
+                                {diffMap && <LeyendaDiff />}
+                                <div>
+                                  <p className="font-bold text-rose-600 mb-1">ANTES:</p>
+                                  {item.datos_anteriores ? (
+                                    <div className="overflow-auto max-h-36 bg-zinc-50 p-2 rounded border border-zinc-100 max-w-full">
+                                      {renderJsonColoreado(item.datos_anteriores, diffMap)}
+                                    </div>
+                                  ) : (
+                                    <span className="text-zinc-400 italic">Sin datos previos</span>
+                                  )}
+                                </div>
+                                <div className="border-t border-zinc-100 pt-2 mt-2">
+                                  <p className="font-bold text-emerald-600 mb-1">DESPUÉS:</p>
+                                  {item.datos_nuevos ? (
+                                    <div className="overflow-auto max-h-36 bg-zinc-50 p-2 rounded border border-zinc-100 max-w-full">
+                                      {renderJsonColoreado(item.datos_nuevos, diffMap)}
+                                    </div>
+                                  ) : (
+                                    <span className="text-zinc-400 italic">Sin datos nuevos</span>
+                                  )}
+                                </div>
                               </div>
-                              <div className="border-t border-zinc-100 pt-2 mt-2">
-                                <p className="font-bold text-emerald-600 mb-1">DESPUÉS:</p>
-                                {item.datos_nuevos ? (
-                                  <div className="overflow-auto max-h-36 bg-zinc-50 p-2 rounded border border-zinc-100 max-w-full">
-                                    {renderJsonColoreado(item.datos_nuevos)}
-                                  </div>
-                                ) : (
-                                  <span className="text-zinc-400 italic">Sin datos nuevos</span>
-                                )}
-                              </div>
-                            </div>
-                          )}
+                            );
+                          })()}
                         </div>
                       </div>
                     ))}
