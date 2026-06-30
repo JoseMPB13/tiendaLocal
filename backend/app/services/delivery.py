@@ -70,6 +70,9 @@ class DeliveryService:
     def actualizar_repartidor(repartidor_id: UUID, datos: RepartidorActualizar) -> dict:
         DeliveryService.obtener_repartidor_por_id(repartidor_id)
         datos_up = datos.model_dump(exclude_unset=True)
+        # Convertir explícitamente UUID a string para evitar fallas de serialización JSON en Supabase (en español)
+        if "usuario_id" in datos_up and datos_up["usuario_id"] is not None:
+            datos_up["usuario_id"] = str(datos_up["usuario_id"])
         resultado = supabase.table("repartidores").update(datos_up).eq("id", str(repartidor_id)).execute()
         if not resultado.data:
             raise HTTPException(
@@ -179,6 +182,12 @@ class DeliveryService:
         try:
             envio_act = DeliveryService.obtener_envio_por_id(envio_id)
             datos_up = datos.model_dump(exclude_unset=True)
+
+            # Sanitización de UUID a string para evitar fallas de serialización JSON en Supabase (en español)
+            if "repartidor_id" in datos_up and datos_up["repartidor_id"] is not None:
+                datos_up["repartidor_id"] = str(datos_up["repartidor_id"])
+            if "venta_id" in datos_up and datos_up["venta_id"] is not None:
+                datos_up["venta_id"] = str(datos_up["venta_id"])
 
             # Validación obligatoria del motivo de cancelación
             if datos_up.get("estado_envio") == "Cancelado":

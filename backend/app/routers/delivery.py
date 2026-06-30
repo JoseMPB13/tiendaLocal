@@ -17,6 +17,7 @@ router = APIRouter(prefix="/delivery", tags=["Delivery & Reparto"])
 # -----------------------------------------------------------------------------
 
 @router.post("/repartidores", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/repartidores/", response_model=dict, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def registrar_repartidor(
     repartidor: RepartidorCrear,
     usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
@@ -51,6 +52,7 @@ async def listar_repartidores(
     return {"ok": True, "data": respuestas}
 
 @router.put("/repartidores/{repartidor_id}", response_model=dict)
+@router.put("/repartidores/{repartidor_id}/", response_model=dict, include_in_schema=False)
 async def actualizar_repartidor(
     repartidor_id: UUID,
     datos: RepartidorActualizar,
@@ -91,6 +93,7 @@ async def actualizar_repartidor(
 # -----------------------------------------------------------------------------
 
 @router.post("/envios", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/envios/", response_model=dict, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def registrar_envio(
     envio: EnvioCrear,
     usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
@@ -130,7 +133,7 @@ async def listar_envios(
     return {"ok": True, "data": respuestas}
 
 @router.put("/envios/{envio_id}", response_model=dict)
-@router.put("/envios/{envio_id}/", include_in_schema=False)
+@router.put("/envios/{envio_id}/", response_model=dict, include_in_schema=False)
 async def actualizar_envio(
     envio_id: UUID,
     datos: EnvioActualizar,
@@ -189,6 +192,7 @@ class MotivoCancelacion(BaseModel):
     motivo_cancelacion: str
 
 @router.delete("/envios/{envio_id}", response_model=dict)
+@router.delete("/envios/{envio_id}/", response_model=dict, include_in_schema=False)
 async def cancelar_envio(
     envio_id: UUID,
     datos: MotivoCancelacion,
