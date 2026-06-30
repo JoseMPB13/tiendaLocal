@@ -10,6 +10,7 @@
 // =============================================================================
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import deliveryService from '../services/deliveryService';
 import usuarioService from '../services/usuarioService';
 import PaginadorTablas from '../components/PaginadorTablas';
@@ -23,10 +24,16 @@ import ventaService from '../services/ventaService';
 import clienteService from '../services/clienteService';
 
 export const GestionEnvios = () => {
+  const navigate = useNavigate();
   const [envios, setEnvios] = useState([]);
   const [repartidores, setRepartidores] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(true);
+
+  const handleRedirigirEditarVenta = (ventaId) => {
+    localStorage.setItem('editar_venta_id', ventaId);
+    navigate('/punto-venta');
+  };
 
   // Filtros y Búsqueda
   const [buscarVenta, setBuscarVenta] = useState('');
@@ -951,10 +958,14 @@ export const GestionEnvios = () => {
                 <label className="block text-xs font-semibold text-zinc-700 mb-1.5">Ubicación de Destino (Verificación Visual)</label>
                 <div className="w-full h-40 rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 relative z-10">
                   <MapaInteractivo
-                    key={`${formLat}-${formLng}`}
+                    key={`new-${envioSeleccionadoId}`}
                     lat={formLat}
                     lng={formLng}
-                    soloLectura={true}
+                    soloLectura={false}
+                    onChange={(lat, lng) => {
+                      setFormLat(lat);
+                      setFormLng(lng);
+                    }}
                   />
                 </div>
               </div>
@@ -1120,7 +1131,7 @@ export const GestionEnvios = () => {
 
                 <div className="w-full h-64 rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 shadow-inner relative z-10">
                   <MapaInteractivo
-                    key={`${resolverCoordenadas(envioSeleccionado)[0]}-${resolverCoordenadas(envioSeleccionado)[1]}`}
+                    key={`detail-${envioSeleccionado?.id}`}
                     lat={resolverCoordenadas(envioSeleccionado)[0]}
                     lng={resolverCoordenadas(envioSeleccionado)[1]}
                     soloLectura={true}
@@ -1139,7 +1150,15 @@ export const GestionEnvios = () => {
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end">
+            <div className="px-5 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-between items-center">
+              {['Por Despachar', 'Pendiente'].includes(envioSeleccionado.estado_envio) ? (
+                <button
+                  onClick={() => handleRedirigirEditarVenta(envioSeleccionado.venta_id)}
+                  className="py-2 px-4 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <Edit3 size={14} /> Editar Venta en POS
+                </button>
+              ) : <div />}
               <button
                 onClick={() => setMostrarModalDetalle(false)}
                 className="py-2 px-5 bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
@@ -1207,10 +1226,14 @@ export const GestionEnvios = () => {
                 <label className="block text-xs font-semibold text-zinc-700 mb-1.5">Ubicación de Destino (Verificación Visual)</label>
                 <div className="w-full h-40 rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 relative z-10">
                   <MapaInteractivo
-                    key={`${formLat}-${formLng}`}
+                    key={`edit-${envioEditar?.id}`}
                     lat={formLat}
                     lng={formLng}
-                    soloLectura={true}
+                    soloLectura={false}
+                    onChange={(lat, lng) => {
+                      setFormLat(lat);
+                      setFormLng(lng);
+                    }}
                   />
                 </div>
               </div>
