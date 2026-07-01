@@ -567,14 +567,14 @@ export const GestionClientes = () => {
         <div className="hidden md:block" style={{ overflowX: 'auto' }}>
           <table className="data-table" style={{ minWidth: '750px' }}>
             <thead>
-              <tr>
-                <th>DNI / RUC</th>
-                <th>Nombre / Razón Social</th>
-                <th>Teléfono</th>
-                <th style={{ textAlign: 'right' }}>Saldo Deudor</th>
-                <th style={{ textAlign: 'right' }}>Límite Crédito</th>
-                <th>Estado</th>
-                <th style={{ textAlign: 'center' }}>Acciones</th>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-xs">
+                <th className="py-3 px-4 text-left">DNI / RUC</th>
+                <th className="py-3 px-4 text-left">Nombre / Razón Social</th>
+                <th className="py-3 px-4 text-left">Teléfono</th>
+                <th className="py-3 px-4 text-right">Saldo Deudor</th>
+                <th className="py-3 px-4 text-right">Límite Crédito</th>
+                <th className="py-3 px-4 text-center">Estado</th>
+                <th className="py-3 px-4 text-center">Acciones</th>
               </tr>
             </thead>
 
@@ -598,40 +598,47 @@ export const GestionClientes = () => {
               <tbody>
                 {clientesPaginados.map((cli) => (
                   <tr key={cli.id}>
-                    <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#6b7280' }}>
+                    <td className="py-3 px-4 text-left font-mono text-xs text-slate-500">
                       {cli.dni_ruc || '—'}
                     </td>
-                    <td className="bold">{cli.nombre}</td>
-                    <td style={{ color: '#6b7280' }}>{cli.telefono || '—'}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: cli.saldo_deudor > 0 ? '#dc2626' : '#374151' }}>
+                    <td className="bold py-3 px-4 text-left">{cli.nombre}</td>
+                    <td className="py-3 px-4 text-left" style={{ color: '#6b7280' }}>{cli.telefono || '—'}</td>
+                    <td className="py-3 px-4 text-right font-extrabold" style={{ color: cli.saldo_deudor > 0 ? '#dc2626' : '#374151' }}>
                       Bs. {cli.saldo_deudor.toFixed(2)}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 600, color: '#6d28d9' }}>
+                    <td className="py-3 px-4 text-right font-semibold" style={{ color: '#6d28d9' }}>
                       Bs. {cli.limite_credito.toFixed(2)}
                     </td>
-                    <td>
+                    <td className="py-3 px-4 text-center">
                       <span className={`badge ${cli.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
                         {cli.estado}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td className="py-3 px-4 text-center">
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                         {cli.latitud !== null && cli.latitud !== undefined && cli.longitud !== null && cli.longitud !== undefined && (
                           <button
                             onClick={() => abrirVerMapa(cli)}
-                            className="btn-icon"
-                            style={{ color: '#db2777' }}
+                            className="text-pink-600 hover:text-pink-900 bg-pink-50 hover:bg-pink-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
                             title="Ver ubicación en mapa"
                           >
-                            <MapPin size={15} />
+                            <MapPin size={14} />
                           </button>
                         )}
-                        <button onClick={() => abrirEditar(cli)} className="btn-icon" title="Editar cliente">
-                          <Edit3 size={15} />
+                        <button
+                          onClick={() => abrirEditar(cli)}
+                          className="text-amber-600 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                          title="Editar cliente"
+                        >
+                          <Edit3 size={14} />
                         </button>
                         {cli.estado === 'Activo' && cli.dni_ruc !== '00000000' && (
-                          <button onClick={() => abrirDesactivar(cli.id)} className="btn-icon danger" title="Desactivar cliente">
-                            <Trash2 size={15} />
+                          <button
+                            onClick={() => abrirDesactivar(cli.id)}
+                            className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                            title="Desactivar cliente"
+                          >
+                            <Trash2 size={14} />
                           </button>
                         )}
                       </div>

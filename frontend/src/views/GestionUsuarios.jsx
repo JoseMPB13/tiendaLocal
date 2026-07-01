@@ -342,12 +342,12 @@ export const GestionUsuarios = () => {
         <div className="hidden md:block" style={{ overflowX: 'auto' }}>
           <table className="data-table" style={{ minWidth: '640px' }}>
             <thead>
-              <tr>
-                <th>Nombre Completo</th>
-                <th>Correo Electrónico</th>
-                <th>Rol de Acceso</th>
-                <th>Estado</th>
-                <th style={{ textAlign: 'right' }}>Acciones</th>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-xs">
+                <th className="py-3 px-4 text-left">Nombre Completo</th>
+                <th className="py-3 px-4 text-left">Correo Electrónico</th>
+                <th className="py-3 px-4 text-center">Rol de Acceso</th>
+                <th className="py-3 px-4 text-center">Estado</th>
+                <th className="py-3 px-4 text-center">Acciones</th>
               </tr>
             </thead>
 
@@ -371,26 +371,34 @@ export const GestionUsuarios = () => {
               <tbody>
                 {usuariosPaginados.map((usr) => (
                   <tr key={usr.id}>
-                    <td className="bold">{usr.nombre_completo}</td>
-                    <td style={{ color: '#6b7280' }}>{usr.email}</td>
-                    <td>
+                    <td className="bold py-3 px-4 text-left">{usr.nombre_completo}</td>
+                    <td className="py-3 px-4 text-left" style={{ color: '#6b7280' }}>{usr.email}</td>
+                    <td className="py-3 px-4 text-center">
                       <span className={`badge ${rolBadge(usr.rol)}`}>
                         {usr.rol}
                       </span>
                     </td>
-                    <td>
+                    <td className="py-3 px-4 text-center">
                       <span className={`badge ${usr.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
                         {usr.estado}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'end', gap: '6px' }}>
-                        <button onClick={() => abrirEditar(usr)} className="btn-icon" title="Editar usuario">
-                          <Edit3 size={15} />
+                    <td className="py-3 px-4 text-center">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        <button
+                          onClick={() => abrirEditar(usr)}
+                          className="text-amber-600 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                          title="Editar usuario"
+                        >
+                          <Edit3 size={14} />
                         </button>
                         {usr.estado === 'Activo' && usr.email !== 'admin@tiendalocal.com' && (
-                          <button onClick={() => abrirDesactivar(usr.id)} className="btn-icon danger" title="Desactivar usuario">
-                            <Trash2 size={15} />
+                          <button
+                            onClick={() => abrirDesactivar(usr.id)}
+                            className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                            title="Desactivar usuario"
+                          >
+                            <Trash2 size={14} />
                           </button>
                         )}
                       </div>
