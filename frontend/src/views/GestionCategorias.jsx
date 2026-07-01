@@ -11,30 +11,60 @@ import ModalDesactivar from '../components/ModalDesactivar';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Plus, Edit3, Trash2, X, Tag, DollarSign, BarChart2,
-  Wine, Cookie, Sparkles, Apple, Folder
+  Wine, Cookie, Sparkles, Apple, Folder, Wrench, Smartphone, Gamepad, Shirt, Heart
 } from 'lucide-react';
 
 /* ── Mapeo de Iconos según Nombre de Categoría ───────────────────────────── */
 const MAPEO_PALABRAS_CLAVE = [
   {
-    palabras: ['bebida', 'jugo', 'gaseosa', 'liquido', 'agua', 'refresco', 'soda'],
+    palabras: ['bebida', 'jugo', 'gaseosa', 'liquido', 'agua', 'refresco', 'soda', 'coca', 'fanta', 'sprite', 'alcohol', 'cerveza', 'vino', 'trago', 'leche', 'lacteo', 'yogurt'],
     icono: Wine,
     color: 'text-blue-600 bg-blue-50 border-blue-150'
   },
   {
-    palabras: ['snack', 'papas', 'galleta', 'pipoca', 'dulce', 'chocolate', 'caramelo', 'piqueo'],
+    palabras: ['snack', 'papas', 'galleta', 'pipoca', 'dulce', 'chocolate', 'caramelo', 'piqueo', 'chicle', 'gominola', 'confite', 'helado', 'postre', 'dona'],
     icono: Cookie,
     color: 'text-amber-600 bg-amber-50 border-amber-150'
   },
   {
-    palabras: ['limpieza', 'aseo', 'detergente', 'jabon', 'desinfectante', 'hogar', 'cepillo', 'higien'],
+    palabras: ['limpieza', 'aseo', 'detergente', 'jabon', 'desinfectante', 'hogar', 'cepillo', 'higien', 'shampoo', 'champu', 'crema', 'desodorante', 'dental', 'baño', 'lavado'],
     icono: Sparkles,
     color: 'text-teal-600 bg-teal-50 border-teal-150'
   },
   {
-    palabras: ['abarrotes', 'arroz', 'fideos', 'harina', 'comida', 'aceite', 'granos', 'pasta', 'alimento'],
+    palabras: ['abarrotes', 'arroz', 'fideos', 'harina', 'comida', 'aceite', 'granos', 'pasta', 'alimento', 'pan', 'panaderia', 'pasteleria', 'torta', 'pastel', 'queque'],
     icono: Apple,
     color: 'text-emerald-600 bg-emerald-50 border-emerald-150'
+  },
+  {
+    palabras: ['fruta', 'verdura', 'vegetal', 'manzana', 'platano', 'banana', 'tomate', 'papa', 'cebolla', 'lechuga', 'zanahoria', 'planta', 'semilla', 'fresa', 'uva', 'naranja'],
+    icono: Apple,
+    color: 'text-green-600 bg-green-50 border-green-150'
+  },
+  {
+    palabras: ['ferreteria', 'herramienta', 'tornillo', 'clavo', 'pintura', 'cable', 'foco', 'construccion', 'martillo', 'tuber', 'llave', 'alambre'],
+    icono: Wrench,
+    color: 'text-orange-600 bg-orange-50 border-orange-150'
+  },
+  {
+    palabras: ['tecnologia', 'electronica', 'celular', 'telefono', 'cargador', 'computadora', 'mouse', 'teclado', 'pantalla', 'audifonos', 'parlante', 'tablet'],
+    icono: Smartphone,
+    color: 'text-purple-600 bg-purple-50 border-purple-150'
+  },
+  {
+    palabras: ['juguete', 'niño', 'muñeca', 'pelota', 'deporte', 'juego', 'gamer', 'consola', 'recreo', 'peluche', 'lego'],
+    icono: Gamepad,
+    color: 'text-rose-600 bg-rose-50 border-rose-150'
+  },
+  {
+    palabras: ['ropa', 'vestimenta', 'textil', 'polera', 'pantalon', 'camisa', 'zapato', 'calzado', 'abrigo', 'prenda', 'media', 'gorra'],
+    icono: Shirt,
+    color: 'text-sky-600 bg-sky-50 border-sky-150'
+  },
+  {
+    palabras: ['medicamento', 'pastilla', 'jarabe', 'salud', 'farmacia', 'remedio', 'botiquin', 'medicina', 'dolor', 'venda', 'gasa', 'vitamina'],
+    icono: Heart,
+    color: 'text-red-600 bg-red-50 border-red-150'
   }
 ];
 
