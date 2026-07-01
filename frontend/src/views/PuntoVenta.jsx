@@ -297,7 +297,11 @@ export const PuntoVenta = () => {
         params.estado_venta = filtroEstado;
       }
       if (filtroFecha) {
-        params.fecha_especifica = filtroFecha;
+        // Calcular inicio y fin del día local en formato ISO UTC
+        const localDateStart = new Date(filtroFecha + 'T00:00:00');
+        const localDateEnd = new Date(filtroFecha + 'T23:59:59.999');
+        params.fecha_inicio = localDateStart.toISOString();
+        params.fecha_fin = localDateEnd.toISOString();
       }
       
       const res = await ventaService.obtenerVentas(params);
@@ -1334,36 +1338,36 @@ export const PuntoVenta = () => {
             </div>
           ) : (
             <div className="w-full">
-              {/* Vista Desktop (Table - Homogeneizada con la de productos usando Tailwind CSS puro) */}
-              <div className="hidden lg:block overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs">
-                <table className="min-w-full divide-y divide-slate-200 text-left text-xs font-medium text-slate-600">
-                  <thead className="bg-slate-50 font-bold text-slate-700 uppercase tracking-wider">
+              {/* Vista Desktop (Table - Homogeneizada con diseño premium usando Tailwind CSS puro) */}
+              <div className="hidden lg:block overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                <table className="min-w-full text-left text-xs font-medium text-slate-600">
+                  <thead className="bg-gradient-to-r from-indigo-950 to-indigo-900 font-bold text-white uppercase tracking-wider text-[10px]">
                     <tr>
-                      <th className="px-4 py-3">Fecha y Hora</th>
-                      <th className="px-4 py-3">Código Factura</th>
-                      <th className="px-4 py-3">Método Pago</th>
-                      <th className="px-4 py-3 text-right">Total Cobrado</th>
-                      <th className="px-4 py-3 text-center">Estado</th>
-                      <th className="px-4 py-3 text-center">Acciones</th>
+                      <th className="px-4 py-3.5">Fecha y Hora</th>
+                      <th className="px-4 py-3.5">Código Factura</th>
+                      <th className="px-4 py-3.5">Método Pago</th>
+                      <th className="px-4 py-3.5 text-right">Total Cobrado</th>
+                      <th className="px-4 py-3.5 text-center">Estado</th>
+                      <th className="px-4 py-3.5 text-center">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {ventas.map(v => (
-                      <tr key={v.id} className="hover:bg-slate-50/50 transition duration-150">
-                        <td className="px-4 py-3 whitespace-nowrap text-slate-500">
+                      <tr key={v.id} className="hover:bg-slate-50/70 border-b border-slate-100 transition duration-150">
+                        <td className="px-4 py-3.5 whitespace-nowrap text-slate-500 font-medium">
                           {new Date(v.fecha_venta).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
                         </td>
-                        <td className="px-4 py-3 font-mono font-bold text-slate-700">
+                        <td className="px-4 py-3.5 font-mono font-bold text-indigo-950">
                           {v.codigo_factura}
                         </td>
-                        <td className="px-4 py-3">
-                          <span className="bg-slate-100 px-2 py-0.5 rounded-full font-bold text-slate-600 text-[10px]">{v.tipo_pago}</span>
+                        <td className="px-4 py-3.5">
+                          <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full font-bold text-[9px] uppercase tracking-wider">{v.tipo_pago}</span>
                         </td>
-                        <td className="px-4 py-3 text-right font-extrabold text-slate-900">
+                        <td className="px-4 py-3.5 text-right font-extrabold text-slate-900 text-sm">
                           Bs. {v.total.toFixed(2)}
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border inline-block ${
+                        <td className="px-4 py-3.5 text-center">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold border inline-block uppercase tracking-wider ${
                             v.estado_venta === 'Completada'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : v.estado_venta === 'Cancelada'
@@ -1373,11 +1377,11 @@ export const PuntoVenta = () => {
                             {v.estado_venta}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-4 py-3.5 text-center">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               onClick={() => { setOrigenRecibo('historial'); handleVerDetalle(v.id); }}
-                              className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                              className="text-indigo-600 hover:text-white bg-indigo-50 hover:bg-indigo-600 p-1.5 rounded-lg transition duration-150 cursor-pointer shadow-xs"
                               title="Ver detalles"
                             >
                               <Eye size={14} />
@@ -1386,14 +1390,14 @@ export const PuntoVenta = () => {
                               <>
                                 <button
                                   onClick={() => handleCargarEdicion(v.id)}
-                                  className="text-amber-600 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                                  className="text-amber-600 hover:text-white bg-amber-50 hover:bg-amber-600 p-1.5 rounded-lg transition duration-150 cursor-pointer shadow-xs"
                                   title="Editar venta"
                                 >
                                   <Edit2 size={14} />
                                 </button>
                                 <button
                                   onClick={() => handleAnularVenta(v.id)}
-                                  className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
+                                  className="text-red-500 hover:text-white bg-red-50 hover:bg-red-600 p-1.5 rounded-lg transition duration-150 cursor-pointer shadow-xs"
                                   title="Anular venta"
                                 >
                                   <Ban size={14} />

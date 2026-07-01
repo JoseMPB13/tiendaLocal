@@ -185,17 +185,28 @@ class VentaService:
                 )
 
     @staticmethod
-    def listar_ventas(estado_venta: Optional[str] = None, fecha_especifica: Optional[str] = None, skip: int = 0, limit: int = 100) -> List[dict]:
+    def listar_ventas(
+        estado_venta: Optional[str] = None,
+        fecha_especifica: Optional[str] = None,
+        fecha_inicio: Optional[str] = None,
+        fecha_fin: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[dict]:
         """
-        Lista todas las ventas del sistema, con soporte de filtrado por estado, fecha específica y paginación.
+        Lista todas las ventas del sistema, con soporte de filtrado por estado, fecha específica, rango de fechas y paginación.
         Idioma: Español
         """
         try:
             query = supabase.table("ventas").select("*")
             if estado_venta:
                 query = query.eq("estado_venta", estado_venta)
-            if fecha_especifica:
-                # Filtrado por rango de fecha completa (de 00:00:00 a 23:59:59 con microsegundos y zona horaria UTC)
+            if fecha_inicio:
+                query = query.gte("fecha_venta", fecha_inicio)
+            if fecha_fin:
+                query = query.lte("fecha_venta", fecha_fin)
+            elif fecha_especifica:
+                # Fallback de filtrado simple por día UTC
                 query = query.gte("fecha_venta", f"{fecha_especifica}T00:00:00+00:00").lte("fecha_venta", f"{fecha_especifica}T23:59:59.999999+00:00")
             
             start = skip

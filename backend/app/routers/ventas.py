@@ -35,6 +35,8 @@ def convertir_uuid_a_str(obj):
 async def listar_ventas(
     estado_venta: Optional[str] = None,
     fecha_especifica: Optional[str] = None,
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
@@ -42,9 +44,9 @@ async def listar_ventas(
     """
     Lista todas las ventas registradas en el sistema.
     Soporta filtros opcionales por estado_venta (Completada, Cancelada, Pendiente), 
-    fecha_especifica (YYYY-MM-DD) y paginación (skip, limit).
+    fecha_especifica (YYYY-MM-DD), rango de fecha_inicio y fecha_fin, y paginación (skip, limit).
     """
-    ventas_data = VentaService.listar_ventas(estado_venta, fecha_especifica, skip, limit)
+    ventas_data = VentaService.listar_ventas(estado_venta, fecha_especifica, fecha_inicio, fecha_fin, skip, limit)
     # Convertir explícitamente cualquier UUID nativo de Supabase a cadena de texto
     datos_limpios = convertir_uuid_a_str(ventas_data)
     respuesta = [VentaRespuesta.model_validate(v) for v in datos_limpios]
