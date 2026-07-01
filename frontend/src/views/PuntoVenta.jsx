@@ -31,8 +31,15 @@ import {
   User, FileText, CheckCircle2, Edit2, Printer
 } from 'lucide-react';
 import MapaInteractivo from '../components/MapaInteractivo';
+import clienteApi from '../services/api';
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
+const obtenerUrlImagenCompleta = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const baseURL = clienteApi.defaults.baseURL || 'http://localhost:8000';
+  return `${baseURL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 /**
  * Extrae coordenadas geográficas (latitud, longitud) desde una URL de mapa
@@ -968,7 +975,7 @@ export const PuntoVenta = () => {
                           <div className="flex gap-2.5 items-start">
                             {prod.imagen_url ? (
                               <img
-                                src={prod.imagen_url}
+                                src={obtenerUrlImagenCompleta(prod.imagen_url)}
                                 alt={prod.nombre}
                                 className="w-10 h-10 object-cover rounded-lg shrink-0 border border-slate-100 shadow-xs"
                               />

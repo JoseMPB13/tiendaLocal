@@ -5,6 +5,8 @@ from app.routers import usuarios, categorias, productos, clientes, ventas, deliv
 from app.routers import bitacora
 from app.database import supabase
 
+from fastapi.staticfiles import StaticFiles
+
 # Cargar la configuración de modo depuración
 debug_mode = os.getenv("DEBUG", "true").lower() == "true"
 
@@ -16,6 +18,13 @@ app = FastAPI(
     redoc_url="/redoc" if debug_mode else None,
     openapi_url="/openapi.json" if debug_mode else None
 )
+
+# Servir imágenes subidas localmente
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+uploads_dir = os.path.join(os.path.dirname(backend_dir), "uploads")
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
 
 
 # Configuración de Orígenes Permitidos para CORS dinámico desde variable de entorno

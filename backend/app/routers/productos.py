@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, UploadFile, File, HTTPException
 from typing import List
 from uuid import UUID
+import shutil
+import uuid as py_uuid
+import os
 from app.schemas.modelos import ProductoCrear, ProductoActualizar, ProductoRespuesta, ProductoAjustarStock
 from app.services.productos import ProductoService
 from app.services.dependencias import verificar_roles
@@ -120,3 +123,41 @@ async def ajustar_stock_producto(
     resultado = ProductoService.ajustar_stock(producto_id, payload, usuario_actual["id"])
     respuesta = ProductoRespuesta.model_validate(resultado)
     return {"ok": True, "data": respuesta}
+
+@router.post("/upload-imagen", response_model=dict)
+@router.post("/upload-imagen/", response_model=dict, include_in_schema=False)
+async def subir_imagen_producto(
+    file: UploadFile = File(...),
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
+):
+    """
+    Sube un archivo de imagen de producto en el servidor local y retorna la ruta relativa.
+    """
+    extension = os.path.splitext(file.filename)[1].lower()
+    if extension not in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tipo de archivo no permitido. Solo se aceptan imágenes (jpg, jpeg, png, webp, gif)."
+        )
+    
+    # Generar un nombre único para evitar colisiones
+    nombre_archivo = f"{py_uuid.uuid4()}{extension}"
+    
+    # Obtener la ruta absoluta de la carpeta backend/uploads
+    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    uploads_dir = os.path.join(backend_dir, "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+    
+    ruta_destino = os.path.join(uploads_dir, nombre_archivo)
+    
+    try:
+        with open(ruta_destino, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error inesperado al guardar el archivo en el servidor: {str(e)}"
+        )
+        
+    return {"ok": True, "imagen_url": f"/uploads/{nombre_archivo}"}
+

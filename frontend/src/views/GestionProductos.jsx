@@ -13,6 +13,15 @@ import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import useAuthStore from '../store/authStore';
 import toast, { Toaster } from 'react-hot-toast';
 import { Plus, Edit3, Trash2, X, Package, AlertTriangle, Layers } from 'lucide-react';
+import clienteApi from '../services/api';
+
+/* ── Funciones de ayuda ── */
+const obtenerUrlImagenCompleta = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const baseURL = clienteApi.defaults.baseURL || 'http://localhost:8000';
+  return `${baseURL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 /* ── Estilos de modal compartidos ── */
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
@@ -219,6 +228,29 @@ export const GestionProductos = () => {
       toast.error(errorMsg);
     } finally {
       setProcesandoAjuste(false);
+    }
+  };
+
+  const handleSubirArchivo = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const loadingToast = toast.loading('Subiendo imagen...');
+    try {
+      const res = await productoService.subirImagen(formData);
+      if (res.ok && res.imagen_url) {
+        setImagenUrl(res.imagen_url);
+        toast.success('¡Imagen subida con éxito!', { id: loadingToast });
+      } else {
+        toast.error('Error al subir la imagen.', { id: loadingToast });
+      }
+    } catch (ex) {
+      console.error(ex);
+      const errMsg = ex.response?.data?.detail || 'Error al conectar con el servidor.';
+      toast.error(errMsg, { id: loadingToast });
     }
   };
 
@@ -722,17 +754,49 @@ export const GestionProductos = () => {
                   </div>
                 </div>
 
-                {/* Campo para la URL de la imagen del producto */}
+                {/* Campo para la imagen del producto (Subir archivo o pegar enlace) */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
                   <div style={fieldStyle}>
-                    <label className="form-label">URL de la Imagen (Opcional)</label>
-                    <input
-                      type="url"
-                      value={imagenUrl}
-                      onChange={(e) => setImagenUrl(e.target.value)}
-                      placeholder="Ej: https://imagenes.com/mi-producto.jpg"
-                      className="form-input"
-                    />
+                    <label className="form-label">Imagen del Producto (Archivo u URL)</label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        value={imagenUrl}
+                        onChange={(e) => setImagenUrl(e.target.value)}
+                        placeholder="Ingresa enlace URL o sube un archivo..."
+                        className="form-input flex-1"
+                      />
+                      <label className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-lg font-bold text-xs cursor-pointer select-none whitespace-nowrap flex items-center gap-1.5 transition-all duration-150 shadow-xs">
+                        <Plus size={14} />
+                        Sube Archivo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleSubirArchivo}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    {imagenUrl && (
+                      <div className="mt-2 flex items-center gap-2 bg-slate-50 border border-slate-200 p-2 rounded-lg">
+                        <img
+                          src={obtenerUrlImagenCompleta(imagenUrl)}
+                          alt="Vista previa"
+                          className="w-10 h-10 object-cover rounded-lg border border-slate-350"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[9px] text-slate-400 block uppercase font-bold font-mono">Vista Previa</span>
+                          <span className="text-[11px] text-slate-600 truncate block font-medium font-mono">{imagenUrl}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setImagenUrl('')}
+                          className="text-slate-400 hover:text-red-500 p-1 hover:bg-red-50 rounded-lg transition duration-150 cursor-pointer"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -20,6 +20,14 @@ export const productoService = {
   ajustarStock: async (id, datos) => {
     const respuesta = await clienteApi.post(`/productos/${id}/ajustar-stock/`, datos);
     return respuesta.data;
+  },
+  subirImagen: async (formData) => {
+    const respuesta = await clienteApi.post('/productos/upload-imagen/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return respuesta.data;
   }
 };
 export default productoService;
