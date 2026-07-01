@@ -965,22 +965,37 @@ export const PuntoVenta = () => {
                         }`}
                       >
                         <div>
-                          {prod.categoria_nombre && (
-                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mb-1.5 inline-block">
-                              {prod.categoria_nombre}
-                            </span>
-                          )}
-                          <h4 className="font-bold text-xs text-slate-800 line-clamp-1 leading-tight">
-                            {prod.nombre}
-                          </h4>
+                          <div className="flex gap-2.5 items-start">
+                            {prod.imagen_url ? (
+                              <img
+                                src={prod.imagen_url}
+                                alt={prod.nombre}
+                                className="w-10 h-10 object-cover rounded-lg shrink-0 border border-slate-100 shadow-xs"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-300 shrink-0">
+                                <Package size={16} />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              {prod.categoria_nombre && (
+                                <span className="text-[8px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mb-0.5 inline-block">
+                                  {prod.categoria_nombre}
+                                </span>
+                              )}
+                              <h4 className="font-bold text-xs text-slate-800 line-clamp-1 leading-tight">
+                                {prod.nombre}
+                              </h4>
+                              <span className="text-[9px] text-slate-400 font-mono block mt-0.5 leading-none">
+                                {prod.codigo_barras || '—'}
+                              </span>
+                            </div>
+                          </div>
                           {prod.descripcion && (
-                            <p className="text-[10px] text-slate-500 line-clamp-2 mt-1 leading-tight font-medium" title={prod.descripcion}>
+                            <p className="text-[10px] text-slate-500 line-clamp-1 mt-1.5 leading-tight font-medium" title={prod.descripcion}>
                               {prod.descripcion}
                             </p>
                           )}
-                          <span className="text-[10px] text-slate-400 font-mono block mt-1">
-                            {prod.codigo_barras}
-                          </span>
                         </div>
                         <div className="flex items-end justify-between mt-2">
                           <span className="font-extrabold text-sm text-slate-900">

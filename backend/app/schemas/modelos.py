@@ -72,6 +72,7 @@ class ProductoBase(BaseModel):
     precio_venta: float = Field(..., ge=0)
     stock_actual: int = Field(0, ge=0)
     stock_minimo: int = Field(5, ge=0)
+    imagen_url: Optional[str] = None
 
 class ProductoCrear(ProductoBase):
     pass
@@ -86,6 +87,7 @@ class ProductoActualizar(BaseModel):
     stock_actual: Optional[int] = Field(None, ge=0)
     stock_minimo: Optional[int] = Field(None, ge=0)
     estado: Optional[str] = Field(None, description="Estados válidos: Activo, Inactivo")
+    imagen_url: Optional[str] = None
 
 class ProductoRespuesta(ProductoBase):
     id: UUID
@@ -171,6 +173,8 @@ class VentaCrear(VentaBase):
     para_delivery: bool = Field(default=False, description="Indica si la venta requiere envío a domicilio")
     direccion_despacho: Optional[str] = Field(default=None, description="Dirección física de envío")
     costo_envio: Optional[Decimal] = Field(default=Decimal('0.00'), ge=0, description="Costo de transporte del delivery")
+    latitud: Optional[float] = Field(default=None, description="Latitud de destino")
+    longitud: Optional[float] = Field(default=None, description="Longitud de destino")
 
 class VentaRespuesta(VentaBase):
     id: UUID
@@ -180,6 +184,8 @@ class VentaRespuesta(VentaBase):
     para_delivery: bool = False
     direccion_despacho: Optional[str] = None
     costo_envio: float = 0.00
+    latitud: Optional[float] = None
+    longitud: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -227,6 +233,8 @@ class EnvioBase(BaseModel):
     repartidor_id: Optional[UUID] = None
     direccion_despacho: str
     costo_envio: float = Field(0.00, ge=0)
+    latitud: Optional[float] = None
+    longitud: Optional[float] = None
 
 class ClienteContacto(BaseModel):
     nombre_completo: str
@@ -246,6 +254,8 @@ class EnvioActualizar(BaseModel):
     costo_envio: Optional[float] = Field(None, ge=0)
     estado_envio: Optional[str] = Field(None, description="Pendiente, En Camino, Entregado, Cancelado")
     motivo_cancelacion: Optional[str] = None
+    latitud: Optional[float] = None
+    longitud: Optional[float] = None
 
 class EnvioRespuesta(EnvioBase):
     id: UUID

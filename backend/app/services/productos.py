@@ -13,7 +13,13 @@ class ProductoService:
         Si no se provee un código de barras, se autogenera nativamente en base de datos.
         """
         # Validar existencia de categoría asociada
-        cat_check = supabase.table("categorias").select("id").eq("id", str(producto.categoria_id)).execute()
+        try:
+            cat_check = supabase.table("categorias").select("id").eq("id", str(producto.categoria_id)).execute()
+        except APIError as ex:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error en BD al comprobar categoría (SQLSTATE {ex.code}): {ex.message}"
+            )
         if not cat_check.data:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -22,7 +28,13 @@ class ProductoService:
 
         # Si el usuario ingresa un código manualmente, validar que sea único
         if producto.codigo_barras:
-            codigo_check = supabase.table("productos").select("id").eq("codigo_barras", producto.codigo_barras).execute()
+            try:
+                codigo_check = supabase.table("productos").select("id").eq("codigo_barras", producto.codigo_barras).execute()
+            except APIError as ex:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error en BD al comprobar código de barras (SQLSTATE {ex.code}): {ex.message}"
+                )
             if codigo_check.data:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -44,6 +56,7 @@ class ProductoService:
             "precio_venta": producto.precio_venta,
             "stock_actual": producto.stock_actual,
             "stock_minimo": producto.stock_minimo,
+            "imagen_url": producto.imagen_url,
             "estado": "Activo"
         }
 
@@ -51,13 +64,19 @@ class ProductoService:
         if producto.codigo_barras:
             nuevo_prod["codigo_barras"] = producto.codigo_barras
 
-        resultado = supabase.table("productos").insert(nuevo_prod).execute()
-        if not resultado.data:
+        try:
+            resultado = supabase.table("productos").insert(nuevo_prod).execute()
+            if not resultado.data:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="No se pudo registrar el producto en la base de datos."
+                )
+            return resultado.data[0]
+        except APIError as ex:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo registrar el producto en la base de datos."
+                detail=f"Error en BD al registrar producto (SQLSTATE {ex.code}): {ex.message}"
             )
-        return resultado.data[0]
 
 
     @staticmethod
@@ -86,13 +105,19 @@ class ProductoService:
         """
         Busca un producto por su UUID.
         """
-        resultado = supabase.table("productos").select("*").eq("id", str(producto_id)).execute()
-        if not resultado.data:
+        try:
+            resultado = supabase.table("productos").select("*").eq("id", str(producto_id)).execute()
+            if not resultado.data:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Producto no encontrado."
+                )
+            return resultado.data[0]
+        except APIError as ex:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Producto no encontrado."
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error en BD al buscar producto (SQLSTATE {ex.code}): {ex.message}"
             )
-        return resultado.data[0]
 
     @staticmethod
     def actualizar_producto(producto_id: UUID, producto: ProductoActualizar) -> dict:
@@ -115,20 +140,32 @@ class ProductoService:
         # Validar categoría si se actualiza
         if "categoria_id" in datos_actualizar:
             datos_actualizar["categoria_id"] = str(datos_actualizar["categoria_id"])
-            cat_check = supabase.table("categorias").select("id").eq("id", datos_actualizar["categoria_id"]).execute()
+            try:
+                cat_check = supabase.table("categorias").select("id").eq("id", datos_actualizar["categoria_id"]).execute()
+            except APIError as ex:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error en BD al comprobar categoría (SQLSTATE {ex.code}): {ex.message}"
+                )
             if not cat_check.data:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="La categoría especificada no existe."
                 )
 
-        resultado = supabase.table("productos").update(datos_actualizar).eq("id", str(producto_id)).execute()
-        if not resultado.data:
+        try:
+            resultado = supabase.table("productos").update(datos_actualizar).eq("id", str(producto_id)).execute()
+            if not resultado.data:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="No se pudo actualizar el producto."
+                )
+            return resultado.data[0]
+        except APIError as ex:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo actualizar el producto."
+                detail=f"Error en BD al actualizar producto (SQLSTATE {ex.code}): {ex.message}"
             )
-        return resultado.data[0]
 
     @staticmethod
     def eliminar_producto(producto_id: UUID) -> dict:

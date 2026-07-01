@@ -889,6 +889,11 @@ drop policy if exists "Permitir insert de bitacora_usuarios a todos" on bitacora
 create policy "Permitir insert de bitacora_usuarios a todos"
 on bitacora_usuarios for insert to anon, authenticated with check (true);
 
+-- -----------------------------------------------------------------------------
+-- MODIFICACIÓN ADICIONAL: AGREGAR COLUMNA IMAGEN_URL A PRODUCTOS
+-- -----------------------------------------------------------------------------
+alter table productos add column if not exists imagen_url text default null;
+
 
 
 

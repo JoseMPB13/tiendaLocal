@@ -8,6 +8,7 @@ from app.services.bitacora import BitacoraService
 
 router = APIRouter(prefix="/productos", tags=["Productos"])
 
+@router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def crear_producto(
     producto: ProductoCrear,
@@ -55,6 +56,7 @@ async def obtener_producto(
     return {"ok": True, "data": respuesta}
 
 @router.put("/{producto_id}", response_model=dict)
+@router.put("/{producto_id}/", response_model=dict)
 async def actualizar_producto(
     producto_id: UUID,
     producto: ProductoActualizar,
@@ -81,6 +83,7 @@ async def actualizar_producto(
     return {"ok": True, "data": respuesta}
 
 @router.delete("/{producto_id}", response_model=dict)
+@router.delete("/{producto_id}/", response_model=dict)
 async def eliminar_producto(
     producto_id: UUID,
     usuario_actual: dict = Depends(verificar_roles(["Administrador"]))

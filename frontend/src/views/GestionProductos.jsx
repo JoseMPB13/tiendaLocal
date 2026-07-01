@@ -44,6 +44,7 @@ export const GestionProductos = () => {
   const [precioVenta, setPrecioVenta] = useState('');
   const [stockActual, setStockActual] = useState('');
   const [stockMinimo, setStockMinimo] = useState('');
+  const [imagenUrl, setImagenUrl] = useState('');
   const [procesandoForm, setProcesandoForm] = useState(false);
 
   // Modal Desactivación
@@ -99,6 +100,7 @@ export const GestionProductos = () => {
     setPrecioVenta('');
     setStockActual(0);
     setStockMinimo(5);
+    setImagenUrl('');
     setMostrarForm(true);
   };
 
@@ -112,6 +114,7 @@ export const GestionProductos = () => {
     setPrecioVenta(prod.precio_venta);
     setStockActual(prod.stock_actual);
     setStockMinimo(prod.stock_minimo);
+    setImagenUrl(prod.imagen_url || '');
     setMostrarForm(true);
   };
 
@@ -127,7 +130,8 @@ export const GestionProductos = () => {
       precio_compra: parseFloat(precioCompra),
       precio_venta: parseFloat(precioVenta),
       stock_actual: parseInt(stockActual),
-      stock_minimo: parseInt(stockMinimo)
+      stock_minimo: parseInt(stockMinimo),
+      imagen_url: imagenUrl || null
     };
 
     try {
@@ -420,6 +424,7 @@ export const GestionProductos = () => {
             <table className="min-w-full divide-y divide-slate-200 text-left text-xs font-medium text-slate-600">
               <thead className="bg-slate-50 font-bold text-slate-700 uppercase tracking-wider">
                 <tr>
+                  <th className="text-left px-4 py-3">Miniatura</th>
                   <th className="text-left px-4 py-3">Código Barras</th>
                   <th className="text-left px-4 py-3">Nombre del Producto</th>
                   <th className="text-right px-4 py-3">Precio Venta</th>
@@ -432,7 +437,7 @@ export const GestionProductos = () => {
               {cargando ? (
                 <tbody className="divide-y divide-slate-100 bg-white">
                   <tr>
-                    <td colSpan="6" className="text-center py-10 text-slate-400 font-medium">
+                    <td colSpan="7" className="text-center py-10 text-slate-400 font-medium">
                       Cargando catálogo de productos...
                     </td>
                   </tr>
@@ -440,7 +445,7 @@ export const GestionProductos = () => {
               ) : productosPaginados.length === 0 ? (
                 <tbody className="divide-y divide-slate-100 bg-white">
                   <tr>
-                    <td colSpan="6" className="text-center py-10 text-slate-400 font-medium">
+                    <td colSpan="7" className="text-center py-10 text-slate-400 font-medium">
                       No se registran productos en el catálogo.
                     </td>
                   </tr>
@@ -449,6 +454,21 @@ export const GestionProductos = () => {
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {productosPaginados.map((prod) => (
                     <tr key={prod.id} className="hover:bg-slate-50/50 transition duration-150">
+                      <td className="text-left px-4 py-3 whitespace-nowrap">
+                        {prod.imagen_url ? (
+                          <div className="relative w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center">
+                            <img
+                              src={prod.imagen_url}
+                              alt={prod.nombre}
+                              className="w-full h-full object-cover rounded-lg cursor-zoom-in transition-all duration-300 transform hover:scale-[3.5] hover:z-50 hover:shadow-lg hover:border-slate-200"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400" title="Sin imagen">
+                            <Package size={14} />
+                          </div>
+                        )}
+                      </td>
                       <td className="text-left px-4 py-3 font-mono text-xs text-slate-500">
                         {prod.codigo_barras || '—'}
                       </td>
@@ -697,6 +717,20 @@ export const GestionProductos = () => {
                     <input
                       type="number" required value={stockMinimo}
                       onChange={(e) => setStockMinimo(e.target.value)}
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+
+                {/* Campo para la URL de la imagen del producto */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
+                  <div style={fieldStyle}>
+                    <label className="form-label">URL de la Imagen (Opcional)</label>
+                    <input
+                      type="url"
+                      value={imagenUrl}
+                      onChange={(e) => setImagenUrl(e.target.value)}
+                      placeholder="Ej: https://imagenes.com/mi-producto.jpg"
                       className="form-input"
                     />
                   </div>
