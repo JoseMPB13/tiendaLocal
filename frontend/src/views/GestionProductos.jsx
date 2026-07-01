@@ -494,8 +494,8 @@ export const GestionProductos = () => {
                               alt={prod.nombre}
                               className="w-full h-full object-cover rounded-lg border border-slate-200 shadow-xs cursor-zoom-in"
                             />
-                            {/* Card flotante de alta resolución que aparece al pasar el cursor */}
-                            <div className="absolute left-10 top-1/2 -translate-y-1/2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl p-2 hidden group-hover:block z-50 pointer-events-none transition-all duration-200">
+                            {/* Card flotante de alta resolución con posición fixed para escapar de overflow-hidden */}
+                            <div className="fixed ml-10 -mt-16 w-48 bg-white border border-slate-200 rounded-xl shadow-2xl p-2 hidden group-hover:block z-50 pointer-events-none transition-all duration-200">
                               <img
                                 src={obtenerUrlImagenCompleta(prod.imagen_url)}
                                 alt={prod.nombre}
