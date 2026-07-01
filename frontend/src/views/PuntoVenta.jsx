@@ -966,59 +966,58 @@ export const PuntoVenta = () => {
                       <div
                         key={prod.id}
                         onClick={() => !agotado && handleAgregarProductoPOS(prod)}
-                        className={`bg-white rounded-xl p-3 border shadow-sm flex flex-col justify-between h-[170px] transition-all duration-200 ${
+                        className={`bg-white rounded-2xl border shadow-sm flex flex-col overflow-hidden h-[210px] transition-all duration-200 ${
                           agotado
                             ? 'border-red-100 opacity-60 cursor-not-allowed'
-                            : 'border-slate-200 cursor-pointer hover:-translate-y-1 hover:shadow-md hover:border-indigo-500'
+                            : 'border-slate-200 cursor-pointer hover:-translate-y-1.5 hover:shadow-md hover:border-indigo-500'
                         }`}
                       >
-                        <div>
-                          <div className="flex gap-2.5 items-start">
-                            {prod.imagen_url && !imagenesRotas[prod.id] ? (
-                              <img
-                                src={obtenerUrlImagenCompleta(prod.imagen_url)}
-                                alt=""
-                                onError={() => setImagenesRotas(prev => ({ ...prev, [prod.id]: true }))}
-                                className="w-10 h-10 object-cover rounded-lg shrink-0 border border-slate-100 shadow-xs"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-300 shrink-0">
-                                <Package size={16} />
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              {prod.categoria_nombre && (
-                                <span className="text-[8px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mb-0.5 inline-block">
-                                  {prod.categoria_nombre}
-                                </span>
-                              )}
-                              <h4 className="font-bold text-xs text-slate-800 line-clamp-1 leading-tight">
-                                {prod.nombre}
-                              </h4>
-                              <span className="text-[9px] text-slate-400 font-mono block mt-0.5 leading-none">
-                                {prod.codigo_barras || '—'}
-                              </span>
+                        {/* Contenedor de la Imagen (Parte Superior Completa) */}
+                        <div className="relative h-24 w-full bg-slate-50 border-b border-slate-100 shrink-0">
+                          {prod.imagen_url && !imagenesRotas[prod.id] ? (
+                            <img
+                              src={obtenerUrlImagenCompleta(prod.imagen_url)}
+                              alt=""
+                              onError={() => setImagenesRotas(prev => ({ ...prev, [prod.id]: true }))}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-slate-300">
+                              <Package size={28} className="opacity-40" />
                             </div>
-                          </div>
-                          {prod.descripcion && (
-                            <p className="text-[10px] text-slate-500 line-clamp-1 mt-1.5 leading-tight font-medium" title={prod.descripcion}>
-                              {prod.descripcion}
-                            </p>
+                          )}
+                          {prod.categoria_nombre && (
+                            <span className="absolute top-2 left-2 text-[8px] font-extrabold uppercase tracking-wider text-indigo-700 bg-indigo-50/95 border border-indigo-150 px-2 py-0.5 rounded-md backdrop-blur-xs">
+                              {prod.categoria_nombre}
+                            </span>
                           )}
                         </div>
-                        <div className="flex items-end justify-between mt-2">
-                          <span className="font-extrabold text-sm text-slate-900">
-                            Bs. {prod.precio_venta.toFixed(2)}
-                          </span>
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
-                            agotado
-                              ? 'bg-red-50 text-red-600 border-red-200'
-                              : bajoStock
-                                ? 'bg-orange-50 text-orange-600 border-orange-200'
-                                : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                          }`}>
-                            {agotado ? 'Sin Stock' : `${stockDisp} uds`}
-                          </span>
+
+                        {/* Detalles del Producto (Parte Inferior) */}
+                        <div className="p-2.5 flex flex-col justify-between flex-1 min-w-0">
+                          <div>
+                            <h4 className="font-bold text-xs text-slate-800 line-clamp-2 leading-tight" title={prod.nombre}>
+                              {prod.nombre}
+                            </h4>
+                            <span className="text-[9px] text-slate-400 font-mono block mt-0.5 leading-none">
+                              {prod.codigo_barras || '—'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-end justify-between mt-2 pt-1 border-t border-slate-50">
+                            <span className="font-extrabold text-xs text-slate-900 leading-none">
+                              Bs. {prod.precio_venta.toFixed(2)}
+                            </span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
+                              agotado
+                                ? 'bg-red-50 text-red-600 border-red-200'
+                                : bajoStock
+                                  ? 'bg-orange-50 text-orange-600 border-orange-200'
+                                  : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                            }`}>
+                              {agotado ? 'Sin Stock' : `${stockDisp} uds`}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     );
