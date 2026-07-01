@@ -966,20 +966,20 @@ export const PuntoVenta = () => {
                       <div
                         key={prod.id}
                         onClick={() => !agotado && handleAgregarProductoPOS(prod)}
-                        className={`bg-white rounded-2xl border shadow-sm flex flex-col overflow-hidden h-[210px] transition-all duration-200 ${
+                        className={`bg-white rounded-2xl border shadow-sm flex flex-col overflow-hidden h-[220px] transition-all duration-200 ${
                           agotado
                             ? 'border-red-100 opacity-60 cursor-not-allowed'
                             : 'border-slate-200 cursor-pointer hover:-translate-y-1.5 hover:shadow-md hover:border-indigo-500'
                         }`}
                       >
                         {/* Contenedor de la Imagen (Parte Superior Completa) */}
-                        <div className="relative h-24 w-full bg-slate-50 border-b border-slate-100 shrink-0">
+                        <div className="relative h-28 w-full bg-slate-50 border-b border-slate-100 shrink-0">
                           {prod.imagen_url && !imagenesRotas[prod.id] ? (
                             <img
                               src={obtenerUrlImagenCompleta(prod.imagen_url)}
                               alt=""
                               onError={() => setImagenesRotas(prev => ({ ...prev, [prod.id]: true }))}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-contain p-1"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-slate-300">
