@@ -148,6 +148,7 @@ export const PuntoVenta = () => {
   const [clientes, setClientes] = useState([]);
   const [categorias, setCategorias] = useState(['Todas']);
   const [cargando, setCargando] = useState(true);
+  const [imagenesRotas, setImagenesRotas] = useState({});
 
   // Búsqueda y filtros del catálogo
   const [buscarInput, setBuscarInput] = useState('');
@@ -973,10 +974,11 @@ export const PuntoVenta = () => {
                       >
                         <div>
                           <div className="flex gap-2.5 items-start">
-                            {prod.imagen_url ? (
+                            {prod.imagen_url && !imagenesRotas[prod.id] ? (
                               <img
                                 src={obtenerUrlImagenCompleta(prod.imagen_url)}
-                                alt={prod.nombre}
+                                alt=""
+                                onError={() => setImagenesRotas(prev => ({ ...prev, [prod.id]: true }))}
                                 className="w-10 h-10 object-cover rounded-lg shrink-0 border border-slate-100 shadow-xs"
                               />
                             ) : (

@@ -20,3 +20,6 @@ __pycache__/
 
 # Archivos de logs
 *.log
+
+# Subidas locales de imágenes de productos
+uploads/
