@@ -9,7 +9,50 @@ import categoriaService from '../services/categoriaService';
 import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
 import toast, { Toaster } from 'react-hot-toast';
-import { Plus, Edit3, Trash2, X, Tag, DollarSign, BarChart2 } from 'lucide-react';
+import { 
+  Plus, Edit3, Trash2, X, Tag, DollarSign, BarChart2,
+  Wine, Cookie, Sparkles, Apple, Folder
+} from 'lucide-react';
+
+/* ── Mapeo de Iconos según Nombre de Categoría ───────────────────────────── */
+const MAPEO_PALABRAS_CLAVE = [
+  {
+    palabras: ['bebida', 'jugo', 'gaseosa', 'liquido', 'agua', 'refresco', 'soda'],
+    icono: Wine,
+    color: 'text-blue-600 bg-blue-50 border-blue-150'
+  },
+  {
+    palabras: ['snack', 'papas', 'galleta', 'pipoca', 'dulce', 'chocolate', 'caramelo', 'piqueo'],
+    icono: Cookie,
+    color: 'text-amber-600 bg-amber-50 border-amber-150'
+  },
+  {
+    palabras: ['limpieza', 'aseo', 'detergente', 'jabon', 'desinfectante', 'hogar', 'cepillo', 'higien'],
+    icono: Sparkles,
+    color: 'text-teal-600 bg-teal-50 border-teal-150'
+  },
+  {
+    palabras: ['abarrotes', 'arroz', 'fideos', 'harina', 'comida', 'aceite', 'granos', 'pasta', 'alimento'],
+    icono: Apple,
+    color: 'text-emerald-600 bg-emerald-50 border-emerald-150'
+  }
+];
+
+const obtenerIconoCategoria = (nombre) => {
+  if (!nombre) return { Component: Folder, colorClasses: 'text-zinc-500 bg-zinc-50 border-zinc-150' };
+  
+  const nombreNormalizado = nombre.toLowerCase().trim();
+  
+  // Buscar coincidencia de palabra clave
+  for (const item of MAPEO_PALABRAS_CLAVE) {
+    if (item.palabras.some(palabra => nombreNormalizado.includes(palabra))) {
+      return { Component: item.icono, colorClasses: item.color };
+    }
+  }
+  
+  // Icono por defecto elegante
+  return { Component: Tag, colorClasses: 'text-indigo-600 bg-indigo-50 border-indigo-150' };
+};
 
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
 
@@ -244,9 +287,18 @@ export const GestionCategorias = () => {
               </tbody>
             ) : (
               <tbody>
-                {categoriasPaginadas.map((cat) => (
-                  <tr key={cat.id}>
-                    <td className="bold">{cat.nombre}</td>
+                {categoriasPaginadas.map((cat) => {
+                  const { Component: IconoComp, colorClasses } = obtenerIconoCategoria(cat.nombre);
+                  return (
+                    <tr key={cat.id}>
+                      <td className="bold">
+                        <div className="flex items-center">
+                          <div className={`flex items-center justify-center w-8 h-8 rounded-lg border mr-2.5 shrink-0 ${colorClasses}`}>
+                            <IconoComp size={15} />
+                          </div>
+                          <span>{cat.nombre}</span>
+                        </div>
+                      </td>
                     <td style={{ color: '#6b7280' }}>{cat.descripcion || '—'}</td>
                     <td>
                       <span className={`badge ${cat.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
@@ -266,7 +318,7 @@ export const GestionCategorias = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                ); })}
               </tbody>
             )}
           </table>
@@ -305,7 +357,23 @@ export const GestionCategorias = () => {
             <form onSubmit={handleGuardar}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div style={fieldStyle}>
-                  <label className="form-label">Nombre Categoría *</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="form-label mb-0">Nombre Categoría *</label>
+                    {nombre.trim() && (
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-xs font-semibold select-none bg-slate-50 border-slate-150">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase mr-1">Ícono asignado:</span>
+                        {(() => {
+                          const { Component, colorClasses } = obtenerIconoCategoria(nombre);
+                          return (
+                            <div className={`flex items-center gap-1 p-0.5 px-1.5 rounded-md border text-[10px] font-bold ${colorClasses}`}>
+                              <Component size={12} className="mr-0.5" />
+                              <span>{nombre}</span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
                   <input
                     type="text" required value={nombre}
                     onChange={(e) => setNombre(e.target.value)}
