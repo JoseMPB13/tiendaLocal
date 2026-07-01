@@ -255,12 +255,9 @@ export const PuntoVenta = () => {
 
       if (resClis.ok) {
         setClientes(resClis.data);
-        // Buscar y seleccionar el cliente predeterminado automáticamente usando el helper
-        const clientePredeterminado = obtenerClientePredeterminado(resClis.data);
-        if (clientePredeterminado) {
-          setCliente(clientePredeterminado);
-          setBuscarCliente(clientePredeterminado.nombre);
-        }
+        // Comenzar con ningún cliente seleccionado por defecto (Opción A)
+        setCliente(null);
+        setBuscarCliente('');
       }
     } catch (ex) {
       console.error(ex);
@@ -619,7 +616,7 @@ export const PuntoVenta = () => {
         setOrigenRecibo('pos');
         await handleVerDetalle(ventaId);
         
-        // Recargar catálogos y seleccionar cliente predeterminado con los datos frescos
+        // Recargar catálogos y comenzar con ningún cliente seleccionado por defecto (Opción A)
         const [resProds, resClis] = await Promise.all([
           ventaService.obtenerProductos(),
           ventaService.obtenerClientes()
@@ -627,11 +624,8 @@ export const PuntoVenta = () => {
         if (resProds.ok) setProductos(resProds.data);
         if (resClis.ok) {
           setClientes(resClis.data);
-          const clientePredeterminado = obtenerClientePredeterminado(resClis.data);
-          if (clientePredeterminado) {
-            setCliente(clientePredeterminado);
-            setBuscarCliente(clientePredeterminado.nombre);
-          }
+          setCliente(null);
+          setBuscarCliente('');
         }
       }
     } catch (ex) {
