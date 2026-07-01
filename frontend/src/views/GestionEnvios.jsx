@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import deliveryService from '../services/deliveryService';
 import usuarioService from '../services/usuarioService';
 import PaginadorTablas from '../components/PaginadorTablas';
+import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Truck, Plus, Search, Filter, MapPin, 
@@ -382,7 +383,11 @@ export const GestionEnvios = () => {
   const enviosFiltrados = envios
     .filter(env => {
       if (env.estado_envio === 'Por Despachar') return false;
-      const coincideBuscar = env.venta_id.toLowerCase().includes(buscarVenta.toLowerCase());
+      const coincideBuscar =
+        env.venta_id.toLowerCase().includes(buscarVenta.toLowerCase()) ||
+        (env.direccion_despacho || '').toLowerCase().includes(buscarVenta.toLowerCase()) ||
+        (env.cliente && (env.cliente.nombre_completo || '').toLowerCase().includes(buscarVenta.toLowerCase())) ||
+        (obtenerNombreRepartidor(env.repartidor_id) || '').toLowerCase().includes(buscarVenta.toLowerCase());
       const coincideEstado = filtroEstado === 'Todos' || env.estado_envio === filtroEstado;
       return coincideBuscar && coincideEstado;
     })
@@ -395,7 +400,9 @@ export const GestionEnvios = () => {
   const totalCancelados = envios.filter(e => e.estado_envio === 'Cancelado').length;
 
   // Paginación local
-  const indexInicio = (pagina - 1) * itemsPorPagina;
+  const totalPaginas = Math.ceil(enviosFiltrados.length / itemsPorPagina) || 1;
+  const paginaEfectiva = Math.min(pagina, totalPaginas);
+  const indexInicio = (paginaEfectiva - 1) * itemsPorPagina;
   const enviosPaginados = enviosFiltrados.slice(indexInicio, indexInicio + itemsPorPagina);
 
   return (
@@ -543,37 +550,20 @@ export const GestionEnvios = () => {
       </div>
 
       {/* ── 3. PANEL DE FILTROS ── */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="relative flex-1 w-full">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            value={buscarVenta}
-            onChange={(e) => setBuscarVenta(e.target.value)}
-            placeholder="Buscar por ID de Venta..."
-            className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-xl py-2 pl-10 pr-4 text-xs font-medium placeholder-slate-400 transition-all duration-150"
-          />
-        </div>
-
-        <div className="flex gap-2 w-full sm:w-auto shrink-0 flex-wrap sm:flex-nowrap">
-          <div className="relative flex-1 sm:flex-initial">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none">
-              <Filter size={14} />
-            </span>
-            <select
-              value={filtroEstado}
-              onChange={(e) => setFiltroEstado(e.target.value)}
-              className="w-full pl-8 pr-8 border border-slate-200 rounded-xl text-xs py-2 bg-white focus:ring-1 focus:ring-indigo-500 outline-none transition-all cursor-pointer font-medium text-slate-600 appearance-none"
-            >
-              <option value="Todos">Todos los estados</option>
-              <option value="Pendiente">Pendientes</option>
-              <option value="En Camino">En Camino</option>
-              <option value="Entregado">Entregados</option>
-              <option value="Cancelado">Cancelados</option>
-            </select>
-          </div>
-        </div>
-      </div>
+      <PanelFiltroBusqueda
+        buscarTexto={buscarVenta}
+        alCambiarBuscarTexto={(val) => { setBuscarVenta(val); setPagina(1); }}
+        estadoSeleccionado={filtroEstado}
+        alCambiarEstado={(val) => { setFiltroEstado(val || 'Todos'); setPagina(1); }}
+        opcionesEstado={[
+          { value: 'Todos', label: 'Todos los estados' },
+          { value: 'Pendiente', label: 'Pendientes' },
+          { value: 'En Camino', label: 'En Camino' },
+          { value: 'Entregado', label: 'Entregados' },
+          { value: 'Cancelado', label: 'Cancelados' }
+        ]}
+        placeholder="Buscar envíos por ID de Venta, dirección, cliente o repartidor..."
+      />
 
       {/* Vista para pantallas grandes (Tabla estructurada y alineada) */}
       <div className="hidden lg:block bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -739,13 +729,6 @@ export const GestionEnvios = () => {
             )}
           </table>
         </div>
-
-        <PaginadorTablas
-          totalItems={enviosFiltrados.length}
-          itemsPorPagina={itemsPorPagina}
-          paginaActual={pagina}
-          alCambiarPagina={setPagina}
-        />
       </div>
 
       {/* Vista para pantallas móviles (Tarjetas independientes responsivas Mobile-First) */}
@@ -895,6 +878,16 @@ export const GestionEnvios = () => {
             );
           })
         )}
+      </div>
+
+      {/* Paginador global para ambas pantallas (Escritorio y Móvil) */}
+      <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-xs">
+        <PaginadorTablas
+          totalItems={enviosFiltrados.length}
+          itemsPorPagina={itemsPorPagina}
+          paginaActual={paginaEfectiva}
+          alCambiarPagina={setPagina}
+        />
       </div>
 
       {/* MODAL REGISTRAR ENVIO MANUAL */}

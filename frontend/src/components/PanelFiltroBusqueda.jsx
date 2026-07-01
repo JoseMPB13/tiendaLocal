@@ -18,7 +18,8 @@ export const PanelFiltroBusqueda = ({
   estadoSeleccionado,
   alCambiarEstado,
   deudaSeleccionada,
-  alCambiarDeuda
+  alCambiarDeuda,
+  opcionesEstado
 }) => {
   return (
     <div style={{
@@ -116,9 +117,19 @@ export const PanelFiltroBusqueda = ({
             }}
             className="focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
           >
-            <option value="">Todos</option>
-            <option value="Activo">Activos</option>
-            <option value="Inactivo">Inactivos</option>
+            {opcionesEstado ? (
+              opcionesEstado.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))
+            ) : (
+              <>
+                <option value="">Todos</option>
+                <option value="Activo">Activos</option>
+                <option value="Inactivo">Inactivos</option>
+              </>
+            )}
           </select>
         </div>
       )}

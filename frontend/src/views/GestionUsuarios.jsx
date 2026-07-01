@@ -196,21 +196,22 @@ export const GestionUsuarios = () => {
     }
   };
 
-  // Filtrado de usuarios en tiempo real
+  // Filtrado de usuarios en tiempo real (Nombre, Correo o Rol)
   const usuariosFiltrados = usuarios.filter((usr) => {
     const matchTexto = buscarTexto.trim() === '' ||
       (usr.nombre_completo || '').toLowerCase().includes(buscarTexto.toLowerCase()) ||
-      (usr.email || '').toLowerCase().includes(buscarTexto.toLowerCase());
+      (usr.email || '').toLowerCase().includes(buscarTexto.toLowerCase()) ||
+      (usr.rol || '').toLowerCase().includes(buscarTexto.toLowerCase());
     const matchRol = rolSeleccionado === '' || usr.rol === rolSeleccionado;
     const matchEstado = estadoSeleccionado === '' || usr.estado === estadoSeleccionado;
     return matchTexto && matchRol && matchEstado;
   });
 
   // Lógica de paginación sobre el listado filtrado
-  const totalItems = usuariosFiltrados.length;
-  const indiceUltimoItem = pagina * itemsPorPagina;
-  const indicePrimerItem = indiceUltimoItem - itemsPorPagina;
-  const usuariosPaginados = usuariosFiltrados.slice(indicePrimerItem, indiceUltimoItem);
+  const totalPaginas = Math.ceil(usuariosFiltrados.length / itemsPorPagina) || 1;
+  const paginaEfectiva = Math.min(pagina, totalPaginas);
+  const indicePrimerItem = (paginaEfectiva - 1) * itemsPorPagina;
+  const usuariosPaginados = usuariosFiltrados.slice(indicePrimerItem, indicePrimerItem + itemsPorPagina);
 
   // Ordenamiento de rankings de rendimiento (Top 3)
   const cajerosOrdenados = [...(rendimiento.cajeros || [])].sort((a, b) => b.monto_total - a.monto_total);
@@ -337,7 +338,8 @@ export const GestionUsuarios = () => {
 
       {/* ── TABLA ── */}
       <div className="table-wrapper">
-        <div style={{ overflowX: 'auto' }}>
+        {/* Vista para Escritorio */}
+        <div className="hidden md:block" style={{ overflowX: 'auto' }}>
           <table className="data-table" style={{ minWidth: '640px' }}>
             <thead>
               <tr>
@@ -361,7 +363,7 @@ export const GestionUsuarios = () => {
               <tbody>
                 <tr>
                   <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
-                    No se encontraron usuarios registrados.
+                    No se registran usuarios en el sistema.
                   </td>
                 </tr>
               </tbody>
@@ -370,11 +372,11 @@ export const GestionUsuarios = () => {
                 {usuariosPaginados.map((usr) => (
                   <tr key={usr.id}>
                     <td className="bold">{usr.nombre_completo}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: '#6b7280' }}>
-                      {usr.email}
-                    </td>
+                    <td style={{ color: '#6b7280' }}>{usr.email}</td>
                     <td>
-                      <span className={`badge ${rolBadge(usr.rol)}`}>{usr.rol}</span>
+                      <span className={`badge ${rolBadge(usr.rol)}`}>
+                        {usr.rol}
+                      </span>
                     </td>
                     <td>
                       <span className={`badge ${usr.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
@@ -382,12 +384,12 @@ export const GestionUsuarios = () => {
                       </span>
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'end', gap: '6px' }}>
                         <button onClick={() => abrirEditar(usr)} className="btn-icon" title="Editar usuario">
                           <Edit3 size={15} />
                         </button>
-                        {usr.estado === 'Activo' && (
-                          <button onClick={() => abrirDesactivar(usr.id)} className="btn-icon danger" title="Dar de baja">
+                        {usr.estado === 'Activo' && usr.email !== 'admin@tiendalocal.com' && (
+                          <button onClick={() => abrirDesactivar(usr.id)} className="btn-icon danger" title="Desactivar usuario">
                             <Trash2 size={15} />
                           </button>
                         )}
@@ -400,10 +402,58 @@ export const GestionUsuarios = () => {
           </table>
         </div>
 
+        {/* Vista para Móviles (Cards responsivos Mobile-First) */}
+        {!cargando && usuarios.length > 0 && (
+          <div className="grid grid-cols-1 gap-4 md:hidden">
+            {usuariosPaginados.map((usr) => (
+              <div key={usr.id} className="p-4 bg-white border border-slate-200 rounded-2xl space-y-3 shadow-xs hover:border-purple-250 transition-colors">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-bold text-gray-900 text-sm">{usr.nombre_completo}</h4>
+                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">{usr.email}</p>
+                  </div>
+                  <span className={`badge ${usr.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
+                    {usr.estado}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs border-t border-slate-100 pt-3">
+                  <div>
+                    <span className="text-[10px] text-gray-400 uppercase font-semibold">Rol de Acceso</span>
+                    <div className="mt-0.5">
+                      <span className={`badge ${rolBadge(usr.rol)}`}>
+                        {usr.rol}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => abrirEditar(usr)}
+                      className="flex justify-center items-center p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-gray-700 rounded-xl transition-colors"
+                      title="Editar usuario"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    {usr.estado === 'Activo' && usr.email !== 'admin@tiendalocal.com' && (
+                      <button
+                        onClick={() => abrirDesactivar(usr.id)}
+                        className="flex justify-center items-center p-2 text-rose-650 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-xl transition-colors"
+                        title="Desactivar usuario"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <PaginadorTablas
-          totalItems={totalItems}
+          totalItems={usuariosFiltrados.length}
           itemsPorPagina={itemsPorPagina}
-          paginaActual={pagina}
+          paginaActual={paginaEfectiva}
           alCambiarPagina={setPagina}
         />
       </div>

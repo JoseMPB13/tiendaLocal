@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import categoriaService from '../services/categoriaService';
 import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
+import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Plus, Edit3, Trash2, X, Tag, DollarSign, BarChart2,
@@ -95,6 +96,10 @@ export const GestionCategorias = () => {
   // Estados de paginación
   const [pagina, setPagina] = useState(1);
   const itemsPorPagina = 7;
+
+  // Filtros de búsqueda y estado
+  const [buscarTexto, setBuscarTexto] = useState('');
+  const [estadoSel, setEstadoSel] = useState('');
 
   // Estados del modal de formulario
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -209,8 +214,21 @@ export const GestionCategorias = () => {
     }
   };
 
-  const indexInicio = (pagina - 1) * itemsPorPagina;
-  const categoriasPaginadas = categorias.slice(indexInicio, indexInicio + itemsPorPagina);
+  const categoriasFiltradas = categorias.filter((cat) => {
+    const coincideTexto =
+      cat.nombre.toLowerCase().includes(buscarTexto.toLowerCase()) ||
+      (cat.descripcion && cat.descripcion.toLowerCase().includes(buscarTexto.toLowerCase()));
+
+    const coincideEstado =
+      !estadoSel || cat.estado === estadoSel;
+
+    return coincideTexto && coincideEstado;
+  });
+
+  const totalPaginas = Math.ceil(categoriasFiltradas.length / itemsPorPagina) || 1;
+  const paginaEfectiva = Math.min(pagina, totalPaginas);
+  const indexInicio = (paginaEfectiva - 1) * itemsPorPagina;
+  const categoriasPaginadas = categoriasFiltradas.slice(indexInicio, indexInicio + itemsPorPagina);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -287,8 +305,18 @@ export const GestionCategorias = () => {
           </div>
         </div>
       </div>
+      {/* ── PANEL DE BÚSQUEDA Y FILTRADO ── */}
+      <PanelFiltroBusqueda
+        buscarTexto={buscarTexto}
+        alCambiarBuscarTexto={setBuscarTexto}
+        estadoSeleccionado={estadoSel}
+        alCambiarEstado={setEstadoSel}
+        placeholder="Buscar categorías por nombre o descripción..."
+      />
+
       <div className="table-wrapper">
-        <div style={{ overflowX: 'auto' }}>
+        {/* Vista para Escritorio */}
+        <div className="hidden md:block" style={{ overflowX: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr>
@@ -329,35 +357,81 @@ export const GestionCategorias = () => {
                           <span>{cat.nombre}</span>
                         </div>
                       </td>
-                    <td style={{ color: '#6b7280' }}>{cat.descripcion || '—'}</td>
-                    <td>
-                      <span className={`badge ${cat.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
-                        {cat.estado}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                        <button onClick={() => abrirEditar(cat)} className="btn-icon" title="Editar categoría">
-                          <Edit3 size={15} />
-                        </button>
-                        {cat.estado === 'Activo' && (
-                          <button onClick={() => abrirDesactivar(cat.id)} className="btn-icon danger" title="Desactivar categoría">
-                            <Trash2 size={15} />
+                      <td style={{ color: '#6b7280' }}>{cat.descripcion || '—'}</td>
+                      <td>
+                        <span className={`badge ${cat.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
+                          {cat.estado}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                          <button onClick={() => abrirEditar(cat)} className="btn-icon" title="Editar categoría">
+                            <Edit3 size={15} />
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ); })}
+                          {cat.estado === 'Activo' && (
+                            <button onClick={() => abrirDesactivar(cat.id)} className="btn-icon danger" title="Desactivar categoría">
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ); })}
               </tbody>
             )}
           </table>
         </div>
 
+        {/* Vista para Móviles (Cards responsivos Mobile-First) */}
+        {!cargando && categorias.length > 0 && (
+          <div className="grid grid-cols-1 gap-4 md:hidden">
+            {categoriasPaginadas.map((cat) => {
+              const { Component: IconoComp, colorClasses } = obtenerIconoCategoria(cat.nombre);
+              return (
+                <div key={cat.id} className="p-4 bg-white border border-slate-200 rounded-2xl space-y-3 shadow-xs hover:border-amber-250 transition-colors">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-2">
+                      <div className={`flex items-center justify-center w-8 h-8 rounded-lg border shrink-0 ${colorClasses}`}>
+                        <IconoComp size={15} />
+                      </div>
+                      <h4 className="font-bold text-gray-900 text-sm">{cat.nombre}</h4>
+                    </div>
+                    <span className={`badge ${cat.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
+                      {cat.estado}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 bg-slate-50 border border-slate-100 rounded-lg p-2 leading-relaxed">
+                    {cat.descripcion || 'Sin descripción'}
+                  </p>
+                  <div className="flex gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      onClick={() => abrirEditar(cat)}
+                      className="flex-1 flex justify-center items-center gap-1.5 py-2 text-xs font-semibold bg-slate-50 hover:bg-slate-100 border border-slate-200 text-gray-700 rounded-xl transition-colors"
+                      title="Editar categoría"
+                    >
+                      <Edit3 size={14} />
+                      <span>Editar</span>
+                    </button>
+                    {cat.estado === 'Activo' && (
+                      <button
+                        onClick={() => abrirDesactivar(cat.id)}
+                        className="flex justify-center items-center p-2 text-rose-650 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-xl transition-colors"
+                        title="Desactivar categoría"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <PaginadorTablas
-          totalItems={categorias.length}
+          totalItems={categoriasFiltradas.length}
           itemsPorPagina={itemsPorPagina}
-          paginaActual={pagina}
+          paginaActual={paginaEfectiva}
           alCambiarPagina={setPagina}
         />
       </div>

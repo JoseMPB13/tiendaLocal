@@ -114,7 +114,9 @@ class DeliveryService:
             "repartidor_id": str(envio.repartidor_id) if envio.repartidor_id else None,
             "direccion_despacho": envio.direccion_despacho,
             "costo_envio": envio.costo_envio,
-            "estado_envio": "Pendiente"
+            "estado_envio": "Pendiente",
+            "latitud": envio.latitud,
+            "longitud": envio.longitud
         }
 
         resultado = supabase.table("envios").insert(nuevo_env).execute()
@@ -137,6 +139,20 @@ class DeliveryService:
         for e in (query.data or []):
             venta = e.get("ventas") or {}
             cliente_data = venta.get("clientes") or {}
+            
+            # Priorizar las coordenadas específicas de la orden de envío, con fallback a las del cliente
+            lat_despacho = e.get("latitud")
+            lng_despacho = e.get("longitud")
+            if lat_despacho is None or lat_despacho == "":
+                lat_despacho = cliente_data.get("latitud")
+            else:
+                lat_despacho = float(lat_despacho)
+                
+            if lng_despacho is None or lng_despacho == "":
+                lng_despacho = cliente_data.get("longitud")
+            else:
+                lng_despacho = float(lng_despacho)
+
             e_formateado = {
                 "id": e["id"],
                 "venta_id": e["venta_id"],
@@ -144,6 +160,8 @@ class DeliveryService:
                 "direccion_despacho": e["direccion_despacho"],
                 "costo_envio": float(e["costo_envio"]) if e.get("costo_envio") is not None else 0.0,
                 "estado_envio": e["estado_envio"],
+                "latitud": lat_despacho,
+                "longitud": lng_despacho,
                 "fecha_despacho": e["fecha_despacho"],
                 "fecha_entrega": e["fecha_entrega"],
                 "fecha_creacion": e["fecha_creacion"],
@@ -155,9 +173,8 @@ class DeliveryService:
                     "direccion": cliente_data.get("direccion", ""),
                     "enlace_ubicacion": cliente_data.get("enlace_ubicacion", ""),
                     "enlace_mapa": cliente_data.get("enlace_mapa", ""),
-                    # Coordenadas geográficas del cliente para el mapa interactivo
-                    "latitud": cliente_data.get("latitud"),
-                    "longitud": cliente_data.get("longitud")
+                    "latitud": lat_despacho,
+                    "longitud": lng_despacho
                 }
             }
             envios_formateados.append(e_formateado)
