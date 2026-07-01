@@ -488,12 +488,24 @@ export const GestionProductos = () => {
                     <tr key={prod.id} className="hover:bg-slate-50/50 transition duration-150">
                       <td className="text-left px-4 py-3 whitespace-nowrap">
                         {prod.imagen_url ? (
-                          <div className="relative w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center">
+                          <div className="relative w-8 h-8 group overflow-visible">
                             <img
-                              src={prod.imagen_url}
+                              src={obtenerUrlImagenCompleta(prod.imagen_url)}
                               alt={prod.nombre}
-                              className="w-full h-full object-cover rounded-lg cursor-zoom-in transition-all duration-300 transform hover:scale-[3.5] hover:z-50 hover:shadow-lg hover:border-slate-200"
+                              className="w-full h-full object-cover rounded-lg border border-slate-200 shadow-xs cursor-zoom-in"
                             />
+                            {/* Card flotante de alta resolución que aparece al pasar el cursor */}
+                            <div className="absolute left-10 top-1/2 -translate-y-1/2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl p-2 hidden group-hover:block z-50 pointer-events-none transition-all duration-200">
+                              <img
+                                src={obtenerUrlImagenCompleta(prod.imagen_url)}
+                                alt={prod.nombre}
+                                className="w-full h-32 object-cover rounded-lg border border-slate-100"
+                              />
+                              <div className="mt-1.5 px-0.5">
+                                <p className="font-bold text-[11px] text-slate-800 leading-tight truncate">{prod.nombre}</p>
+                                <p className="text-[9px] text-slate-400 font-mono mt-0.5">{prod.codigo_barras || 'Sin código'}</p>
+                              </div>
+                            </div>
                           </div>
                         ) : (
                           <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400" title="Sin imagen">

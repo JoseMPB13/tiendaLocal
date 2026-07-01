@@ -143,8 +143,10 @@ async def subir_imagen_producto(
     # Generar un nombre único para evitar colisiones
     nombre_archivo = f"{py_uuid.uuid4()}{extension}"
     
-    # Obtener la ruta absoluta de la carpeta backend/uploads
-    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # Obtener la ruta absoluta de la carpeta backend/uploads (3 niveles arriba)
+    router_dir = os.path.dirname(os.path.abspath(__file__))
+    app_dir = os.path.dirname(router_dir)
+    backend_dir = os.path.dirname(app_dir)
     uploads_dir = os.path.join(backend_dir, "uploads")
     os.makedirs(uploads_dir, exist_ok=True)
     
