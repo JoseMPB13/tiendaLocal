@@ -93,7 +93,9 @@ class VentaService:
                     "p_items": items_json,
                     "p_para_delivery": venta.para_delivery,
                     "p_direccion_despacho": venta.direccion_despacho,
-                    "p_costo_envio": float(venta.costo_envio) if venta.costo_envio is not None else 0.0
+                    "p_costo_envio": float(venta.costo_envio) if venta.costo_envio is not None else 0.0,
+                    "p_latitud": float(venta.latitud) if venta.latitud is not None else None,
+                    "p_longitud": float(venta.longitud) if venta.longitud is not None else None
                 }).execute()
                 
                 if not sp_result.data:
@@ -145,7 +147,9 @@ class VentaService:
                     "p_items": items_json,
                     "p_para_delivery": venta.para_delivery,
                     "p_direccion_despacho": venta.direccion_despacho,
-                    "p_costo_envio": float(venta.costo_envio) if venta.costo_envio is not None else 0.0
+                    "p_costo_envio": float(venta.costo_envio) if venta.costo_envio is not None else 0.0,
+                    "p_latitud": float(venta.latitud) if venta.latitud is not None else None,
+                    "p_longitud": float(venta.longitud) if venta.longitud is not None else None
                 }).execute()
                 
                 if not sp_result.data:
@@ -181,18 +185,33 @@ class VentaService:
                 )
 
     @staticmethod
-    def listar_ventas(estado_venta: Optional[str] = None, skip: int = 0, limit: int = 100) -> List[dict]:
+    def listar_ventas(estado_venta: Optional[str] = None, fecha_especifica: Optional[str] = None, skip: int = 0, limit: int = 100) -> List[dict]:
         """
-        Lista todas las ventas del sistema, con soporte de filtrado por estado y paginación.
+        Lista todas las ventas del sistema, con soporte de filtrado por estado, fecha específica y paginación.
+        Idioma: Español
         """
-        query = supabase.table("ventas").select("*")
-        if estado_venta:
-            query = query.eq("estado_venta", estado_venta)
-        
-        start = skip
-        end = skip + limit - 1
-        resultado = query.order("fecha_venta", desc=True).range(start, end).execute()
-        return resultado.data or []
+        try:
+            query = supabase.table("ventas").select("*")
+            if estado_venta:
+                query = query.eq("estado_venta", estado_venta)
+            if fecha_especifica:
+                # Filtrado por rango de fecha completa (de 00:00:00 a 23:59:59 con microsegundos y zona horaria UTC)
+                query = query.gte("fecha_venta", f"{fecha_especifica}T00:00:00+00:00").lte("fecha_venta", f"{fecha_especifica}T23:59:59.999999+00:00")
+            
+            start = skip
+            end = skip + limit - 1
+            resultado = query.order("fecha_venta", desc=True).range(start, end).execute()
+            return resultado.data or []
+        except APIError as ex:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error en BD al listar ventas (SQLSTATE {ex.code}): {ex.message}"
+            )
+        except Exception as ex:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error inesperado al listar ventas: {str(ex)}"
+            )
 
     @staticmethod
     def obtener_por_id(venta_id: UUID) -> dict:
@@ -334,7 +353,9 @@ class VentaService:
                 "p_items": items_json,
                 "p_para_delivery": venta.para_delivery,
                 "p_direccion_despacho": venta.direccion_despacho,
-                "p_costo_envio": float(venta.costo_envio) if venta.costo_envio is not None else 0.0
+                "p_costo_envio": float(venta.costo_envio) if venta.costo_envio is not None else 0.0,
+                "p_latitud": float(venta.latitud) if venta.latitud is not None else None,
+                "p_longitud": float(venta.longitud) if venta.longitud is not None else None
             }).execute()
 
             if not sp_result.data:

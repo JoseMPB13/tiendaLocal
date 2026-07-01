@@ -119,6 +119,23 @@ export const PuntoVenta = () => {
   // Pestaña activa ('pos' o 'historial')
   const [activeTab, setActiveTab] = useState('pos');
 
+  /**
+   * Obtiene el cliente configurado como predeterminado por el sistema,
+   * evaluando nombres específicos y el DNI base.
+   * Idioma: Español
+   * @param {Array} listaClientes - Lista de clientes obtenida.
+   * @returns {Object|null} El cliente predeterminado.
+   */
+  const obtenerClientePredeterminado = (listaClientes) => {
+    if (!listaClientes || listaClientes.length === 0) return null;
+    return (
+      listaClientes.find(c => c.nombre === 'Cliente General') ||
+      listaClientes.find(c => c.nombre === 'Venta Mostrador') ||
+      listaClientes.find(c => c.dni_ruc === '00000000') ||
+      listaClientes[0]
+    );
+  };
+
   // Catálogo de Productos y Clientes
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -165,6 +182,7 @@ export const PuntoVenta = () => {
   const [ventas, setVentas] = useState([]);
   const [cargandoVentas, setCargandoVentas] = useState(false);
   const [filtroEstado, setFiltroEstado] = useState('Todas');
+  const [filtroFecha, setFiltroFecha] = useState('');
   const [pagina, setPagina] = useState(1);
   const [totalVentas, setTotalVentas] = useState(0);
   const limitVentas = 10;
@@ -237,11 +255,11 @@ export const PuntoVenta = () => {
 
       if (resClis.ok) {
         setClientes(resClis.data);
-        // Preseleccionar "Cliente General" (DNI 00000000) si existe
-        const cliGeneral = resClis.data.find(c => c.dni_ruc === '00000000') || resClis.data[0];
-        if (cliGeneral) {
-          setCliente(cliGeneral);
-          setBuscarCliente(cliGeneral.nombre);
+        // Buscar y seleccionar el cliente predeterminado automáticamente usando el helper
+        const clientePredeterminado = obtenerClientePredeterminado(resClis.data);
+        if (clientePredeterminado) {
+          setCliente(clientePredeterminado);
+          setBuscarCliente(clientePredeterminado.nombre);
         }
       }
     } catch (ex) {
@@ -281,6 +299,9 @@ export const PuntoVenta = () => {
       if (filtroEstado !== 'Todas') {
         params.estado_venta = filtroEstado;
       }
+      if (filtroFecha) {
+        params.fecha_especifica = filtroFecha;
+      }
       
       const res = await ventaService.obtenerVentas(params);
       if (res.ok && res.data) {
@@ -295,12 +316,12 @@ export const PuntoVenta = () => {
     }
   };
 
-  // Cargar historial de ventas cuando cambia el filtro, pestaña o la página
+  // Cargar historial de ventas cuando cambia el filtro, pestaña, la página o la fecha
   useEffect(() => {
     if (activeTab === 'historial') {
       (async () => { await obtenerHistorialVentas(); })();
     }
-  }, [activeTab, filtroEstado, pagina]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab, filtroEstado, pagina, filtroFecha]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Cerrar dropdown de clientes al hacer clic fuera ───────────────────── */
   useEffect(() => {
@@ -598,16 +619,19 @@ export const PuntoVenta = () => {
         setOrigenRecibo('pos');
         await handleVerDetalle(ventaId);
         
-        // Recargar catálogos
-        await Promise.all([
-          ventaService.obtenerProductos().then(res => { if (res.ok) setProductos(res.data); }),
-          ventaService.obtenerClientes().then(res => { if (res.ok) setClientes(res.data); })
+        // Recargar catálogos y seleccionar cliente predeterminado con los datos frescos
+        const [resProds, resClis] = await Promise.all([
+          ventaService.obtenerProductos(),
+          ventaService.obtenerClientes()
         ]);
-
-        const cliGeneral = clientes.find(c => c.dni_ruc === '00000000') || clientes[0];
-        if (cliGeneral) { 
-          setCliente(cliGeneral); 
-          setBuscarCliente(cliGeneral.nombre); 
+        if (resProds.ok) setProductos(resProds.data);
+        if (resClis.ok) {
+          setClientes(resClis.data);
+          const clientePredeterminado = obtenerClientePredeterminado(resClis.data);
+          if (clientePredeterminado) {
+            setCliente(clientePredeterminado);
+            setBuscarCliente(clientePredeterminado.nombre);
+          }
         }
       }
     } catch (ex) {
@@ -1258,25 +1282,48 @@ export const PuntoVenta = () => {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 w-full flex flex-col gap-4 animate-fade-in">
           
           {/* Barra de Filtros del Historial */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4">
             <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
               <FileText size={16} className="text-indigo-600" /> Registro Diario de Ventas
             </h3>
             
-            <div className="flex gap-1.5 flex-wrap">
-              {['Todas', 'Completada', 'Cancelada', 'Pendiente'].map(estado => (
-                <button
-                  key={estado}
-                  onClick={() => { setFiltroEstado(estado); setPagina(1); }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition duration-150 cursor-pointer ${
-                    filtroEstado === estado
-                      ? 'bg-indigo-600 text-white border-indigo-600'
-                      : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  {estado}
-                </button>
-              ))}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+              {/* Filtro de Fecha Específica con input estilizado y botón de limpiar */}
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+                <span className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">Fecha:</span>
+                <input
+                  type="date"
+                  value={filtroFecha}
+                  onChange={(e) => { setFiltroFecha(e.target.value); setPagina(1); }}
+                  className="bg-transparent text-slate-700 text-xs font-semibold outline-none focus:ring-0 w-full sm:w-auto cursor-pointer"
+                />
+                {filtroFecha && (
+                  <button
+                    onClick={() => { setFiltroFecha(''); setPagina(1); }}
+                    className="text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition duration-150 cursor-pointer animate-fade-in"
+                    title="Limpiar filtro de fecha"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              {/* Filtros de Estado */}
+              <div className="flex gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-thin">
+                {['Todas', 'Completada', 'Cancelada', 'Pendiente'].map(estado => (
+                  <button
+                    key={estado}
+                    onClick={() => { setFiltroEstado(estado); setPagina(1); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition duration-150 cursor-pointer whitespace-nowrap ${
+                      filtroEstado === estado
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {estado}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1293,9 +1340,9 @@ export const PuntoVenta = () => {
             </div>
           ) : (
             <div className="w-full">
-              {/* Vista Desktop (Table) */}
-              <div className="hidden lg:block overflow-x-auto rounded-xl border border-slate-200">
-                <table className="min-w-full divide-y divide-slate-200 text-left text-[11px] font-medium text-slate-600">
+              {/* Vista Desktop (Table - Homogeneizada con la de productos usando Tailwind CSS puro) */}
+              <div className="hidden lg:block overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs">
+                <table className="min-w-full divide-y divide-slate-200 text-left text-xs font-medium text-slate-600">
                   <thead className="bg-slate-50 font-bold text-slate-700 uppercase tracking-wider">
                     <tr>
                       <th className="px-4 py-3">Fecha y Hora</th>
@@ -1308,21 +1355,21 @@ export const PuntoVenta = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {ventas.map(v => (
-                      <tr key={v.id} className="hover:bg-slate-50/50 transition">
-                        <td className="px-4 py-2.5 whitespace-nowrap">
+                      <tr key={v.id} className="hover:bg-slate-50/50 transition duration-150">
+                        <td className="px-4 py-3 whitespace-nowrap text-slate-500">
                           {new Date(v.fecha_venta).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
                         </td>
-                        <td className="px-4 py-2.5 font-mono font-bold text-slate-700">
+                        <td className="px-4 py-3 font-mono font-bold text-slate-700">
                           {v.codigo_factura}
                         </td>
-                        <td className="px-4 py-2.5">
-                          <span className="bg-slate-100 px-2 py-0.5 rounded-full font-bold text-slate-600">{v.tipo_pago}</span>
+                        <td className="px-4 py-3">
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-full font-bold text-slate-600 text-[10px]">{v.tipo_pago}</span>
                         </td>
-                        <td className="px-4 py-2.5 text-right font-extrabold text-slate-900">
+                        <td className="px-4 py-3 text-right font-extrabold text-slate-900">
                           Bs. {v.total.toFixed(2)}
                         </td>
-                        <td className="px-4 py-2.5 text-center">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                        <td className="px-4 py-3 text-center">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border inline-block ${
                             v.estado_venta === 'Completada'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : v.estado_venta === 'Cancelada'
@@ -1332,14 +1379,14 @@ export const PuntoVenta = () => {
                             {v.estado_venta}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 text-center">
+                        <td className="px-4 py-3 text-center">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               onClick={() => { setOrigenRecibo('historial'); handleVerDetalle(v.id); }}
                               className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
                               title="Ver detalles"
                             >
-                              <Eye size={13} />
+                              <Eye size={14} />
                             </button>
                             {v.estado_venta !== 'Cancelada' && esMismoDia(v.fecha_venta) && (
                               <>
@@ -1348,14 +1395,14 @@ export const PuntoVenta = () => {
                                   className="text-amber-600 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
                                   title="Editar venta"
                                 >
-                                  <Edit2 size={13} />
+                                  <Edit2 size={14} />
                                 </button>
                                 <button
                                   onClick={() => handleAnularVenta(v.id)}
                                   className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition duration-150 cursor-pointer"
                                   title="Anular venta"
                                 >
-                                  <Ban size={13} />
+                                  <Ban size={14} />
                                 </button>
                               </>
                             )}
@@ -1367,20 +1414,20 @@ export const PuntoVenta = () => {
                 </table>
               </div>
 
-              {/* Vista Móvil (Cards) */}
+              {/* Vista Móvil (Cards - Adaptada fluidamente con Tailwind CSS) */}
               <div className="block lg:hidden space-y-3">
                 {ventas.map(v => (
-                  <div key={v.id} className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm flex flex-col gap-2">
+                  <div key={v.id} className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm flex flex-col gap-2 transition hover:border-slate-300">
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="text-[10px] text-slate-400 block font-medium">
-                          {new Date(v.fecha_venta).toLocaleString()}
+                          {new Date(v.fecha_venta).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
                         </span>
                         <h4 className="font-bold text-xs text-slate-800 font-mono mt-0.5">
                           {v.codigo_factura}
                         </h4>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border inline-block ${
                         v.estado_venta === 'Completada'
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           : v.estado_venta === 'Cancelada'
@@ -1396,10 +1443,10 @@ export const PuntoVenta = () => {
                         <span className="text-[10px] text-slate-400 block">Pago: {v.tipo_pago}</span>
                         <span className="font-extrabold text-slate-900">Bs. {v.total.toFixed(2)}</span>
                       </div>
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-1.5 flex-wrap">
                         <button
                           onClick={() => { setOrigenRecibo('historial'); handleVerDetalle(v.id); }}
-                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-2 py-1 rounded-md font-bold text-[10px] flex items-center gap-1 cursor-pointer transition"
                         >
                           <Eye size={12} /> Detalles
                         </button>
@@ -1407,13 +1454,13 @@ export const PuntoVenta = () => {
                           <>
                             <button
                               onClick={() => handleCargarEdicion(v.id)}
-                              className="bg-amber-50 hover:bg-amber-100 text-amber-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                              className="bg-amber-50 hover:bg-amber-100 text-amber-600 px-2 py-1 rounded-md font-bold text-[10px] flex items-center gap-1 cursor-pointer transition"
                             >
                               <Edit2 size={12} /> Editar
                             </button>
                             <button
                               onClick={() => handleAnularVenta(v.id)}
-                              className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                              className="bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1 rounded-md font-bold text-[10px] flex items-center gap-1 cursor-pointer transition"
                             >
                               <Ban size={12} /> Anular
                             </button>

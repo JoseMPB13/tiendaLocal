@@ -15,20 +15,43 @@ from app.services.bitacora import BitacoraService
 
 router = APIRouter(prefix="/ventas", tags=["Ventas"])
 
+def convertir_uuid_a_str(obj):
+    """
+    Función recursiva para convertir cualquier objeto UUID a su representación
+    en cadena de texto (str) dentro de estructuras de datos (diccionarios y listas).
+    Evita fallos de serialización JSON con Supabase y Pydantic.
+    Idioma: Español
+    """
+    if isinstance(obj, dict):
+        return {k: convertir_uuid_a_str(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convertir_uuid_a_str(x) for x in obj]
+    elif isinstance(obj, UUID):
+        return str(obj)
+    return obj
+
+@router.get("", response_model=dict)
 @router.get("/", response_model=dict)
 async def listar_ventas(
     estado_venta: Optional[str] = None,
+    fecha_especifica: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero"]))
 ):
     """
     Lista todas las ventas registradas en el sistema.
-    Soporta filtros opcionales por estado_venta (Completada, Cancelada, Pendiente) y paginación (skip, limit).
+    Soporta filtros opcionales por estado_venta (Completada, Cancelada, Pendiente), 
+    fecha_especifica (YYYY-MM-DD) y paginación (skip, limit).
     """
-    ventas_data = VentaService.listar_ventas(estado_venta, skip, limit)
-    respuesta = [VentaRespuesta.model_validate(v) for v in ventas_data]
-    return {"ok": True, "data": respuesta}
+    ventas_data = VentaService.listar_ventas(estado_venta, fecha_especifica, skip, limit)
+    # Convertir explícitamente cualquier UUID nativo de Supabase a cadena de texto
+    datos_limpios = convertir_uuid_a_str(ventas_data)
+    respuesta = [VentaRespuesta.model_validate(v) for v in datos_limpios]
+    # Serializar los esquemas y asegurar conversión a str de cualquier UUID residual
+    respuesta_dict = [r.model_dump() for r in respuesta]
+    respuesta_final = convertir_uuid_a_str(respuesta_dict)
+    return {"ok": True, "data": respuesta_final}
 
 @router.get("/proximo-numero-factura", response_model=dict)
 async def obtener_proximo_numero_factura(
