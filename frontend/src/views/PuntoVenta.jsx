@@ -631,7 +631,7 @@ export const PuntoVenta = () => {
           codigo_factura: codigoFacturaGenerado,
           total: total,
           cliente: clienteSeleccionado?.nombre || 'Cliente General',
-          fecha: new Date()
+          fecha: respuesta.data.fecha_venta || new Date().toISOString(),
         };
         setUltimasFacturas(prev => [nuevaFactura, ...prev].slice(0, 3));
 

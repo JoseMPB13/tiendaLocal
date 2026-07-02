@@ -48,11 +48,19 @@ def fin_dia_bolivia_iso_desde_str(fecha_str: str) -> str:
     return fin_dia_bolivia_iso(date.fromisoformat(fecha_str))
 
 
+def parsear_fecha_api(iso_str: str) -> datetime:
+    """
+    Parsea timestamps de PostgreSQL/Supabase asumiendo UTC si no traen offset.
+    """
+    texto = iso_str.replace("Z", "+00:00")
+    dt = datetime.fromisoformat(texto)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    return dt
+
+
 def formatear_fecha_hora_bolivia(iso_str: str, formato: str = "%d/%m/%Y %H:%M") -> str:
     """
     Convierte un timestamp ISO almacenado (UTC o con offset) a texto en hora boliviana.
     """
-    dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
-    return dt.astimezone(ZONA_HORARIA_BOLIVIA).strftime(formato)
+    return parsear_fecha_api(iso_str).astimezone(ZONA_HORARIA_BOLIVIA).strftime(formato)

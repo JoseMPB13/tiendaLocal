@@ -1,7 +1,8 @@
 // =============================================================================
 // UTILIDAD: fechaBolivia.js
-// Propósito: Helpers de fecha/hora en zona horaria oficial de Bolivia (America/La_Paz).
-//            Evita el desfase de un día causado por toISOString() (UTC) en el cliente.
+// Propósito: Helpers centralizados de fecha/hora en America/La_Paz (Bolivia).
+//            - Almacenamiento en BD: instante UTC (timestamptz con now()).
+//            - Visualización/filtros: siempre convertir a hora boliviana aquí.
 // Módulo: Utilidades compartidas del frontend
 // Idioma: Español
 // =============================================================================
@@ -13,65 +14,87 @@ export const ZONA_HORARIA_BOLIVIA = 'America/La_Paz';
 const OFFSET_BOLIVIA = '-04:00';
 
 /**
+ * Parsea timestamps devueltos por la API (PostgreSQL/Supabase).
+ * Si el string no trae zona horaria, se asume UTC (convención timestamptz).
+ * @param {string|Date} valor - Timestamp desde la API.
+ * @returns {Date|null}
+ */
+export const parsearFechaApi = (valor) => {
+  if (!valor) return null;
+  if (valor instanceof Date) return valor;
+
+  const texto = String(valor).trim();
+  if (!texto) return null;
+
+  // Ya incluye zona horaria explícita (Z o ±HH:MM)
+  if (/[zZ]$/.test(texto) || /[+-]\d{2}:\d{2}$/.test(texto)) {
+    const fecha = new Date(texto);
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
+  }
+
+  // Solo fecha calendario
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    const fecha = new Date(`${texto}T00:00:00Z`);
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
+  }
+
+  // Timestamp sin zona desde PostgreSQL → interpretar como UTC
+  if (/^\d{4}-\d{2}-\d{2}T/.test(texto)) {
+    const fecha = new Date(`${texto}Z`);
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
+  }
+
+  const fecha = new Date(texto);
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
+};
+
+/**
  * Obtiene la fecha local de Bolivia en formato YYYY-MM-DD (ideal para inputs type="date").
- * @returns {string} Fecha actual en Bolivia, ej: "2026-07-01"
  */
 export const obtenerFechaBoliviaHoy = () => {
   return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_HORARIA_BOLIVIA }).format(new Date());
 };
 
-/**
- * Inicio del día calendario en Bolivia como ISO-8601 con offset -04:00.
- * @param {string} fechaYYYYMMDD - Fecha en formato YYYY-MM-DD.
- */
+/** Inicio del día calendario en Bolivia como ISO-8601 con offset -04:00. */
 export const obtenerInicioDiaBoliviaISO = (fechaYYYYMMDD) =>
   `${fechaYYYYMMDD}T00:00:00${OFFSET_BOLIVIA}`;
 
-/**
- * Fin del día calendario en Bolivia como ISO-8601 con offset -04:00.
- * @param {string} fechaYYYYMMDD - Fecha en formato YYYY-MM-DD.
- */
+/** Fin del día calendario en Bolivia como ISO-8601 con offset -04:00. */
 export const obtenerFinDiaBoliviaISO = (fechaYYYYMMDD) =>
   `${fechaYYYYMMDD}T23:59:59.999${OFFSET_BOLIVIA}`;
 
-/**
- * Formatea una fecha/hora a DD/MM/YYYY según el huso horario de Bolivia.
- * @param {Date} [fecha=new Date()] - Instancia de fecha a formatear.
- * @returns {string} Fecha legible, ej: "01/07/2026"
- */
+/** Formatea una fecha a DD/MM/YYYY en hora boliviana. */
 export const formatearFechaBolivia = (fecha = new Date()) => {
+  const ref = fecha instanceof Date ? fecha : parsearFechaApi(fecha);
+  if (!ref) return '';
   return new Intl.DateTimeFormat('es-BO', {
     timeZone: ZONA_HORARIA_BOLIVIA,
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-  }).format(fecha);
+  }).format(ref);
 };
 
-/**
- * Formatea una fecha/hora a HH:MM:SS según el huso horario de Bolivia.
- * @param {Date} [fecha=new Date()] - Instancia de fecha a formatear.
- * @returns {string} Hora legible, ej: "14:30:05"
- */
+/** Formatea una hora a HH:MM:SS en hora boliviana. */
 export const formatearHoraBolivia = (fecha = new Date()) => {
+  const ref = fecha instanceof Date ? fecha : parsearFechaApi(fecha);
+  if (!ref) return '';
   return new Intl.DateTimeFormat('es-BO', {
     timeZone: ZONA_HORARIA_BOLIVIA,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hour12: false,
-  }).format(fecha);
+  }).format(ref);
 };
 
 /**
- * Formatea un timestamp ISO almacenado para visualización en hora boliviana.
- * @param {string} fechaStr - Timestamp ISO desde la API.
- * @param {object} [opciones] - Opciones de Intl (dateStyle, timeStyle).
+ * Formatea un timestamp de la API para visualización en hora boliviana.
+ * Usar en facturas, historial, envíos, bitácora, etc.
  */
 export const formatearFechaHoraBolivia = (fechaStr, opciones = {}) => {
-  if (!fechaStr) return '';
-  const fecha = new Date(fechaStr);
-  if (Number.isNaN(fecha.getTime())) return fechaStr;
+  const fecha = parsearFechaApi(fechaStr);
+  if (!fecha) return fechaStr ? String(fechaStr) : '';
 
   const { dateStyle = 'short', timeStyle = 'short' } = opciones;
   return new Intl.DateTimeFormat('es-BO', {
@@ -81,29 +104,27 @@ export const formatearFechaHoraBolivia = (fechaStr, opciones = {}) => {
   }).format(fecha);
 };
 
-/**
- * Verifica si un timestamp ISO corresponde al día calendario actual en Bolivia.
- * @param {string} fechaStr - Timestamp ISO desde la API.
- */
+/** Verifica si un timestamp corresponde al día calendario actual en Bolivia. */
 export const esMismoDiaBolivia = (fechaStr) => {
-  if (!fechaStr) return false;
+  const fecha = parsearFechaApi(fechaStr);
+  if (!fecha) return false;
   const fechaBolivia = new Intl.DateTimeFormat('en-CA', {
     timeZone: ZONA_HORARIA_BOLIVIA,
-  }).format(new Date(fechaStr));
+  }).format(fecha);
   return fechaBolivia === obtenerFechaBoliviaHoy();
 };
 
-/**
- * Obtiene componentes de fecha (día, mes, año) en zona horaria Bolivia.
- * @param {Date} [fecha=new Date()]
- */
+/** Obtiene componentes de fecha (día, mes, año) en zona horaria Bolivia. */
 export const obtenerPartesFechaBolivia = (fecha = new Date()) => {
+  const ref = fecha instanceof Date ? fecha : parsearFechaApi(fecha);
+  if (!ref) return { anio: 0, mes: 0, dia: 0 };
+
   const partes = new Intl.DateTimeFormat('en-CA', {
     timeZone: ZONA_HORARIA_BOLIVIA,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).formatToParts(fecha);
+  }).formatToParts(ref);
 
   return {
     anio: Number(partes.find((p) => p.type === 'year')?.value),
@@ -111,3 +132,9 @@ export const obtenerPartesFechaBolivia = (fecha = new Date()) => {
     dia: Number(partes.find((p) => p.type === 'day')?.value),
   };
 };
+
+/** Fecha y hora actual en Bolivia listas para ticket/factura. */
+export const obtenerFechaHoraBoliviaAhora = () => formatearFechaHoraBolivia(new Date().toISOString(), {
+  dateStyle: 'short',
+  timeStyle: 'medium',
+});
