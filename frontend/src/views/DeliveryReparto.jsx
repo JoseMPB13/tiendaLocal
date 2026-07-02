@@ -433,24 +433,15 @@ export const DeliveryReparto = () => {
       return misEnviosActivos;
     }
     if (tabActiva === 'historial') {
-      const hoy = new Date();
-      const hoyDia = hoy.getDate();
-      const hoyMes = hoy.getMonth();
-      const hoyAnio = hoy.getFullYear();
-
       return envios.filter(env => {
         const finalizado = env.estado_envio === 'Entregado' || env.estado_envio === 'Cancelado';
         if (!finalizado) return false;
 
         // Si es repartidor, solo ve su historial
-        if (usuario?.rol === 'Repartidor' && repartidorId && env.repartidor_id !== repartidorId) {
-          return false;
+        if (usuario?.rol === 'Repartidor') {
+          return env.repartidor_id === repartidorId;
         }
-
-        const fActualizacion = new Date(env.fecha_actualizacion);
-        return fActualizacion.getDate() === hoyDia &&
-               fActualizacion.getMonth() === hoyMes &&
-               fActualizacion.getFullYear() === hoyAnio;
+        return true;
       });
     }
     return [];
@@ -462,7 +453,7 @@ export const DeliveryReparto = () => {
   const obtenerMensajeVacio = () => {
     if (tabActiva === 'disponibles') return "No hay envíos pendientes disponibles para autoasignación.";
     if (tabActiva === 'mi_ruta') return "No tienes envíos activos en tu ruta de entrega.";
-    return "No registras envíos entregados o cancelados durante el día de hoy.";
+    return "No registras envíos entregados o cancelados en tu historial.";
   };
 
   // ──────────────────────────────────────────────────────────────────────────
