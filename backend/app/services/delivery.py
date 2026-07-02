@@ -1,10 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
-from zoneinfo import ZoneInfo
-
-# Zona horaria oficial de Bolivia para marcas temporales de reparto y GPS
-ZONA_HORARIA_BOLIVIA = ZoneInfo("America/La_Paz")
+from app.utils.zona_horaria import ZONA_HORARIA_BOLIVIA
 from fastapi import HTTPException, status
 from app.database import supabase
 from app.schemas.modelos import (

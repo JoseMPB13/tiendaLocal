@@ -14,7 +14,7 @@ create table if not exists bitacora (
     datos_anteriores jsonb,
     datos_nuevos jsonb,
     usuario_db varchar(100) default current_user,
-    fecha_registro timestamp with time zone default timezone('utc'::text, now()) not null,
+    fecha_registro timestamp with time zone default timezone('America/La_Paz', now()) not null,
     usuario_id uuid -- Guardará el ID de usuario real de la aplicación
 );
 
@@ -499,15 +499,15 @@ begin
         into v_total_actual
         from ventas
         where estado_venta = 'Completada'
-          and fecha_venta >= timezone('utc'::text, now()) - interval '30 days';
+          and fecha_venta >= timezone('America/La_Paz', now()) - interval '30 days';
 
         -- Ventas del período anterior (días 31 al 60 hacia atrás)
         select coalesce(sum(total), 0.00)
         into v_total_anterior
         from ventas
         where estado_venta = 'Completada'
-          and fecha_venta >= timezone('utc'::text, now()) - interval '60 days'
-          and fecha_venta < timezone('utc'::text, now()) - interval '30 days';
+          and fecha_venta >= timezone('America/La_Paz', now()) - interval '60 days'
+          and fecha_venta < timezone('America/La_Paz', now()) - interval '30 days';
     end if;
 
     -- 8. Cálculo de tendencia porcentual
@@ -656,7 +656,7 @@ declare
     v_fecha varchar(8);
     v_next_val bigint;
 begin
-    v_fecha := to_char(timezone('utc'::text, now()), 'YYYYMMDD');
+    v_fecha := to_char(timezone('America/La_Paz', now()), 'YYYYMMDD');
     v_next_val := nextval('seq_codigo_factura_f');
     return 'F-' || v_fecha || '-' || lpad(v_next_val::text, 5, '0');
 end;
@@ -691,10 +691,10 @@ begin
     into v_next_val
     from seq_codigo_factura_f;
     
-    v_fecha := to_char(timezone('utc'::text, now()), 'YYYYMMDD');
+    v_fecha := to_char(timezone('America/La_Paz', now()), 'YYYYMMDD');
     return 'F-' || v_fecha || '-' || lpad(v_next_val::text, 5, '0');
 exception when others then
-    return 'F-' || to_char(timezone('utc'::text, now()), 'YYYYMMDD') || '-00001';
+    return 'F-' || to_char(timezone('America/La_Paz', now()), 'YYYYMMDD') || '-00001';
 end;
 $$ language plpgsql;
 
@@ -714,7 +714,7 @@ begin
        (tg_op = 'UPDATE' and old.estado_venta <> 'Completada' and new.estado_venta = 'Completada') then
         
         insert into facturas (venta_id, codigo_factura, total, fecha_emision, estado)
-        values (new.id, new.codigo_factura, new.total, timezone('utc'::text, now()), 'Emitida')
+        values (new.id, new.codigo_factura, new.total, timezone('America/La_Paz', now()), 'Emitida')
         on conflict (venta_id) do nothing;
     end if;
     return new;
@@ -745,7 +745,7 @@ begin
     end if;
 
     -- Validar que la venta se haya realizado el mismo día actual del servidor
-    if v_fecha_venta::date <> current_date then
+    if (v_fecha_venta at time zone 'America/La_Paz')::date <> (now() at time zone 'America/La_Paz')::date then
         raise exception 'Solo se pueden anular ventas realizadas el mismo día.'
             using errcode = 'P0008';
     end if;
@@ -809,7 +809,7 @@ begin
     end if;
 
     -- Validar restricción de edición al mismo día
-    if v_old_fecha_venta::date <> current_date then
+    if (v_old_fecha_venta at time zone 'America/La_Paz')::date <> (now() at time zone 'America/La_Paz')::date then
         raise exception 'Solo se pueden editar ventas realizadas el mismo día.' using errcode = 'P0007';
     end if;
 
@@ -1000,25 +1000,25 @@ declare
     v_inicio_periodo timestamptz;
     v_fin_periodo    timestamptz;
 begin
-    -- Calcular inicio y fin del período activo en UTC
+    -- Calcular inicio y fin del período activo en zona horaria de Bolivia
     if p_periodo = 'dia' then
         v_trunc_period   := 'day';
-        v_inicio_periodo := date_trunc('day',   now() at time zone 'UTC');
+        v_inicio_periodo := date_trunc('day', now() at time zone 'America/La_Paz') at time zone 'America/La_Paz';
         v_fin_periodo    := v_inicio_periodo + interval '1 day';
 
     elsif p_periodo = 'semana' then
         v_trunc_period   := 'week';
-        v_inicio_periodo := date_trunc('week',  now() at time zone 'UTC');
+        v_inicio_periodo := date_trunc('week', now() at time zone 'America/La_Paz') at time zone 'America/La_Paz';
         v_fin_periodo    := v_inicio_periodo + interval '1 week';
 
     elsif p_periodo = 'mes' then
         v_trunc_period   := 'month';
-        v_inicio_periodo := date_trunc('month', now() at time zone 'UTC');
+        v_inicio_periodo := date_trunc('month', now() at time zone 'America/La_Paz') at time zone 'America/La_Paz';
         v_fin_periodo    := v_inicio_periodo + interval '1 month';
 
     else
         v_trunc_period   := 'day';
-        v_inicio_periodo := date_trunc('day',   now() at time zone 'UTC');
+        v_inicio_periodo := date_trunc('day', now() at time zone 'America/La_Paz') at time zone 'America/La_Paz';
         v_fin_periodo    := v_inicio_periodo + interval '1 day';
     end if;
 
@@ -1041,7 +1041,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
-comment on function obtener_movimientos_stock_agrupados(text) is 'Retorna movimientos de stock del período activo (dia/semana/mes) desde ahora en UTC. SECURITY DEFINER garantiza bypass de RLS para la consulta.';
+comment on function obtener_movimientos_stock_agrupados(text) is 'Retorna movimientos de stock del período activo (dia/semana/mes) en zona horaria America/La_Paz. SECURITY DEFINER garantiza bypass de RLS para la consulta.';
 
 
 -- -----------------------------------------------------------------------------

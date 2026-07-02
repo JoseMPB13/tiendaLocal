@@ -11,6 +11,7 @@ import useAuthStore from '../store/authStore';
 import deliveryService from '../services/deliveryService';
 import toast, { Toaster } from 'react-hot-toast';
 import { ClipboardList, MapPin, FileText, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
+import { formatearFechaHoraBolivia } from '../utils/fechaBolivia';
 
 export const DeliveryHistorial = () => {
   const { usuario } = useAuthStore();
@@ -104,13 +105,7 @@ export const DeliveryHistorial = () => {
                     Venta: #{env.venta_id.substring(0, 8)}
                   </span>
                   <span className="text-[9px] text-zinc-400 font-bold mt-0.5">
-                    {new Date(env.fecha_actualizacion).toLocaleString('es-ES', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {formatearFechaHoraBolivia(env.fecha_actualizacion, { dateStyle: 'medium', timeStyle: 'short' })}
                   </span>
                 </div>
                 <span className={`text-[9px] px-2.5 py-0.5 rounded-full font-bold uppercase flex items-center gap-1 ${

@@ -16,6 +16,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { Plus, Edit3, Trash2, X, Users, MapPin, DollarSign, AlertCircle, TrendingUp, UserCheck, FileText } from 'lucide-react';
 import MapaInteractivo from '../components/MapaInteractivo';
 import reportesService from '../services/reportesService';
+import { obtenerFechaBoliviaHoy } from '../utils/fechaBolivia';
 
 
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
@@ -146,7 +147,7 @@ export const GestionClientes = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `reporte_clientes_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.download = `reporte_clientes_${obtenerFechaBoliviaHoy()}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();

@@ -14,6 +14,7 @@
 from typing import List, Optional, Any
 from uuid import UUID
 from datetime import date
+from app.utils.zona_horaria import inicio_dia_bolivia_iso, fin_dia_bolivia_iso
 from fastapi import HTTPException, status
 from postgrest.exceptions import APIError
 from app.database import supabase
@@ -148,12 +149,10 @@ class BitacoraService:
 
             # Aplicar filtros opcionales delegados a la DB (no en memoria)
             if fecha_inicio:
-                # Inicio del día en UTC: 'YYYY-MM-DDT00:00:00+00:00'
-                query = query.gte("fecha", f"{fecha_inicio.isoformat()}T00:00:00+00:00")
+                query = query.gte("fecha", inicio_dia_bolivia_iso(fecha_inicio))
 
             if fecha_fin:
-                # Fin del día en UTC: 'YYYY-MM-DDT23:59:59+00:00'
-                query = query.lte("fecha", f"{fecha_fin.isoformat()}T23:59:59+00:00")
+                query = query.lte("fecha", fin_dia_bolivia_iso(fecha_fin))
 
             if tabla_afectada and tabla_afectada.strip():
                 query = query.eq("tabla_afectada", tabla_afectada.strip().lower())

@@ -15,6 +15,7 @@ import {
   Wine, Cookie, Sparkles, Apple, Folder, Wrench, Smartphone, Gamepad, Shirt, Heart, FileText
 } from 'lucide-react';
 import reportesService from '../services/reportesService';
+import { obtenerFechaBoliviaHoy } from '../utils/fechaBolivia';
 
 
 /* ── Mapeo de Iconos según Nombre de Categoría ───────────────────────────── */
@@ -158,7 +159,7 @@ export const GestionCategorias = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `reporte_categorias_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.download = `reporte_categorias_${obtenerFechaBoliviaHoy()}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();

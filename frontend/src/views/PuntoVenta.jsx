@@ -34,6 +34,12 @@ import MapaInteractivo from '../components/MapaInteractivo';
 import clienteApi from '../services/api';
 import deliveryService from '../services/deliveryService';
 import reportesService from '../services/reportesService';
+import {
+  obtenerInicioDiaBoliviaISO,
+  obtenerFinDiaBoliviaISO,
+  formatearFechaHoraBolivia,
+  esMismoDiaBolivia,
+} from '../utils/fechaBolivia';
 
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -206,13 +212,7 @@ export const PuntoVenta = () => {
 
   const inputBuscarRef = useRef(null);
 
-  // Helper para verificar si una fecha ISO corresponde al día de hoy local del cliente (en español)
-  const esMismoDia = (fechaStr) => {
-    if (!fechaStr) return false;
-    const fechaVenta = new Date(fechaStr);
-    const hoy = new Date();
-    return fechaVenta.toDateString() === hoy.toDateString();
-  };
+  const esMismoDia = esMismoDiaBolivia;
 
   // Zustand stores
   const {
@@ -326,11 +326,8 @@ export const PuntoVenta = () => {
         params.estado_venta = filtroEstado;
       }
       if (filtroFecha) {
-        // Calcular inicio y fin del día local en formato ISO UTC
-        const localDateStart = new Date(filtroFecha + 'T00:00:00');
-        const localDateEnd = new Date(filtroFecha + 'T23:59:59.999');
-        params.fecha_inicio = localDateStart.toISOString();
-        params.fecha_fin = localDateEnd.toISOString();
+        params.fecha_inicio = obtenerInicioDiaBoliviaISO(filtroFecha);
+        params.fecha_fin = obtenerFinDiaBoliviaISO(filtroFecha);
       }
       
       const res = await ventaService.obtenerVentas(params);
@@ -1407,7 +1404,7 @@ export const PuntoVenta = () => {
                     {ventas.map(v => (
                       <tr key={v.id} className="hover:bg-slate-50/70 border-b border-slate-100 transition duration-150">
                         <td className="px-4 py-3.5 whitespace-nowrap text-slate-500 font-medium">
-                          {new Date(v.fecha_venta).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
+                          {formatearFechaHoraBolivia(v.fecha_venta)}
                         </td>
                         <td className="px-4 py-3.5 font-mono font-bold text-indigo-950">
                           {v.codigo_factura}
@@ -1471,7 +1468,7 @@ export const PuntoVenta = () => {
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="text-[10px] text-slate-400 block font-medium">
-                          {new Date(v.fecha_venta).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
+                          {formatearFechaHoraBolivia(v.fecha_venta)}
                         </span>
                         <h4 className="font-bold text-xs text-slate-800 font-mono mt-0.5">
                           {v.codigo_factura}
@@ -1805,7 +1802,7 @@ export const PuntoVenta = () => {
                     </div>
                     <div className="flex justify-between">
                       <span>FECHA/HORA:</span>
-                      <span>{new Date(ventaSeleccionada.fecha_venta).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'medium' })}</span>
+                      <span>{formatearFechaHoraBolivia(ventaSeleccionada.fecha_venta, { dateStyle: 'short', timeStyle: 'medium' })}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>CLIENTE:</span>

@@ -16,7 +16,8 @@ import DeslizadorInteractivo from '../components/DeslizadorInteractivo';
 import { MapaInteractivo } from '../components/MapaInteractivo';
 import { MapaSeguimiento } from '../components/MapaSeguimiento';
 import toast, { Toaster } from 'react-hot-toast';
-import { 
+import { obtenerPartesFechaBolivia } from '../utils/fechaBolivia';
+import {
   ChevronDown, ChevronUp, MapPin, Navigation, Phone, 
   Clock, FileText, CheckCircle2, XCircle, Map, Satellite
 } from 'lucide-react';
@@ -440,24 +441,19 @@ export const DeliveryReparto = () => {
       return misEnviosActivos;
     }
     if (tabActiva === 'historial') {
-      const hoy = new Date();
-      const hoyDia = hoy.getDate();
-      const hoyMes = hoy.getMonth();
-      const hoyAnio = hoy.getFullYear();
+      const { dia: hoyDia, mes: hoyMes, anio: hoyAnio } = obtenerPartesFechaBolivia();
 
       return envios.filter(env => {
         const finalizado = env.estado_envio === 'Entregado' || env.estado_envio === 'Cancelado';
         if (!finalizado) return false;
 
-        // Si es repartidor, solo ve su historial
         if (usuario?.rol === 'Repartidor' && env.repartidor_id !== repartidorId) {
           return false;
         }
 
         const fActualizacion = new Date(env.fecha_actualizacion);
-        return fActualizacion.getDate() === hoyDia &&
-               fActualizacion.getMonth() === hoyMes &&
-               fActualizacion.getFullYear() === hoyAnio;
+        const partes = obtenerPartesFechaBolivia(fActualizacion);
+        return partes.dia === hoyDia && partes.mes === hoyMes && partes.anio === hoyAnio;
       });
     }
     return [];

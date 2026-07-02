@@ -9,7 +9,12 @@
 import io
 from typing import List, Optional
 from datetime import datetime, date
-from zoneinfo import ZoneInfo
+from app.utils.zona_horaria import (
+    ahora_bolivia,
+    inicio_dia_bolivia_iso,
+    fin_dia_bolivia_iso,
+    formatear_fecha_hora_bolivia,
+)
 from uuid import UUID
 from decimal import Decimal
 from fastapi import HTTPException, status
@@ -23,9 +28,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
 from reportlab.graphics.shapes import Drawing, Rect, String
-
-# Zona horaria oficial de Bolivia para marcas temporales en reportes PDF
-ZONA_HORARIA_BOLIVIA = ZoneInfo("America/La_Paz")
 
 
 class NumberedCanvas(canvas.Canvas):
@@ -115,9 +117,9 @@ class ReporteService:
         if tipo_movimiento:
             query = query.eq("tipo_movimiento", tipo_movimiento)
         if fecha_inicio:
-            query = query.gte("fecha_movimiento", fecha_inicio.isoformat())
+            query = query.gte("fecha_movimiento", inicio_dia_bolivia_iso(fecha_inicio))
         if fecha_fin:
-            query = query.lte("fecha_movimiento", f"{fecha_fin.isoformat()}T23:59:59")
+            query = query.lte("fecha_movimiento", fin_dia_bolivia_iso(fecha_fin))
 
         resultado = query.order("fecha_movimiento", desc=True).execute()
         
@@ -141,8 +143,8 @@ class ReporteService:
         Genera un documento PDF detallado en español para el Cierre de Caja Diario.
         """
         # 1. Recopilar datos correspondientes a la fecha seleccionada
-        rango_inicio = f"{fecha_cierre.isoformat()}T00:00:00"
-        rango_fin = f"{fecha_cierre.isoformat()}T23:59:59"
+        rango_inicio = inicio_dia_bolivia_iso(fecha_cierre)
+        rango_fin = fin_dia_bolivia_iso(fecha_cierre)
 
         # Consulta de ventas del día
         ventas_dia = supabase.table("ventas").select("id, total, tipo_pago, estado_venta").gte("fecha_venta", rango_inicio).lte("fecha_venta", rango_fin).execute()
@@ -213,7 +215,7 @@ class ReporteService:
 
         # Encabezado
         story.append(Paragraph("CIERRE DE CAJA DIARIO", style_titulo))
-        story.append(Paragraph(f"Fecha del Reporte: {fecha_cierre.strftime('%d/%m/%Y')} | Generado: {datetime.now(ZONA_HORARIA_BOLIVIA).strftime('%d/%m/%Y %H:%M:%S')}", style_subtitulo))
+        story.append(Paragraph(f"Fecha del Reporte: {fecha_cierre.strftime('%d/%m/%Y')} | Generado: {ahora_bolivia().strftime('%d/%m/%Y %H:%M:%S')}", style_subtitulo))
 
         # Sección 1: Resumen de Ventas por Método de Pago
         story.append(Paragraph("1. Resumen de Ingresos por Tipo de Pago", style_seccion))
@@ -375,9 +377,9 @@ class ReporteService:
         """
         query = supabase.table("ventas").select("*, clientes(nombre)").order("fecha_venta", desc=True)
         if fecha_inicio:
-            query = query.gte("fecha_venta", f"{fecha_inicio.isoformat()}T00:00:00")
+            query = query.gte("fecha_venta", inicio_dia_bolivia_iso(fecha_inicio))
         if fecha_fin:
-            query = query.lte("fecha_venta", f"{fecha_fin.isoformat()}T23:59:59")
+            query = query.lte("fecha_venta", fin_dia_bolivia_iso(fecha_fin))
             
         res = query.execute()
         ventas = res.data or []
@@ -454,7 +456,7 @@ class ReporteService:
             cli_nom = cli.get("nombre", "Cliente General") if cli else "Cliente General"
             t_rows.append([
                 Paragraph(str(v["id"])[:8].upper(), style_cell),
-                Paragraph(datetime.fromisoformat(v["fecha_venta"].replace("Z", "+00:00")).strftime("%d/%m/%Y %H:%M"), style_cell),
+                Paragraph(formatear_fecha_hora_bolivia(v["fecha_venta"]), style_cell),
                 Paragraph(cli_nom, style_cell),
                 Paragraph(v.get("tipo_pago") or "Otro", style_cell),
                 Paragraph(f"Bs. {Decimal(str(v['total'])):,.2f}", style_cell_bold),
@@ -806,9 +808,9 @@ class ReporteService:
             .order("fecha_creacion", desc=True)
             
         if fecha_inicio:
-            query = query.gte("fecha_creacion", f"{fecha_inicio.isoformat()}T00:00:00")
+            query = query.gte("fecha_creacion", inicio_dia_bolivia_iso(fecha_inicio))
         if fecha_fin:
-            query = query.lte("fecha_creacion", f"{fecha_fin.isoformat()}T23:59:59")
+            query = query.lte("fecha_creacion", fin_dia_bolivia_iso(fecha_fin))
             
         res = query.execute()
         envios = res.data or []

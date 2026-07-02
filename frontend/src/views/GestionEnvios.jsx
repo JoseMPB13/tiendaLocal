@@ -27,6 +27,7 @@ import { MapaSeguimiento } from '../components/MapaSeguimiento';
 import ventaService from '../services/ventaService';
 import clienteService from '../services/clienteService';
 import reportesService from '../services/reportesService';
+import { obtenerFechaBoliviaHoy, formatearFechaHoraBolivia } from '../utils/fechaBolivia';
 
 
 export const GestionEnvios = () => {
@@ -77,7 +78,7 @@ export const GestionEnvios = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `reporte_envios_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.download = `reporte_envios_${obtenerFechaBoliviaHoy()}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -844,7 +845,7 @@ export const GestionEnvios = () => {
                     </span>
                     {env.fecha_creacion && (
                       <span className="text-[10px] text-slate-400 block mt-1 font-medium">
-                        {new Date(env.fecha_creacion).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
+                        {formatearFechaHoraBolivia(env.fecha_creacion)}
                       </span>
                     )}
                   </div>

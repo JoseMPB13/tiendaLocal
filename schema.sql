@@ -14,8 +14,8 @@ create table if not exists categorias (
     nombre varchar(100) not null unique,
     descripcion text,
     estado varchar(20) default 'Activo' not null check (estado in ('Activo', 'Inactivo')),
-    fecha_creacion timestamp with time zone default timezone('utc'::text, now()) not null,
-    fecha_actualizacion timestamp with time zone default timezone('utc'::text, now()) not null
+    fecha_creacion timestamp with time zone default timezone('America/La_Paz', now()) not null,
+    fecha_actualizacion timestamp with time zone default timezone('America/La_Paz', now()) not null
 );
 
 comment on table categorias is 'Módulo de categorías de productos para el inventario.';
@@ -35,8 +35,8 @@ create table if not exists productos (
     stock_actual integer default 0 not null check (stock_actual >= 0),
     stock_minimo integer default 5 not null check (stock_minimo >= 0),
     estado varchar(20) default 'Activo' not null check (estado in ('Activo', 'Inactivo')),
-    fecha_creacion timestamp with time zone default timezone('utc'::text, now()) not null,
-    fecha_actualizacion timestamp with time zone default timezone('utc'::text, now()) not null,
+    fecha_creacion timestamp with time zone default timezone('America/La_Paz', now()) not null,
+    fecha_actualizacion timestamp with time zone default timezone('America/La_Paz', now()) not null,
     constraint check_precios check (precio_venta >= precio_compra)
 );
 
@@ -91,8 +91,8 @@ create table if not exists usuarios (
     nombre_completo varchar(150) not null,
     rol varchar(30) default 'Cajero' not null check (rol in ('Administrador', 'Cajero', 'Repartidor')),
     estado varchar(20) default 'Activo' not null check (estado in ('Activo', 'Inactivo')),
-    fecha_creacion timestamp with time zone default timezone('utc'::text, now()) not null,
-    fecha_actualizacion timestamp with time zone default timezone('utc'::text, now()) not null
+    fecha_creacion timestamp with time zone default timezone('America/La_Paz', now()) not null,
+    fecha_actualizacion timestamp with time zone default timezone('America/La_Paz', now()) not null
 );
 
 comment on table usuarios is 'Usuarios del sistema backend (administradores, cajeros y repartidores).';
@@ -114,8 +114,8 @@ create table if not exists clientes (
     saldo_deudor numeric(12, 2) default 0.00 not null check (saldo_deudor >= 0),
     limite_credito numeric(12, 2) default 0.00 not null check (limite_credito >= 0),
     estado varchar(20) default 'Activo' not null check (estado in ('Activo', 'Inactivo')),
-    fecha_creacion timestamp with time zone default timezone('utc'::text, now()) not null,
-    fecha_actualizacion timestamp with time zone default timezone('utc'::text, now()) not null
+    fecha_creacion timestamp with time zone default timezone('America/La_Paz', now()) not null,
+    fecha_actualizacion timestamp with time zone default timezone('America/La_Paz', now()) not null
 );
 
 comment on table clientes is 'Clientes registrados en la tienda con soporte para saldo deudor y ubicación geográfica.';
@@ -134,7 +134,7 @@ create table if not exists ventas (
     total numeric(12, 2) default 0.00 not null check (total >= 0),
     tipo_pago varchar(30) not null check (tipo_pago in ('Efectivo', 'Tarjeta', 'Credito', 'Transferencia', 'QR')),
     estado_venta varchar(30) default 'Completada' not null check (estado_venta in ('Completada', 'Cancelada', 'Pendiente')),
-    fecha_venta timestamp with time zone default timezone('utc'::text, now()) not null
+    fecha_venta timestamp with time zone default timezone('America/La_Paz', now()) not null
 );
 
 comment on table ventas is 'Cabecera de transacciones de venta.';
@@ -171,7 +171,7 @@ create table if not exists historial_stock (
     tipo_movimiento varchar(50) not null check (tipo_movimiento in ('Venta', 'Ajuste', 'Cancelacion Venta')),
     referencia_id uuid, -- ID de la Venta o Compra que generó el movimiento
     motivo text, -- Justificación o comentario del movimiento
-    fecha_movimiento timestamp with time zone default timezone('utc'::text, now()) not null
+    fecha_movimiento timestamp with time zone default timezone('America/La_Paz', now()) not null
 );
 
 comment on table historial_stock is 'Kardex/Historial detallado del flujo y movimiento del stock de los productos.';
@@ -185,7 +185,7 @@ create table if not exists facturas (
     venta_id uuid references ventas(id) on delete restrict unique,
     codigo_factura varchar(50) unique not null,
     total numeric(12, 2) not null check (total >= 0),
-    fecha_emision timestamp with time zone default timezone('utc'::text, now()) not null,
+    fecha_emision timestamp with time zone default timezone('America/La_Paz', now()) not null,
     estado varchar(20) default 'Emitida' not null check (estado in ('Emitida', 'Anulada'))
 );
 
@@ -204,7 +204,7 @@ create index if not exists idx_facturas_codigo on facturas(codigo_factura);
 create or replace function update_fecha_actualizacion()
 returns trigger as $$
 begin
-    new.fecha_actualizacion = timezone('utc'::text, now());
+    new.fecha_actualizacion = timezone('America/La_Paz', now());
     return new;
 end;
 $$ language plpgsql;
@@ -445,15 +445,15 @@ begin
         into v_total_actual
         from ventas
         where estado_venta = 'Completada'
-          and fecha_venta >= timezone('utc'::text, now()) - interval '30 days';
+          and fecha_venta >= timezone('America/La_Paz', now()) - interval '30 days';
 
         -- Ventas del período anterior (días 31 al 60 hacia atrás)
         select coalesce(sum(total), 0.00)
         into v_total_anterior
         from ventas
         where estado_venta = 'Completada'
-          and fecha_venta >= timezone('utc'::text, now()) - interval '60 days'
-          and fecha_venta < timezone('utc'::text, now()) - interval '30 days';
+          and fecha_venta >= timezone('America/La_Paz', now()) - interval '60 days'
+          and fecha_venta < timezone('America/La_Paz', now()) - interval '30 days';
     end if;
 
     -- 8. Cálculo de tendencia porcentual
@@ -751,7 +751,7 @@ declare
     v_fecha varchar(8);
 begin
     if new.codigo_factura is null or new.codigo_factura = '' or new.codigo_factura = 'Autogenerado' then
-        v_fecha := to_char(timezone('utc'::text, now()), 'YYYYMMDD');
+        v_fecha := to_char(timezone('America/La_Paz', now()), 'YYYYMMDD');
         new.codigo_factura := 'FAC-' || v_fecha || '-' || lpad(nextval('seq_codigo_factura')::text, 5, '0');
     end if;
     return new;
@@ -777,10 +777,10 @@ begin
     into v_next_val
     from seq_codigo_factura;
     
-    v_fecha := to_char(timezone('utc'::text, now()), 'YYYYMMDD');
+    v_fecha := to_char(timezone('America/La_Paz', now()), 'YYYYMMDD');
     return 'FAC-' || v_fecha || '-' || lpad(v_next_val::text, 5, '0');
 exception when others then
-    return 'FAC-' || to_char(timezone('utc'::text, now()), 'YYYYMMDD') || '-00001';
+    return 'FAC-' || to_char(timezone('America/La_Paz', now()), 'YYYYMMDD') || '-00001';
 end;
 $$ language plpgsql;
 
@@ -800,7 +800,7 @@ begin
        (tg_op = 'UPDATE' and old.estado_venta <> 'Completada' and new.estado_venta = 'Completada') then
         
         insert into facturas (venta_id, codigo_factura, total, fecha_emision, estado)
-        values (new.id, new.codigo_factura, new.total, timezone('utc'::text, now()), 'Emitida')
+        values (new.id, new.codigo_factura, new.total, timezone('America/La_Paz', now()), 'Emitida')
         on conflict (venta_id) do nothing;
     end if;
     return new;
@@ -868,7 +868,7 @@ create table if not exists bitacora_usuarios (
     tabla_afectada varchar(100) not null,
     registro_id uuid not null,
     detalles text,
-    fecha timestamp with time zone default timezone('utc'::text, now()) not null,
+    fecha timestamp with time zone default timezone('America/La_Paz', now()) not null,
     datos_anteriores jsonb default null,
     datos_nuevos jsonb default null,
     operacion varchar(10) default null

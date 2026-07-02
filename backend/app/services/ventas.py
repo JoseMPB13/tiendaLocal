@@ -10,6 +10,7 @@ from typing import List, Optional
 from uuid import UUID
 from fastapi import HTTPException, status
 from postgrest.exceptions import APIError
+from app.utils.zona_horaria import inicio_dia_bolivia_iso_desde_str, fin_dia_bolivia_iso_desde_str
 from app.database import supabase
 from app.schemas.modelos import VentaCrear
 
@@ -206,8 +207,10 @@ class VentaService:
             if fecha_fin:
                 query = query.lte("fecha_venta", fecha_fin)
             elif fecha_especifica:
-                # Fallback de filtrado simple por día UTC
-                query = query.gte("fecha_venta", f"{fecha_especifica}T00:00:00+00:00").lte("fecha_venta", f"{fecha_especifica}T23:59:59.999999+00:00")
+                # Filtrado por día calendario en zona horaria de Bolivia
+                query = query.gte("fecha_venta", inicio_dia_bolivia_iso_desde_str(fecha_especifica)).lte(
+                    "fecha_venta", fin_dia_bolivia_iso_desde_str(fecha_especifica)
+                )
             
             start = skip
             end = skip + limit - 1

@@ -15,6 +15,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { Plus, Edit3, Trash2, X, Package, AlertTriangle, Layers, FileText } from 'lucide-react';
 import clienteApi from '../services/api';
 import reportesService from '../services/reportesService';
+import { obtenerFechaBoliviaHoy } from '../utils/fechaBolivia';
 
 
 /* ── Funciones de ayuda ── */
@@ -83,7 +84,7 @@ export const GestionProductos = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `reporte_inventario_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.download = `reporte_inventario_${obtenerFechaBoliviaHoy()}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();

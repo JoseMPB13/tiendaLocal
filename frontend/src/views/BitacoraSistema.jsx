@@ -14,6 +14,7 @@ import {
   Search, ArrowUpRight, ArrowDownRight, RefreshCw,
   Database, AlertTriangle, Activity, Users
 } from 'lucide-react';
+import { formatearFechaBolivia, formatearFechaHoraBolivia } from '../utils/fechaBolivia';
 
 export const BitacoraSistema = () => {
   const [activeTab, setActiveTab] = useState('inventario'); // 'inventario' o 'auditoria'
@@ -321,16 +322,19 @@ export const BitacoraSistema = () => {
   const formatFechaPeriodo = (fechaStr, per) => {
     const f = new Date(fechaStr);
     if (per === 'mes') {
-      return f.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+      return new Intl.DateTimeFormat('es-BO', {
+        timeZone: 'America/La_Paz',
+        month: 'long',
+        year: 'numeric',
+      }).format(f);
     }
     if (per === 'semana') {
-      // Retornar rango de días
       const inicioSemana = new Date(f);
       const finSemana = new Date(f);
       finSemana.setDate(finSemana.getDate() + 6);
-      return `Semana del ${inicioSemana.getDate()}/${inicioSemana.getMonth() + 1} al ${finSemana.getDate()}/${finSemana.getMonth() + 1}`;
+      return `Semana del ${formatearFechaBolivia(inicioSemana)} al ${formatearFechaBolivia(finSemana)}`;
     }
-    return f.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return formatearFechaBolivia(f);
   };
 
   const getInitials = (nombre) => {
@@ -747,7 +751,7 @@ export const BitacoraSistema = () => {
                         <Fragment key={item.id}>
                           <tr className="hover:bg-zinc-50/50 transition-colors">
                             <td className="py-4 px-6 font-mono text-zinc-500 text-xs">
-                              {new Date(item.fecha).toLocaleString('es-ES')}
+                              {formatearFechaHoraBolivia(item.fecha)}
                             </td>
                             <td className="py-4 px-6">
                               <div className="flex items-center">
@@ -851,7 +855,7 @@ export const BitacoraSistema = () => {
                         <div className="space-y-2 bg-zinc-50 p-4 rounded-2xl border border-zinc-200/50 shadow-sm">
                           <div className="flex justify-between items-start">
                             <span className="font-mono text-[10px] text-zinc-400 font-semibold">
-                              {new Date(item.fecha).toLocaleString('es-ES')}
+                              {formatearFechaHoraBolivia(item.fecha)}
                             </span>
                             {renderBadgeAccion(item.accion)}
                           </div>
