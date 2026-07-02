@@ -40,7 +40,39 @@ export const reportesService = {
       responseType: 'blob'
     });
     return respuesta.data;
+  },
+
+  descargarPdfVentas: async (fechaInicio = null, fechaFin = null) => {
+    const params = {};
+    if (fechaInicio) params.fecha_inicio = fechaInicio;
+    if (fechaFin) params.fecha_fin = fechaFin;
+    const respuesta = await clienteApi.get('/reportes/pdf/ventas', { params, responseType: 'blob' });
+    return respuesta.data;
+  },
+
+  descargarPdfProductos: async () => {
+    const respuesta = await clienteApi.get('/reportes/pdf/productos', { responseType: 'blob' });
+    return respuesta.data;
+  },
+
+  descargarPdfCategorias: async () => {
+    const respuesta = await clienteApi.get('/reportes/pdf/categorias', { responseType: 'blob' });
+    return respuesta.data;
+  },
+
+  descargarPdfClientes: async () => {
+    const respuesta = await clienteApi.get('/reportes/pdf/clientes', { responseType: 'blob' });
+    return respuesta.data;
+  },
+
+  descargarPdfEnvios: async (fechaInicio = null, fechaFin = null) => {
+    const params = {};
+    if (fechaInicio) params.fecha_inicio = fechaInicio;
+    if (fechaFin) params.fecha_fin = fechaFin;
+    const respuesta = await clienteApi.get('/reportes/pdf/envios', { params, responseType: 'blob' });
+    return respuesta.data;
   }
 };
+
 
 export default reportesService;

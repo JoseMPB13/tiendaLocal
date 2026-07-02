@@ -12,8 +12,10 @@ import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Plus, Edit3, Trash2, X, Tag, DollarSign, BarChart2,
-  Wine, Cookie, Sparkles, Apple, Folder, Wrench, Smartphone, Gamepad, Shirt, Heart
+  Wine, Cookie, Sparkles, Apple, Folder, Wrench, Smartphone, Gamepad, Shirt, Heart, FileText
 } from 'lucide-react';
+import reportesService from '../services/reportesService';
+
 
 /* ── Mapeo de Iconos según Nombre de Categoría ───────────────────────────── */
 const MAPEO_PALABRAS_CLAVE = [
@@ -148,6 +150,28 @@ export const GestionCategorias = () => {
     })();
   }, []);
 
+  const handleDescargarReporteCategorias = async () => {
+    try {
+      const loadToast = toast.loading('Generando reporte PDF de categorías...');
+      const blob = await reportesService.descargarPdfCategorias();
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporte_categorias_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Reporte de categorías descargado con éxito.', { id: loadToast });
+    } catch (err) {
+      console.error(err);
+      toast.error('No se pudo generar el reporte de categorías.');
+    }
+  };
+
+
   const abrirCrear = () => {
     setCategoriaEdit(null);
     setNombre('');
@@ -255,10 +279,19 @@ export const GestionCategorias = () => {
             <p className="page-subtitle">Clasificación de productos y control de stock</p>
           </div>
         </div>
-        <button onClick={abrirCrear} className="btn-primary">
-          <Plus size={15} />
-          Nueva Categoría
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button
+            onClick={handleDescargarReporteCategorias}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white bg-gradient-to-r from-indigo-950 to-indigo-900 border border-indigo-950/20 shadow-md hover:shadow-lg transition duration-150 cursor-pointer w-full sm:w-auto"
+          >
+            <FileText size={15} />
+            Generar Reporte PDF
+          </button>
+          <button onClick={abrirCrear} className="btn-primary">
+            <Plus size={15} />
+            Nueva Categoría
+          </button>
+        </div>
       </div>
 
       {/* ── CARD METRICAS EJECUTIVAS ── */}

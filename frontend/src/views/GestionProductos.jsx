@@ -12,8 +12,10 @@ import ModalDesactivar from '../components/ModalDesactivar';
 import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import useAuthStore from '../store/authStore';
 import toast, { Toaster } from 'react-hot-toast';
-import { Plus, Edit3, Trash2, X, Package, AlertTriangle, Layers } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Package, AlertTriangle, Layers, FileText } from 'lucide-react';
 import clienteApi from '../services/api';
+import reportesService from '../services/reportesService';
+
 
 /* ── Funciones de ayuda ── */
 const obtenerUrlImagenCompleta = (url) => {
@@ -72,6 +74,28 @@ export const GestionProductos = () => {
   const { usuario } = useAuthStore();
   const esAdmin = usuario?.rol === 'Administrador'; // eslint-disable-line no-unused-vars
   const tabActiva = 'catalogo';
+
+  const handleDescargarReporteProductos = async () => {
+    try {
+      const loadToast = toast.loading('Generando reporte PDF de inventario...');
+      const blob = await reportesService.descargarPdfProductos();
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporte_inventario_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Reporte de inventario descargado con éxito.', { id: loadToast });
+    } catch (err) {
+      console.error(err);
+      toast.error('No se pudo generar el reporte de inventario.');
+    }
+  };
+
 
   const cargarDatos = async () => {
     try {
@@ -315,10 +339,19 @@ export const GestionProductos = () => {
           </div>
         </div>
         {tabActiva === 'catalogo' && (
-          <button onClick={abrirCrear} className="btn-primary">
-            <Plus size={15} />
-            Registrar Producto
-          </button>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button
+              onClick={handleDescargarReporteProductos}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white bg-gradient-to-r from-indigo-950 to-indigo-900 border border-indigo-950/20 shadow-md hover:shadow-lg transition duration-150 cursor-pointer w-full sm:w-auto"
+            >
+              <FileText size={15} />
+              Generar Reporte PDF
+            </button>
+            <button onClick={abrirCrear} className="btn-primary">
+              <Plus size={15} />
+              Registrar Producto
+            </button>
+          </div>
         )}
       </div>
 

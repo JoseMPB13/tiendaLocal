@@ -13,8 +13,10 @@ import PaginadorTablas from '../components/PaginadorTablas';
 import ModalDesactivar from '../components/ModalDesactivar';
 import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import toast, { Toaster } from 'react-hot-toast';
-import { Plus, Edit3, Trash2, X, Users, MapPin, DollarSign, AlertCircle, TrendingUp, UserCheck } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Users, MapPin, DollarSign, AlertCircle, TrendingUp, UserCheck, FileText } from 'lucide-react';
 import MapaInteractivo from '../components/MapaInteractivo';
+import reportesService from '../services/reportesService';
+
 
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '5px' };
 
@@ -135,6 +137,27 @@ export const GestionClientes = () => {
   const [mostrarEliminar, setMostrarEliminar] = useState(false);
   const [clienteEliminarId, setClienteEliminarId] = useState(null);
   const [procesandoEliminar, setProcesandoEliminar] = useState(false);
+
+  const handleDescargarReporteClientes = async () => {
+    try {
+      const loadToast = toast.loading('Generando reporte PDF de clientes...');
+      const blob = await reportesService.descargarPdfClientes();
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporte_clientes_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Reporte de clientes descargado con éxito.', { id: loadToast });
+    } catch (err) {
+      console.error(err);
+      toast.error('No se pudo generar el reporte de clientes.');
+    }
+  };
 
   const cargarClientes = async () => {
     try {
@@ -432,10 +455,19 @@ export const GestionClientes = () => {
             <p className="page-subtitle">Control de cuentas de crédito y saldos deudores</p>
           </div>
         </div>
-        <button onClick={abrirCrear} className="btn-primary">
-          <Plus size={15} />
-          Registrar Cliente
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button
+            onClick={handleDescargarReporteClientes}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white bg-gradient-to-r from-indigo-950 to-indigo-900 border border-indigo-950/20 shadow-md hover:shadow-lg transition duration-150 cursor-pointer w-full sm:w-auto"
+          >
+            <FileText size={15} />
+            Generar Reporte PDF
+          </button>
+          <button onClick={abrirCrear} className="btn-primary">
+            <Plus size={15} />
+            Registrar Cliente
+          </button>
+        </div>
       </div>
 
       {/* ── MINI-DASHBOARD DE CLIENTES ── */}

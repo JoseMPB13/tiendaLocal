@@ -33,6 +33,8 @@ import {
 import MapaInteractivo from '../components/MapaInteractivo';
 import clienteApi from '../services/api';
 import deliveryService from '../services/deliveryService';
+import reportesService from '../services/reportesService';
+
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 const obtenerUrlImagenCompleta = (url) => {
@@ -238,6 +240,29 @@ export const PuntoVenta = () => {
 
   const { usuario } = useAuthStore();
   const total = obtenerTotal();
+
+  const handleDescargarReporteVentas = async () => {
+    try {
+      const loadToast = toast.loading('Generando reporte PDF de ventas...');
+      const fecha = filtroFecha || null;
+      const blob = await reportesService.descargarPdfVentas(fecha, fecha);
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporte_ventas_${fecha || 'completo'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Reporte de ventas descargado con éxito.', { id: loadToast });
+    } catch (err) {
+      console.error(err);
+      toast.error('No se pudo generar el reporte de ventas.');
+    }
+  };
+
 
   // Debounce para la búsqueda de productos
   useEffect(() => {
@@ -1316,10 +1341,19 @@ export const PuntoVenta = () => {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 w-full flex flex-col gap-4 animate-fade-in">
           
           {/* Barra de Filtros del Historial */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4">
-            <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-              <FileText size={16} className="text-indigo-600" /> Registro Diario de Ventas
-            </h3>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4 w-full">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 m-0">
+                <FileText size={16} className="text-indigo-600" /> Registro Diario de Ventas
+              </h3>
+              <button
+                onClick={handleDescargarReporteVentas}
+                className="flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl text-white bg-gradient-to-r from-indigo-950 to-indigo-900 shadow-md hover:shadow-lg transition duration-150 cursor-pointer w-full sm:w-auto self-start"
+              >
+                <FileText size={14} />
+                Generar Reporte PDF
+              </button>
+            </div>
             
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
               {/* Filtro de Fecha Específica con input estilizado y botón de limpiar */}
