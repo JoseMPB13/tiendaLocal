@@ -211,7 +211,7 @@ export const DeliveryReparto = () => {
     if (usuario?.rol === 'Repartidor') {
       solicitarPermisoGPS();
     }
-  }, [usuario]);
+  }, [usuario]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ──────────────────────────────────────────────────────────────────────────
   // GESTIÓN DEL CICLO DE VIDA DEL GPS

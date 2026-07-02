@@ -16,7 +16,7 @@ import {
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 import {
-  TrendingUp, Users, Truck, Calendar, Printer, DollarSign,
+  TrendingUp, Truck, Calendar, Printer, DollarSign,
   RefreshCw, ArrowUpRight, ArrowDownRight, Package
 } from 'lucide-react';
 

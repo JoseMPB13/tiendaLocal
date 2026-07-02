@@ -187,33 +187,32 @@ export const GestionEnvios = () => {
   // Efecto: consulta periódica de la posición GPS del repartidor cuando el modal de detalle está abierto
   // y el envío está en estado 'En Camino'. Polling cada 6 segundos para no saturar el servidor.
   useEffect(() => {
+    if (!mostrarModalDetalle || envioSeleccionado?.estado_envio !== 'En Camino' || !envioSeleccionado?.repartidor_id) {
+      return;
+    }
+
     let intervalId = null;
 
     const actualizarUbicacion = async () => {
-      if (mostrarModalDetalle && envioSeleccionado?.estado_envio === 'En Camino' && envioSeleccionado?.repartidor_id) {
-        try {
-          const res = await deliveryService.obtenerUbicacionRepartidor(envioSeleccionado.repartidor_id);
-          if (res.ok && res.data) {
-            setPosicionRepartidor({
-              lat: res.data.latitud_actual ? parseFloat(res.data.latitud_actual) : null,
-              lng: res.data.longitud_actual ? parseFloat(res.data.longitud_actual) : null
-            });
-          }
-        } catch (err) {
-          console.error('Error al obtener ubicación del repartidor:', err);
+      try {
+        const res = await deliveryService.obtenerUbicacionRepartidor(envioSeleccionado.repartidor_id);
+        if (res.ok && res.data) {
+          setPosicionRepartidor({
+            lat: res.data.latitud_actual ? parseFloat(res.data.latitud_actual) : null,
+            lng: res.data.longitud_actual ? parseFloat(res.data.longitud_actual) : null
+          });
         }
+      } catch (err) {
+        console.error('Error al obtener ubicación del repartidor:', err);
       }
     };
 
-    if (mostrarModalDetalle && envioSeleccionado?.estado_envio === 'En Camino' && envioSeleccionado?.repartidor_id) {
-      actualizarUbicacion(); // Consulta inmediata inicial
-      intervalId = setInterval(actualizarUbicacion, 6000); // Polling cada 6 segundos
-    } else {
-      setPosicionRepartidor(prev => (prev.lat !== null || prev.lng !== null) ? { lat: null, lng: null } : prev);
-    }
+    actualizarUbicacion(); // Consulta inmediata inicial
+    intervalId = setInterval(actualizarUbicacion, 6000); // Polling cada 6 segundos
 
     return () => {
       if (intervalId) clearInterval(intervalId);
+      setPosicionRepartidor({ lat: null, lng: null });
     };
   }, [mostrarModalDetalle, envioSeleccionado]);
 

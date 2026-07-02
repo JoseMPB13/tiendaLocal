@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import RutaProtegida from './components/RutaProtegida';
 import LayoutEscritorio from './components/LayoutEscritorio';
 import LayoutDelivery from './components/LayoutDelivery';
-import { PaginaPrueba } from './components/PaginaPrueba';
 import Login from './views/Login';
 import PuntoVenta from './views/PuntoVenta';
 import DeliveryReparto from './views/DeliveryReparto';
