@@ -92,47 +92,6 @@ export const DeliveryReparto = () => {
   const posicionRecienteRef = useRef({ lat: null, lng: null });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // SOLICITUD DE PERMISO DE GPS
-  // Se encarga de gatillar el diálogo de permisos del navegador y registrar
-  // la ubicación inicial si se concede el acceso.
-  // ──────────────────────────────────────────────────────────────────────────
-  const solicitarPermisoGPS = () => {
-    if (usuario?.rol !== 'Repartidor') return;
-    if (!navigator.geolocation) {
-      toast.error('Tu dispositivo no soporta geolocalización o GPS.');
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (posicion) => {
-        const { latitude: lat, longitude: lng } = posicion.coords;
-        setPosicionGPS({ lat, lng });
-        posicionRecienteRef.current = { lat, lng };
-        setGpsActivo(true);
-        // Inicializar el watch continuo si ya fue concedido
-        iniciarSeguimientoGPS();
-      },
-      (error) => {
-        console.warn(`Permiso/Ubicación fallida (Código ${error.code}): ${error.message}`);
-        if (error.code === 1) {
-          toast.error(
-            'Permiso de ubicación denegado. Habilita el GPS en la configuración de tu navegador para que los clientes sigan tu envío.',
-            { id: 'gps-permiso', duration: 8000 }
-          );
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  };
-
-  // Solicitar permiso automáticamente al montar la vista
-  useEffect(() => {
-    if (usuario?.rol === 'Repartidor') {
-      solicitarPermisoGPS();
-    }
-  }, [usuario]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ──────────────────────────────────────────────────────────────────────────
   // SEGUIMIENTO GPS ACTIVO (mediante watchPosition continuo)
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -194,18 +153,65 @@ export const DeliveryReparto = () => {
 
   /**
    * Detiene el seguimiento GPS y limpia los recursos asociados.
+   * Modificado para actualizar el estado gpsActivo condicionalmente y evitar renders en cascada.
    */
   const detenerSeguimientoGPS = () => {
+    let cambio = false;
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
+      cambio = true;
     }
     if (timerGPSRef.current) {
       clearTimeout(timerGPSRef.current);
       timerGPSRef.current = null;
+      cambio = true;
     }
-    setGpsActivo(false);
+    if (cambio) {
+      setGpsActivo(false);
+    }
   };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // SOLICITUD DE PERMISO DE GPS
+  // Se encarga de gatillar el diálogo de permisos del navegador y registrar
+  // la ubicación inicial si se concede el acceso.
+  // ──────────────────────────────────────────────────────────────────────────
+  const solicitarPermisoGPS = () => {
+    if (usuario?.rol !== 'Repartidor') return;
+    if (!navigator.geolocation) {
+      toast.error('Tu dispositivo no soporta geolocalización o GPS.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (posicion) => {
+        const { latitude: lat, longitude: lng } = posicion.coords;
+        setPosicionGPS({ lat, lng });
+        posicionRecienteRef.current = { lat, lng };
+        setGpsActivo(true);
+        // Inicializar el watch continuo si ya fue concedido
+        iniciarSeguimientoGPS();
+      },
+      (error) => {
+        console.warn(`Permiso/Ubicación fallida (Código ${error.code}): ${error.message}`);
+        if (error.code === 1) {
+          toast.error(
+            'Permiso de ubicación denegado. Habilita el GPS en la configuración de tu navegador para que los clientes sigan tu envío.',
+            { id: 'gps-permiso', duration: 8000 }
+          );
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  // Solicitar permiso automáticamente al montar la vista
+  useEffect(() => {
+    if (usuario?.rol === 'Repartidor') {
+      solicitarPermisoGPS();
+    }
+  }, [usuario]);
 
   // ──────────────────────────────────────────────────────────────────────────
   // GESTIÓN DEL CICLO DE VIDA DEL GPS
@@ -222,7 +228,8 @@ export const DeliveryReparto = () => {
     return () => {
       detenerSeguimientoGPS();
     };
-  }, [usuario]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [usuario]);
+
 
   // Carga de datos unificada
   const cargarDatos = async () => {
