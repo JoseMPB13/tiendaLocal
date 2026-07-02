@@ -340,9 +340,9 @@ begin
     where estado_venta = 'Completada'
       and (
         (p_fecha_inicio is null and p_fecha_fin is null) or
-        (p_fecha_inicio is not null and p_fecha_fin is null and fecha_venta::date = p_fecha_inicio) or
-        (p_fecha_inicio is null and p_fecha_fin is not null and fecha_venta::date = p_fecha_fin) or
-        (p_fecha_inicio is not null and p_fecha_fin is not null and fecha_venta::date between p_fecha_inicio and p_fecha_fin)
+        (p_fecha_inicio is not null and p_fecha_fin is null and (fecha_venta at time zone 'America/La_Paz')::date = p_fecha_inicio) or
+        (p_fecha_inicio is null and p_fecha_fin is not null and (fecha_venta at time zone 'America/La_Paz')::date = p_fecha_fin) or
+        (p_fecha_inicio is not null and p_fecha_fin is not null and (fecha_venta at time zone 'America/La_Paz')::date between p_fecha_inicio and p_fecha_fin)
       );
 
     -- 2. Deudas activas en la calle (suma de saldo deudor)
@@ -360,9 +360,9 @@ begin
     from envios
     where (
         (p_fecha_inicio is null and p_fecha_fin is null) or
-        (p_fecha_inicio is not null and p_fecha_fin is null and fecha_creacion::date = p_fecha_inicio) or
-        (p_fecha_inicio is null and p_fecha_fin is not null and fecha_creacion::date = p_fecha_fin) or
-        (p_fecha_inicio is not null and p_fecha_fin is not null and fecha_creacion::date between p_fecha_inicio and p_fecha_fin)
+        (p_fecha_inicio is not null and p_fecha_fin is null and (fecha_creacion at time zone 'America/La_Paz')::date = p_fecha_inicio) or
+        (p_fecha_inicio is null and p_fecha_fin is not null and (fecha_creacion at time zone 'America/La_Paz')::date = p_fecha_fin) or
+        (p_fecha_inicio is not null and p_fecha_fin is not null and (fecha_creacion at time zone 'America/La_Paz')::date between p_fecha_inicio and p_fecha_fin)
       );
 
     -- 3b. Pedidos Delivery: Número absoluto de pedidos que fueron solicitados mediante delivery
@@ -371,9 +371,9 @@ begin
     from envios
     where (
         (p_fecha_inicio is null and p_fecha_fin is null) or
-        (p_fecha_inicio is not null and p_fecha_fin is null and fecha_creacion::date = p_fecha_inicio) or
-        (p_fecha_inicio is null and p_fecha_fin is not null and fecha_creacion::date = p_fecha_fin) or
-        (p_fecha_inicio is not null and p_fecha_fin is not null and fecha_creacion::date between p_fecha_inicio and p_fecha_fin)
+        (p_fecha_inicio is not null and p_fecha_fin is null and (fecha_creacion at time zone 'America/La_Paz')::date = p_fecha_inicio) or
+        (p_fecha_inicio is null and p_fecha_fin is not null and (fecha_creacion at time zone 'America/La_Paz')::date = p_fecha_fin) or
+        (p_fecha_inicio is not null and p_fecha_fin is not null and (fecha_creacion at time zone 'America/La_Paz')::date between p_fecha_inicio and p_fecha_fin)
       );
 
     -- 4. Cantidad de clientes activos
@@ -390,9 +390,9 @@ begin
     where v.estado_venta = 'Completada'
       and (
         (p_fecha_inicio is null and p_fecha_fin is null) or
-        (p_fecha_inicio is not null and p_fecha_fin is null and v.fecha_venta::date = p_fecha_inicio) or
-        (p_fecha_inicio is null and p_fecha_fin is not null and v.fecha_venta::date = p_fecha_fin) or
-        (p_fecha_inicio is not null and p_fecha_fin is not null and v.fecha_venta::date between p_fecha_inicio and p_fecha_fin)
+        (p_fecha_inicio is not null and p_fecha_fin is null and (v.fecha_venta at time zone 'America/La_Paz')::date = p_fecha_inicio) or
+        (p_fecha_inicio is null and p_fecha_fin is not null and (v.fecha_venta at time zone 'America/La_Paz')::date = p_fecha_fin) or
+        (p_fecha_inicio is not null and p_fecha_fin is not null and (v.fecha_venta at time zone 'America/La_Paz')::date between p_fecha_inicio and p_fecha_fin)
       );
 
     -- 5. Distribución de ventas por categoría (excluye las que tienen 0.00 de ventas)
@@ -407,9 +407,9 @@ begin
         where v.estado_venta = 'Completada'
           and (
             (p_fecha_inicio is null and p_fecha_fin is null) or
-            (p_fecha_inicio is not null and p_fecha_fin is null and v.fecha_venta::date = p_fecha_inicio) or
-            (p_fecha_inicio is null and p_fecha_fin is not null and v.fecha_venta::date = p_fecha_fin) or
-            (p_fecha_inicio is not null and p_fecha_fin is not null and v.fecha_venta::date between p_fecha_inicio and p_fecha_fin)
+            (p_fecha_inicio is not null and p_fecha_fin is null and (v.fecha_venta at time zone 'America/La_Paz')::date = p_fecha_inicio) or
+            (p_fecha_inicio is null and p_fecha_fin is not null and (v.fecha_venta at time zone 'America/La_Paz')::date = p_fecha_fin) or
+            (p_fecha_inicio is not null and p_fecha_fin is not null and (v.fecha_venta at time zone 'America/La_Paz')::date between p_fecha_inicio and p_fecha_fin)
           )
         group by c.nombre
     ) t;
@@ -430,14 +430,14 @@ begin
             into v_total_actual
             from ventas
             where estado_venta = 'Completada'
-              and fecha_venta::date between v_actual_inicio and v_actual_fin;
+              and (fecha_venta at time zone 'America/La_Paz')::date between v_actual_inicio and v_actual_fin;
 
             -- Ventas del periodo espejo anterior de igual duración exacta
             select coalesce(sum(total), 0.00)
             into v_total_anterior
             from ventas
             where estado_venta = 'Completada'
-              and fecha_venta::date between v_inicio_anterior and v_fin_anterior;
+              and (fecha_venta at time zone 'America/La_Paz')::date between v_inicio_anterior and v_fin_anterior;
         end;
     else
         -- Ventas del período actual (últimos 30 días)

@@ -19,6 +19,9 @@ import {
   TrendingUp, Truck, Calendar, Printer, DollarSign,
   RefreshCw, ArrowUpRight, ArrowDownRight, Package
 } from 'lucide-react';
+import { obtenerFechaBoliviaHoy, formatearFechaBolivia, formatearHoraBolivia } from '../utils/fechaBolivia';
+
+const FECHA_HOY_BOLIVIA = obtenerFechaBoliviaHoy();
 
 /* Componente de Tooltip personalizado para los gráficos */
 const CustomTooltip = ({ active, payload, label }) => {
@@ -55,8 +58,8 @@ export const DashboardAdmin = () => {
     ventas_por_categoria: []
   });
 
-  const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().split('T')[0]);
-  const [fechaFin, setFechaFin] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaInicio, setFechaInicio] = useState(FECHA_HOY_BOLIVIA);
+  const [fechaFin, setFechaFin] = useState(FECHA_HOY_BOLIVIA);
   const [cargando, setCargando] = useState(true);
   const [errorFechas, setErrorFechas] = useState(null); // Control de visualización de advertencia por rango incorrecto
 
@@ -189,9 +192,9 @@ export const DashboardAdmin = () => {
           <div style="text-align: right;">
             <p style="font-weight: bold; text-transform: uppercase; color: #4b5563; margin: 0 0 4px 0;">Fecha y Hora de Emisión</p>
             <p style="margin: 0; font-weight: bold;">
-              ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              ${formatearFechaBolivia()}
               - 
-              ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              ${formatearHoraBolivia()}
             </p>
             <p style="font-size: 9px; color: #6b7280; margin: 2px 0 0 0; font-style: italic;">Generado digitalmente por el Sistema</p>
           </div>
