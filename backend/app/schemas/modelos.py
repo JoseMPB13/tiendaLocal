@@ -217,11 +217,42 @@ class RepartidorActualizar(BaseModel):
 class RepartidorRespuesta(RepartidorBase):
     id: UUID
     estado_repartidor: str
+    # Campos de posición GPS en tiempo real (nulos si el repartidor no está en ruta)
+    latitud_actual: Optional[float] = None
+    longitud_actual: Optional[float] = None
+    ultima_actualizacion_gps: Optional[datetime] = None
     fecha_creacion: datetime
     fecha_actualizacion: datetime
 
     class Config:
         from_attributes = True
+
+
+# -----------------------------------------------------------------------------
+# ESQUEMAS PARA EL MÓDULO DE SEGUIMIENTO GPS EN TIEMPO REAL
+# -----------------------------------------------------------------------------
+
+class UbicacionActualizar(BaseModel):
+    """Cuerpo del endpoint de alta frecuencia PUT /delivery/mi-ubicacion."""
+    latitud: float = Field(..., ge=-90.0, le=90.0, description="Latitud GPS del repartidor")
+    longitud: float = Field(..., ge=-180.0, le=180.0, description="Longitud GPS del repartidor")
+
+
+# -----------------------------------------------------------------------------
+# ESQUEMAS PARA EL MÓDULO DE CONFIGURACIÓN DEL SISTEMA
+# -----------------------------------------------------------------------------
+
+class ConfiguracionSistemaCrear(BaseModel):
+    """Cuerpo para crear o actualizar (upsert) una configuración del sistema."""
+    clave: str = Field(..., max_length=100, description="Clave única de configuración. Ej: kiosco_latitud")
+    valor: Optional[str] = Field(None, description="Valor de la configuración en formato texto")
+
+class ConfiguracionSistemaRespuesta(BaseModel):
+    id: UUID
+    clave: str
+    valor: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # -----------------------------------------------------------------------------

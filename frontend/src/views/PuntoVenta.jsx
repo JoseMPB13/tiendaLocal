@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import MapaInteractivo from '../components/MapaInteractivo';
 import clienteApi from '../services/api';
+import deliveryService from '../services/deliveryService';
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 const obtenerUrlImagenCompleta = (url) => {
@@ -171,6 +172,18 @@ export const PuntoVenta = () => {
   const [mostrarModalCobro, setMostrarModalCobro] = useState(false);
   const [efectivoRecibido, setEfectivoRecibido] = useState('');
   const [procesandoPago, setProcesandoPago] = useState(false);
+
+  // URL/base64 de la imagen QR de cobro (cargada desde configuracion_sistema)
+  const [qrImagenUrl, setQrImagenUrl] = useState(null);
+
+  // Cargar imagen QR al montar el componente (una sola vez)
+  useEffect(() => {
+    deliveryService.obtenerConfiguracion('qr_pago_imagen')
+      .then((res) => {
+        if (res.ok && res.data?.valor) setQrImagenUrl(res.data.valor);
+      })
+      .catch(() => {}); // Ignorar si aún no está configurado
+  }, []);
 
   // Opciones de delivery
   const [requiereDelivery, setRequiereDelivery] = useState(false);
@@ -1660,7 +1673,15 @@ export const PuntoVenta = () => {
               {/* Entrada QR */}
               {metodoPago === 'QR' && (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center gap-2 text-center">
-                  <QrCode size={48} className="text-indigo-600 animate-pulse" />
+                  {qrImagenUrl ? (
+                    <img
+                      src={qrImagenUrl}
+                      alt="QR de cobro"
+                      className="w-40 h-40 object-contain rounded-lg border border-indigo-100 bg-white p-1"
+                    />
+                  ) : (
+                    <QrCode size={48} className="text-indigo-600 animate-pulse" />
+                  )}
                   <span className="text-[10px] font-bold text-indigo-700">Muestre el QR al cliente para cobro rápido</span>
                   <span className="text-[11px] text-slate-500 font-medium leading-snug">Se espera transferencia de Bs. {total.toFixed(2)}</span>
                 </div>

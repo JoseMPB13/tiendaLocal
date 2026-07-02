@@ -51,7 +51,59 @@ export const deliveryService = {
   obtenerRepartidores: async () => {
     const respuesta = await clienteApi.get('/delivery/repartidores');
     return respuesta.data;
-  }
+  },
+
+  // ---------------------------------------------------------------------------
+  // MÉTODOS DE SEGUIMIENTO GPS EN TIEMPO REAL
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Envía la posición GPS actual del repartidor autenticado al servidor.
+   * Endpoint de alta frecuencia, llamado cada ~7 segundos mientras el repartidor
+   * tiene un envío en estado 'En Camino'.
+   * @param {number} latitud - Latitud GPS actual del dispositivo.
+   * @param {number} longitud - Longitud GPS actual del dispositivo.
+   */
+  actualizarMiUbicacion: async (latitud, longitud) => {
+    const respuesta = await clienteApi.put('/delivery/mi-ubicacion', { latitud, longitud });
+    return respuesta.data;
+  },
+
+  /**
+   * Obtiene la última posición GPS registrada de un repartidor específico.
+   * Utilizado por MapaSeguimiento.jsx para dibujar el ícono del repartidor en el mapa.
+   * @param {string} repartidorId - UUID del repartidor a consultar.
+   */
+  obtenerUbicacionRepartidor: async (repartidorId) => {
+    const respuesta = await clienteApi.get(`/delivery/repartidores/${repartidorId}/ubicacion`);
+    return respuesta.data;
+  },
+
+  // ---------------------------------------------------------------------------
+  // MÉTODOS DE CONFIGURACIÓN DEL SISTEMA (Ubicación del Kiosco)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Obtiene el valor de una clave de configuración del sistema.
+   * @param {string} clave - Nombre de la clave. Ej: 'kiosco_latitud'.
+   */
+  obtenerConfiguracion: async (clave) => {
+    const respuesta = await clienteApi.get(`/delivery/configuracion/${clave}`);
+    return respuesta.data;
+  },
+
+  /**
+   * Crea o actualiza una clave de configuración del sistema (solo Administrador).
+   * @param {string} clave - Nombre de la clave.
+   * @param {string|number} valor - Valor a almacenar (se convierte a texto).
+   */
+  guardarConfiguracion: async (clave, valor) => {
+    const respuesta = await clienteApi.put('/delivery/configuracion', {
+      clave,
+      valor: String(valor)
+    });
+    return respuesta.data;
+  },
 };
 
 export default deliveryService;

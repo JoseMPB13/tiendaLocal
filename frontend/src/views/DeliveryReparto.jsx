@@ -1,11 +1,24 @@
-import { useState, useEffect } from 'react';
+/**
+ * Vista: DeliveryReparto.jsx
+ * Propósito: Panel móvil de gestión de logística de reparto para repartidores.
+ * Funcionalidades:
+ *   - Visualizar envíos disponibles, en ruta e historial del día.
+ *   - Autoasignación de pedidos (deslizador).
+ *   - Confirmación de entrega (deslizador) y anulación (modal).
+ *   - Transmisión de ubicación GPS en tiempo real (watchPosition) al backend.
+ *   - Mapa de seguimiento interactivo (MapaSeguimiento.jsx) con OSRM.
+ * Idioma: Español
+ */
+
+import { useState, useEffect, useRef } from 'react';
 import deliveryService from '../services/deliveryService';
 import DeslizadorInteractivo from '../components/DeslizadorInteractivo';
 import { MapaInteractivo } from '../components/MapaInteractivo';
+import { MapaSeguimiento } from '../components/MapaSeguimiento';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   ChevronDown, ChevronUp, MapPin, Navigation, Phone, 
-  Clock, FileText, CheckCircle2, XCircle, Map
+  Clock, FileText, CheckCircle2, XCircle, Map, Satellite
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 
@@ -26,6 +39,190 @@ export const DeliveryReparto = () => {
 
   // Control de expansión del mapa interactivo por envío (id → boolean)
   const [mapasExpandidos, setMapasExpandidos] = useState({});
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // ESTADO Y REFS PARA SEGUIMIENTO GPS EN TIEMPO REAL
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Posición GPS actual del dispositivo del repartidor (para el mapa en tiempo real)
+  const [posicionGPS, setPosicionGPS] = useState({ lat: null, lng: null });
+
+  // Estado booleano que indica si el seguimiento GPS está activo
+  // (NO usar watchIdRef.current durante el render — viola las reglas de React 19)
+  const [gpsActivo, setGpsActivo] = useState(false);
+
+  // Ubicación del kiosco cargada desde configuracion_sistema
+  const [kiosco, setKiosco] = useState({ lat: -17.7833, lng: -63.1667 });
+
+  // Ref para limpiar watchPosition al desmontar el componente o al finalizar ruta
+  const watchIdRef = useRef(null);
+
+  // Ref para el timer de throttle de envío GPS (evita saturar el servidor)
+  const timerGPSRef = useRef(null);
+
+  // Ref con la última posición enviada al servidor (para comparar y evitar duplicados)
+  const ultimaPosicionEnviadaRef = useRef(null);
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // CARGA DE CONFIGURACIÓN DEL KIOSCO
+  // ──────────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const cargarUbicacionKiosco = async () => {
+      try {
+        const [resLat, resLng] = await Promise.all([
+          deliveryService.obtenerConfiguracion('kiosco_latitud'),
+          deliveryService.obtenerConfiguracion('kiosco_longitud')
+        ]);
+        if (resLat.ok && resLng.ok) {
+          setKiosco({
+            lat: parseFloat(resLat.data.valor),
+            lng: parseFloat(resLng.data.valor)
+          });
+        }
+      } catch {
+        // Mantener coordenadas por defecto si la tabla no existe o no hay config
+        console.info('Usando coordenadas por defecto del kiosco.');
+      }
+    };
+    cargarUbicacionKiosco();
+  }, []);
+
+  // Ref con la posición GPS más reciente capturada (para evitar closures desactualizados en setTimeout)
+  const posicionRecienteRef = useRef({ lat: null, lng: null });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // SOLICITUD DE PERMISO DE GPS
+  // Se encarga de gatillar el diálogo de permisos del navegador y registrar
+  // la ubicación inicial si se concede el acceso.
+  // ──────────────────────────────────────────────────────────────────────────
+  const solicitarPermisoGPS = () => {
+    if (usuario?.rol !== 'Repartidor') return;
+    if (!navigator.geolocation) {
+      toast.error('Tu dispositivo no soporta geolocalización o GPS.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (posicion) => {
+        const { latitude: lat, longitude: lng } = posicion.coords;
+        setPosicionGPS({ lat, lng });
+        posicionRecienteRef.current = { lat, lng };
+        setGpsActivo(true);
+        // Inicializar el watch continuo si ya fue concedido
+        iniciarSeguimientoGPS();
+      },
+      (error) => {
+        console.warn(`Permiso/Ubicación fallida (Código ${error.code}): ${error.message}`);
+        if (error.code === 1) {
+          toast.error(
+            'Permiso de ubicación denegado. Habilita el GPS en la configuración de tu navegador para que los clientes sigan tu envío.',
+            { id: 'gps-permiso', duration: 8000 }
+          );
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  // Solicitar permiso automáticamente al montar la vista
+  useEffect(() => {
+    if (usuario?.rol === 'Repartidor') {
+      solicitarPermisoGPS();
+    }
+  }, [usuario]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // SEGUIMIENTO GPS ACTIVO (mediante watchPosition continuo)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Inicia el seguimiento GPS del dispositivo mediante watchPosition.
+   * La posición se envía al backend cada 7 segundos como máximo (throttle).
+   */
+  const iniciarSeguimientoGPS = () => {
+    if (watchIdRef.current !== null) return;
+    if (!navigator.geolocation) return;
+
+    const opcionesGPS = {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 5000
+    };
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (posicion) => {
+        const { latitude: lat, longitude: lng } = posicion.coords;
+        // 1. Guardar la coordenada más reciente capturada en la ref
+        posicionRecienteRef.current = { lat, lng };
+        
+        // 2. Actualizar estado reactivo local (movimiento suave en el mapa)
+        setPosicionGPS({ lat, lng });
+        setGpsActivo(true);
+
+        // 3. Enviar al servidor con throttle de 7 segundos
+        if (!timerGPSRef.current) {
+          timerGPSRef.current = setTimeout(async () => {
+            timerGPSRef.current = null;
+            
+            // Obtener el valor más actual de la ref en lugar del closure de hace 7s
+            const latReciente = posicionRecienteRef.current.lat;
+            const lngReciente = posicionRecienteRef.current.lng;
+            
+            if (latReciente === null || lngReciente === null) return;
+
+            const ultima = ultimaPosicionEnviadaRef.current;
+            const hayCambio = !ultima || Math.abs(ultima.lat - latReciente) > 0.00005 || Math.abs(ultima.lng - lngReciente) > 0.00005;
+
+            if (hayCambio) {
+              try {
+                await deliveryService.actualizarMiUbicacion(latReciente, lngReciente);
+                ultimaPosicionEnviadaRef.current = { lat: latReciente, lng: lngReciente };
+              } catch {
+                // Ignorar errores de red temporales silenciosamente
+              }
+            }
+          }, 7000);
+        }
+      },
+      (error) => {
+        console.warn(`Error de seguimiento GPS continuo (código ${error.code}): ${error.message}`);
+      },
+      opcionesGPS
+    );
+  };
+
+  /**
+   * Detiene el seguimiento GPS y limpia los recursos asociados.
+   */
+  const detenerSeguimientoGPS = () => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    if (timerGPSRef.current) {
+      clearTimeout(timerGPSRef.current);
+      timerGPSRef.current = null;
+    }
+    setGpsActivo(false);
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // GESTIÓN DEL CICLO DE VIDA DEL GPS
+  // ──────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const esRepartidor = usuario?.rol === 'Repartidor';
+
+    if (esRepartidor) {
+      iniciarSeguimientoGPS();
+    } else {
+      detenerSeguimientoGPS();
+    }
+
+    return () => {
+      detenerSeguimientoGPS();
+    };
+  }, [usuario]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Carga de datos unificada
   const cargarDatos = async () => {
@@ -109,7 +306,7 @@ export const DeliveryReparto = () => {
   };
 
   /**
-   * INICIAR RUTA: Transición de Pendiente -> En Camino (Autoasignación)
+   * INICIAR RUTA: Transición de Pendiente → En Camino (Autoasignación)
    */
   const handleIniciarRuta = async (envioId) => {
     // Validar si el usuario tiene rol administrativo puro y no tiene perfil de repartidor activo
@@ -125,6 +322,7 @@ export const DeliveryReparto = () => {
       if (res.ok) {
         toast.success("Pedido asignado e iniciado con éxito.");
         await cargarDatos();
+        // El seguimiento GPS se activa automáticamente via el useEffect de misEnviosActivos
       }
     } catch (ex) {
       const detail = ex.response?.data?.detail || "No se pudo iniciar la ruta.";
@@ -135,7 +333,7 @@ export const DeliveryReparto = () => {
   };
 
   /**
-   * ENTREGAR: Transición de En Camino -> Entregado
+   * ENTREGAR: Transición de En Camino → Entregado
    */
   const handleConfirmarEntrega = async (envioId) => {
     const esAdminPuro = usuario?.rol === 'Administrador' || usuario?.rol === 'Cajero';
@@ -150,6 +348,7 @@ export const DeliveryReparto = () => {
       if (res.ok) {
         toast.success("¡Pedido marcado como Entregado!");
         await cargarDatos();
+        // El GPS se detiene automáticamente si ya no quedan envíos activos
       }
     } catch (ex) {
       const detail = ex.response?.data?.detail || "No se pudo confirmar la entrega.";
@@ -203,6 +402,28 @@ export const DeliveryReparto = () => {
     return str.startsWith('http://') || str.startsWith('https://');
   };
 
+  // Helper para guiar dinámicamente al repartidor por etapas
+  const obtenerInstruccionRuta = (latR, lngR, latK, lngK) => {
+    if (!latR || !lngR) {
+      return "Esperando señal GPS para iniciar el guiado...";
+    }
+    const R = 6371000; // Radio en metros
+    const dLat = (latK - latR) * Math.PI / 180;
+    const dLon = (lngK - lngR) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(latR * Math.PI / 180) * Math.cos(latK * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distMetros = R * c;
+
+    if (distMetros > 80) {
+      const distStr = distMetros > 1000 ? `${(distMetros / 1000).toFixed(1)} km` : `${distMetros.toFixed(0)} metros`;
+      return `🏃 Fase 1: Dirígete al Kiosco a recoger el pedido (estás a ~${distStr})`;
+    } else {
+      return "📦 Fase 2: Recoge el pedido del Kiosco y dirígete al Destino del cliente";
+    }
+  };
+
   // Filtrado de items a mostrar según la pestaña activa
   const obtenerItemsFiltrados = () => {
     if (tabActiva === 'disponibles') {
@@ -244,6 +465,11 @@ export const DeliveryReparto = () => {
     return "No registras envíos entregados o cancelados durante el día de hoy.";
   };
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // INDICADOR DE GPS ACTIVO (solo visible para Repartidores en ruta)
+  // ──────────────────────────────────────────────────────────────────────────
+  const tieneGPS = posicionGPS.lat !== null;
+
   return (
     <div className="max-w-md mx-auto space-y-4 px-2 sm:px-0 pb-12">
       <Toaster position="top-center" />
@@ -254,12 +480,27 @@ export const DeliveryReparto = () => {
           <Clock className="text-zinc-900 mr-2" size={18} />
           Logística de Reparto
         </h3>
-        <button 
-          onClick={cargarDatos}
-          className="text-xs bg-zinc-50 hover:bg-zinc-100 px-3.5 py-2 rounded-xl font-medium text-zinc-700 border border-zinc-200 transition-all"
-        >
-          Actualizar
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Indicador GPS activo */}
+          {usuario?.rol === 'Repartidor' && (
+            <div className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full font-semibold border ${
+              tieneGPS
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : gpsActivo
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-zinc-50 text-zinc-400 border-zinc-200'
+            }`}>
+              <Satellite size={10} className={tieneGPS ? 'text-emerald-600' : 'text-zinc-400'} />
+              {tieneGPS ? 'GPS' : 'Sin GPS'}
+            </div>
+          )}
+          <button 
+            onClick={cargarDatos}
+            className="text-xs bg-zinc-50 hover:bg-zinc-100 px-3.5 py-2 rounded-xl font-medium text-zinc-700 border border-zinc-200 transition-all"
+          >
+            Actualizar
+          </button>
+        </div>
       </div>
 
       {/* PESTAÑAS (TABS) */}
@@ -296,6 +537,28 @@ export const DeliveryReparto = () => {
         </button>
       </div>
 
+      {/* Alerta de GPS Deshabilitado / Requiere Permiso */}
+      {usuario?.rol === 'Repartidor' && !tieneGPS && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col gap-3 shadow-sm animate-fade-in-up">
+          <div className="flex gap-2.5">
+            <Satellite className="text-amber-600 flex-shrink-0 animate-pulse mt-0.5" size={20} />
+            <div>
+              <h4 className="text-xs font-bold text-amber-900">Ubicación GPS Inactiva</h4>
+              <p className="text-[11px] text-amber-700 font-medium leading-relaxed mt-0.5">
+                Para poder autoasignarte entregas y que los clientes vean tu recorrido en tiempo real, es necesario que actives el GPS de tu dispositivo y concedas los permisos correspondientes.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={solicitarPermisoGPS}
+            className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Navigation size={13} className="animate-bounce" />
+            Conceder Permiso GPS / Activar Ubicación
+          </button>
+        </div>
+      )}
+
       {/* CONTENIDO PRINCIPAL */}
       {cargando ? (
         <div className="text-center py-12 text-zinc-500 font-medium bg-white rounded-2xl border border-zinc-200 shadow-sm">
@@ -304,6 +567,44 @@ export const DeliveryReparto = () => {
       ) : itemsAMostrar.length === 0 ? (
         <div className="text-center py-12 text-zinc-400 bg-white rounded-2xl border border-zinc-200 shadow-sm px-4">
           {obtenerMensajeVacio()}
+        </div>
+      ) : tabActiva === 'historial' ? (
+        // RENDER DEL HISTORIAL (LISTA SIMPLE DE PEDIDOS COMPLETADOS, SIN ACCIONES NI MAPAS)
+        <div className="space-y-3">
+          {itemsAMostrar.map((env) => (
+            <div 
+              key={env.id} 
+              className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-4 space-y-2.5"
+            >
+              <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
+                <span className="font-bold text-xs text-zinc-900">
+                  Venta: {env.venta_id.substring(0, 8)}
+                </span>
+                <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase ${
+                  env.estado_envio === 'Entregado'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200/50'
+                }`}>
+                  {env.estado_envio}
+                </span>
+              </div>
+              <div className="text-xs text-zinc-600 space-y-1.5 font-medium">
+                {env.cliente?.nombre_completo && (
+                  <p><span className="font-bold text-zinc-800">Cliente:</span> {env.cliente.nombre_completo}</p>
+                )}
+                <p><span className="font-bold text-zinc-800">Dirección:</span> {env.direccion_despacho}</p>
+                <p>
+                  <span className="font-bold text-zinc-800">Recargo Delivery:</span>{' '}
+                  <span className="font-black text-zinc-900">Bs. {env.costo_envio.toFixed(2)}</span>
+                </p>
+                {env.estado_envio === 'Cancelado' && env.motivo_cancelacion && (
+                  <div className="bg-rose-50 border border-rose-100 rounded-xl p-2.5 text-[11px] text-rose-800 mt-1">
+                    <span className="font-bold">Motivo:</span> {env.motivo_cancelacion}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="space-y-3">
@@ -395,15 +696,21 @@ export const DeliveryReparto = () => {
                               <Navigation size={14} className="mr-1.5" />
                               Abrir GPS
                             </button>
-                          ) : (
-                            <button 
-                              disabled
-                              className="flex-1 flex items-center justify-center py-2 px-3.5 bg-zinc-100 text-zinc-400 rounded-xl text-xs font-semibold border border-zinc-200 cursor-not-allowed"
-                              title="Sin enlace de ubicación válido"
+                          ) : (env.cliente?.latitud && env.cliente?.longitud) ? (
+                            // Hay coordenadas aunque no haya URL → abrir en Google Maps
+                            <button
+                              onClick={() => window.open(`https://www.google.com/maps?q=${env.cliente.latitud},${env.cliente.longitud}`, '_blank')}
+                              className="flex-1 flex items-center justify-center py-2 px-3.5 bg-zinc-950 text-white rounded-xl text-xs font-semibold hover:bg-zinc-800 transition-colors shadow-sm"
                             >
                               <Navigation size={14} className="mr-1.5" />
-                              GPS Deshabilitado
+                              Abrir en Mapa
                             </button>
+                          ) : (
+                            // Sin URL ni coordenadas → ocultar el botón
+                            <div className="flex-1 flex items-center justify-center py-2 px-3.5 bg-zinc-50 text-zinc-400 rounded-xl text-xs font-medium border border-zinc-200">
+                              <Navigation size={14} className="mr-1.5" />
+                              Sin Ubicación
+                            </div>
                           )}
 
                           {/* Botón de llamada telefónica */}
@@ -433,8 +740,44 @@ export const DeliveryReparto = () => {
                           </div>
                         )}
 
-                        {/* MAPA INTERACTIVO DE DESTINO: visible solo en Mi Ruta si hay coordenadas */}
-                        {tabActiva === 'mi_ruta' && env.cliente?.latitud && env.cliente?.longitud && (
+                        {/* ──────────────────────────────────────────────────────
+                            MAPA DE SEGUIMIENTO EN TIEMPO REAL
+                            Siempre visible en "Mi Ruta" si el envío está En Camino.
+                            Ruta: 🏠 Kiosco → 🚴 Repartidor → 📍 Destino (2 etapas via OSRM)
+                        ─────────────────────────────────────────────────────── */}
+                        {tabActiva === 'mi_ruta' && env.estado_envio === 'En Camino' && env.cliente?.latitud && env.cliente?.longitud && (
+                          <div>
+                            {/* Caja de Instrucción Dinámica Premium */}
+                            <div className="mb-3 bg-violet-50 border border-violet-150 rounded-xl p-3 flex items-start gap-2.5 shadow-sm animate-fade-in-up">
+                              <div className="bg-violet-600 rounded-lg p-1.5 text-white flex-shrink-0">
+                                <Navigation size={14} className="animate-pulse" />
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-extrabold uppercase tracking-wider text-violet-600 block mb-0.5">
+                                  Instrucción de Ruta
+                                </span>
+                                <p className="text-xs text-violet-900 font-extrabold leading-relaxed">
+                                  {obtenerInstruccionRuta(posicionGPS.lat, posicionGPS.lng, kiosco.lat, kiosco.lng)}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="rounded-xl overflow-hidden border border-violet-200 shadow-sm">
+                              <MapaSeguimiento
+                                latKiosco={kiosco.lat}
+                                lngKiosco={kiosco.lng}
+                                latRepartidor={posicionGPS.lat}
+                                lngRepartidor={posicionGPS.lng}
+                                latDestino={parseFloat(env.cliente.latitud)}
+                                lngDestino={parseFloat(env.cliente.longitud)}
+                                nombreDestino={env.cliente.nombre_completo || 'Destino'}
+                                estadoEnvio={env.estado_envio}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Mapa simple de destino (para envíos Pendientes con coords) */}
+                        {tabActiva !== 'mi_ruta' && env.cliente?.latitud && env.cliente?.longitud && (
                           <div>
                             <button
                               onClick={() => toggleMapa(env.id)}

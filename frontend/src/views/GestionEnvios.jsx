@@ -22,6 +22,8 @@ import {
   ShoppingCart
 } from 'lucide-react';
 import MapaInteractivo from '../components/MapaInteractivo';
+import { MapaSeguimiento } from '../components/MapaSeguimiento';
+
 import ventaService from '../services/ventaService';
 import clienteService from '../services/clienteService';
 
@@ -31,6 +33,34 @@ export const GestionEnvios = () => {
   const [repartidores, setRepartidores] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(true);
+
+  // Coordenadas fijas del origen (Kiosco) cargadas desde el sistema
+  const [kiosco, setKiosco] = useState({ lat: -17.7833, lng: -63.1667 });
+
+  // Ubicación del repartidor asignado en tiempo real (para tracking en el modal de detalle)
+  const [posicionRepartidor, setPosicionRepartidor] = useState({ lat: null, lng: null });
+
+  // 1. Cargar ubicación del Kiosco desde la base de datos al montar el componente
+  useEffect(() => {
+    const cargarUbicacionKiosco = async () => {
+      try {
+        const [resLat, resLng] = await Promise.all([
+          deliveryService.obtenerConfiguracion('kiosco_latitud'),
+          deliveryService.obtenerConfiguracion('kiosco_longitud')
+        ]);
+        if (resLat.ok && resLng.ok) {
+          setKiosco({
+            lat: parseFloat(resLat.data.valor),
+            lng: parseFloat(resLng.data.valor)
+          });
+        }
+      } catch {
+        console.info('Usando coordenadas por defecto del kiosco.');
+      }
+    };
+    cargarUbicacionKiosco();
+  }, []);
+
 
   const handleRedirigirEditarVenta = (ventaId) => {
     localStorage.setItem('editar_venta_id', ventaId);
@@ -130,6 +160,40 @@ export const GestionEnvios = () => {
   // Modal para ver detalles logísticos con mapa
   const [mostrarModalDetalle, setMostrarModalDetalle] = useState(false);
   const [envioSeleccionado, setEnvioSeleccionado] = useState(null);
+
+  // Efecto: consulta periódica de la posición GPS del repartidor cuando el modal de detalle está abierto
+  // y el envío está en estado 'En Camino'. Polling cada 6 segundos para no saturar el servidor.
+  useEffect(() => {
+    let intervalId = null;
+
+    const actualizarUbicacion = async () => {
+      if (mostrarModalDetalle && envioSeleccionado?.estado_envio === 'En Camino' && envioSeleccionado?.repartidor_id) {
+        try {
+          const res = await deliveryService.obtenerUbicacionRepartidor(envioSeleccionado.repartidor_id);
+          if (res.ok && res.data) {
+            setPosicionRepartidor({
+              lat: res.data.latitud_actual ? parseFloat(res.data.latitud_actual) : null,
+              lng: res.data.longitud_actual ? parseFloat(res.data.longitud_actual) : null
+            });
+          }
+        } catch (err) {
+          console.error('Error al obtener ubicación del repartidor:', err);
+        }
+      }
+    };
+
+    if (mostrarModalDetalle && envioSeleccionado?.estado_envio === 'En Camino' && envioSeleccionado?.repartidor_id) {
+      actualizarUbicacion(); // Consulta inmediata inicial
+      intervalId = setInterval(actualizarUbicacion, 6000); // Polling cada 6 segundos
+    } else {
+      setPosicionRepartidor({ lat: null, lng: null }); // Limpiar posición al cerrar el modal
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [mostrarModalDetalle, envioSeleccionado]);
+
 
   const [ventas, setVentas] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -1143,13 +1207,28 @@ export const GestionEnvios = () => {
                   </div>
                 </div>
 
-                <div className="w-full h-64 rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 shadow-inner relative z-10">
-                  <MapaInteractivo
-                    key={`detail-${envioSeleccionado?.id}`}
-                    lat={resolverCoordenadas(envioSeleccionado)[0]}
-                    lng={resolverCoordenadas(envioSeleccionado)[1]}
-                    soloLectura={true}
-                  />
+                <div className="w-full rounded-xl overflow-hidden border border-zinc-200 bg-slate-100 shadow-inner relative z-10">
+                  {envioSeleccionado.estado_envio === 'En Camino' && envioSeleccionado.repartidor_id ? (
+                    <MapaSeguimiento
+                      latKiosco={kiosco.lat}
+                      lngKiosco={kiosco.lng}
+                      latRepartidor={posicionRepartidor.lat}
+                      lngRepartidor={posicionRepartidor.lng}
+                      latDestino={resolverCoordenadas(envioSeleccionado)[0]}
+                      lngDestino={resolverCoordenadas(envioSeleccionado)[1]}
+                      nombreDestino={envioSeleccionado.cliente?.nombre_completo || 'Destino'}
+                      estadoEnvio={envioSeleccionado.estado_envio}
+                    />
+                  ) : (
+                    <div className="w-full h-64">
+                      <MapaInteractivo
+                        key={`detail-${envioSeleccionado?.id}`}
+                        lat={resolverCoordenadas(envioSeleccionado)[0]}
+                        lng={resolverCoordenadas(envioSeleccionado)[1]}
+                        soloLectura={true}
+                      />
+                    </div>
+                  )}
                 </div>
                 {(envioSeleccionado.cliente?.enlace_ubicacion || envioSeleccionado.cliente?.enlace_mapa) && (
                   <a

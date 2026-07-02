@@ -13,6 +13,7 @@ import GestionProductos from './views/GestionProductos';
 import GestionClientes from './views/GestionClientes';
 import GestionUsuarios from './views/GestionUsuarios';
 import GestionEnvios from './views/GestionEnvios';
+import Configuracion from './views/Configuracion';
 
 export const RutasApp = () => {
   return (
@@ -38,6 +39,7 @@ export const RutasApp = () => {
           <Route element={<LayoutEscritorio />}>
             <Route path="/bitacora" element={<BitacoraSistema />} />
             <Route path="/usuarios" element={<GestionUsuarios />} />
+            <Route path="/configuracion" element={<Configuracion />} />
           </Route>
         </Route>
 

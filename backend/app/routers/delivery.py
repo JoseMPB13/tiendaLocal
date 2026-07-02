@@ -4,11 +4,13 @@ from uuid import UUID
 from pydantic import BaseModel
 from app.schemas.modelos import (
     RepartidorCrear, RepartidorActualizar, RepartidorRespuesta,
-    EnvioCrear, EnvioActualizar, EnvioRespuesta
+    EnvioCrear, EnvioActualizar, EnvioRespuesta,
+    UbicacionActualizar, ConfiguracionSistemaCrear, ConfiguracionSistemaRespuesta
 )
 from app.services.delivery import DeliveryService
 from app.services.dependencias import verificar_roles
 from app.services.bitacora import BitacoraService
+
 
 router = APIRouter(prefix="/delivery", tags=["Delivery & Reparto"])
 
@@ -227,4 +229,67 @@ async def cancelar_envio(
             "motivo_cancelacion": datos.motivo_cancelacion
         }
     )
+    return {"ok": True, "data": resultado}
+
+
+# -----------------------------------------------------------------------------
+# ENDPOINT DE SEGUIMIENTO GPS EN TIEMPO REAL (ALTA FRECUENCIA)
+# -----------------------------------------------------------------------------
+
+@router.put("/mi-ubicacion", response_model=dict, summary="Actualizar posición GPS del repartidor autenticado")
+@router.put("/mi-ubicacion/", response_model=dict, include_in_schema=False)
+async def actualizar_mi_ubicacion(
+    ubicacion: UbicacionActualizar,
+    usuario_actual: dict = Depends(verificar_roles(["Repartidor"]))
+):
+    """
+    Endpoint de alta frecuencia para transmitir la posición GPS del repartidor.
+    Solo accesible por el rol Repartidor. No registra en bitácora para no saturarla
+    con miles de actualizaciones de coordenadas por sesión.
+    """
+    resultado = DeliveryService.actualizar_ubicacion_repartidor(usuario_actual, ubicacion)
+    return resultado
+
+
+@router.get("/repartidores/{repartidor_id}/ubicacion", response_model=dict)
+async def obtener_ubicacion_repartidor(
+    repartidor_id: UUID,
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
+):
+    """
+    Obtiene la última posición GPS registrada de un repartidor.
+    Utilizado por el componente MapaSeguimiento para renderizar el ícono del repartidor en tiempo real.
+    """
+    resultado = DeliveryService.obtener_ubicacion_repartidor(repartidor_id)
+    return {"ok": True, "data": resultado}
+
+
+# -----------------------------------------------------------------------------
+# ENDPOINTS DE CONFIGURACIÓN DEL SISTEMA
+# -----------------------------------------------------------------------------
+
+@router.get("/configuracion/{clave}", response_model=dict)
+async def obtener_configuracion(
+    clave: str,
+    usuario_actual: dict = Depends(verificar_roles(["Administrador", "Cajero", "Repartidor"]))
+):
+    """
+    Lee el valor de una clave de configuración del sistema.
+    Ej: GET /delivery/configuracion/kiosco_latitud
+    """
+    resultado = DeliveryService.obtener_configuracion(clave)
+    return {"ok": True, "data": resultado}
+
+
+@router.put("/configuracion", response_model=dict, status_code=status.HTTP_200_OK)
+@router.put("/configuracion/", response_model=dict, include_in_schema=False)
+async def guardar_configuracion(
+    datos: ConfiguracionSistemaCrear,
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
+):
+    """
+    Crea o actualiza (UPSERT) una clave de configuración del sistema.
+    Solo accesible por el rol Administrador.
+    """
+    resultado = DeliveryService.guardar_configuracion(datos)
     return {"ok": True, "data": resultado}

@@ -1,10 +1,14 @@
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from app.database import supabase
-from app.schemas.modelos import RepartidorCrear, RepartidorActualizar, EnvioCrear, EnvioActualizar
+from app.schemas.modelos import (
+    RepartidorCrear, RepartidorActualizar, EnvioCrear, EnvioActualizar,
+    UbicacionActualizar, ConfiguracionSistemaCrear
+)
 from postgrest.exceptions import APIError
+
 
 class DeliveryService:
     # -------------------------------------------------------------------------
@@ -464,3 +468,89 @@ class DeliveryService:
             )
         return resultado.data[0]
 
+    # -------------------------------------------------------------------------
+    # OPERACIONES DE SEGUIMIENTO GPS EN TIEMPO REAL
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def actualizar_ubicacion_repartidor(usuario_actual: dict, ubicacion: UbicacionActualizar) -> dict:
+        """
+        Actualiza la posición GPS actual del repartidor autenticado.
+        Este endpoint es de alta frecuencia (llamado cada 5-10 segundos),
+        por lo que no registra acciones en la bitácora para no saturarla.
+        """
+        # Buscar el perfil de repartidor del usuario autenticado
+        rep_res = supabase.table("repartidores").select("id").eq("usuario_id", str(usuario_actual["id"])).execute()
+        if not rep_res.data:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="El usuario actual no tiene un perfil de repartidor registrado."
+            )
+        repartidor_id = rep_res.data[0]["id"]
+
+        # Actualizar coordenadas y timestamp de última señal GPS
+        datos_gps = {
+            "latitud_actual": ubicacion.latitud,
+            "longitud_actual": ubicacion.longitud,
+            "ultima_actualizacion_gps": datetime.now(timezone.utc).isoformat()
+        }
+        resultado = supabase.table("repartidores").update(datos_gps).eq("id", str(repartidor_id)).execute()
+        if not resultado.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No se pudo actualizar la posición GPS del repartidor."
+            )
+        return {"ok": True, "repartidor_id": str(repartidor_id)}
+
+    @staticmethod
+    def obtener_ubicacion_repartidor(repartidor_id: UUID) -> dict:
+        """
+        Obtiene la última posición GPS registrada de un repartidor específico.
+        Utilizado por el componente MapaSeguimiento.jsx para mostrar el ícono del repartidor.
+        """
+        resultado = supabase.table("repartidores")\
+            .select("id, latitud_actual, longitud_actual, ultima_actualizacion_gps, estado_repartidor")\
+            .eq("id", str(repartidor_id))\
+            .execute()
+        if not resultado.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Repartidor no encontrado."
+            )
+        return resultado.data[0]
+
+    # -------------------------------------------------------------------------
+    # OPERACIONES DE CONFIGURACIÓN DEL SISTEMA
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def obtener_configuracion(clave: str) -> dict:
+        """
+        Obtiene el valor de una clave de configuración del sistema.
+        Lanza 404 si la clave no existe en la tabla configuracion_sistema.
+        """
+        resultado = supabase.table("configuracion_sistema").select("*").eq("clave", clave).execute()
+        if not resultado.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Clave de configuración '{clave}' no encontrada."
+            )
+        return resultado.data[0]
+
+    @staticmethod
+    def guardar_configuracion(datos: ConfiguracionSistemaCrear) -> dict:
+        """
+        Crea o actualiza (UPSERT) una clave de configuración del sistema.
+        Si la clave ya existe, actualiza su valor; si no, la crea.
+        """
+        payload = {"clave": datos.clave, "valor": datos.valor}
+        resultado = supabase.table("configuracion_sistema").upsert(
+            payload,
+            on_conflict="clave"
+        ).execute()
+        if not resultado.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No se pudo guardar la configuración del sistema."
+            )
+        return resultado.data[0]
