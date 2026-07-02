@@ -7,8 +7,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
+import clienteApi from '../services/api';
 import { Lock, Mail, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 import authService from '../services/authService';
+
+/** Resuelve la URL completa del logotipo almacenado en el servidor backend. */
+const obtenerUrlImagenCompleta = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const baseURL = clienteApi.defaults.baseURL || 'http://localhost:8000';
+  return `${baseURL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -17,6 +26,7 @@ export const Login = () => {
   const [cargando, setCargando] = useState(false);
 
   const iniciarSesionStore = useAuthStore(state => state.iniciarSesion);
+  const logoUrl = useAuthStore(state => state.logoUrl);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -95,18 +105,32 @@ export const Login = () => {
         <div style={{ padding: '36px 36px 40px' }}>
           {/* Cabecera / Logotipo */}
           <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-            <div style={{
-              width: '60px', height: '60px',
-              background: 'linear-gradient(135deg, #6d28d9, #4338ca)',
-              borderRadius: '16px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 16px',
-              boxShadow: '0 8px 24px rgba(109,40,217,.4)',
-            }}>
-              <span style={{ color: 'white', fontSize: '24px', fontFamily: 'Outfit, sans-serif', fontWeight: 800 }}>
-                M
-              </span>
-            </div>
+            {logoUrl ? (
+              <img
+                src={obtenerUrlImagenCompleta(logoUrl)}
+                alt="Logotipo Tienda Margarita"
+                style={{
+                  width: '80px',
+                  height: '80px',
+                  objectFit: 'contain',
+                  margin: '0 auto 16px',
+                  display: 'block',
+                }}
+              />
+            ) : (
+              <div style={{
+                width: '60px', height: '60px',
+                background: 'linear-gradient(135deg, #6d28d9, #4338ca)',
+                borderRadius: '16px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 16px',
+                boxShadow: '0 8px 24px rgba(109,40,217,.4)',
+              }}>
+                <span style={{ color: 'white', fontSize: '24px', fontFamily: 'Outfit, sans-serif', fontWeight: 800 }}>
+                  M
+                </span>
+              </div>
+            )}
             <h1 style={{
               fontFamily: 'Outfit, sans-serif',
               fontSize: '1.5rem',

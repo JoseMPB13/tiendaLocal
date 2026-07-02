@@ -1,6 +1,10 @@
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+# Zona horaria oficial de Bolivia para marcas temporales de reparto y GPS
+ZONA_HORARIA_BOLIVIA = ZoneInfo("America/La_Paz")
 from fastapi import HTTPException, status
 from app.database import supabase
 from app.schemas.modelos import (
@@ -285,7 +289,7 @@ class DeliveryService:
                     
                     # Asignar forzosamente a sí mismo
                     datos_up["repartidor_id"] = str(repartidor_autenticado_id)
-                    datos_up["fecha_despacho"] = datetime.utcnow().isoformat()
+                    datos_up["fecha_despacho"] = datetime.now(ZONA_HORARIA_BOLIVIA).isoformat()
                     
                     # Ejecutar actualización atómica filtrando por repartidor_id IS NULL y estado_envio = 'Pendiente'
                     resultado = supabase.table("envios")\
@@ -327,7 +331,7 @@ class DeliveryService:
                             )
                     
                     if nuevo_estado == "Entregado":
-                        datos_up["fecha_entrega"] = datetime.utcnow().isoformat()
+                        datos_up["fecha_entrega"] = datetime.now(ZONA_HORARIA_BOLIVIA).isoformat()
 
                     resultado = supabase.table("envios").update(datos_up).eq("id", str(envio_id)).execute()
                     if not resultado.data:
@@ -353,9 +357,9 @@ class DeliveryService:
                 # Ajuste de fechas automáticas para el delivery
                 if "estado_envio" in datos_up:
                     if datos_up["estado_envio"] == "En Camino":
-                        datos_up["fecha_despacho"] = datetime.utcnow().isoformat()
+                        datos_up["fecha_despacho"] = datetime.now(ZONA_HORARIA_BOLIVIA).isoformat()
                     elif datos_up["estado_envio"] == "Entregado":
-                        datos_up["fecha_entrega"] = datetime.utcnow().isoformat()
+                        datos_up["fecha_entrega"] = datetime.now(ZONA_HORARIA_BOLIVIA).isoformat()
 
                 if "repartidor_id" in datos_up and datos_up["repartidor_id"]:
                     DeliveryService.obtener_repartidor_por_id(UUID(str(datos_up["repartidor_id"])))
@@ -492,7 +496,7 @@ class DeliveryService:
         datos_gps = {
             "latitud_actual": ubicacion.latitud,
             "longitud_actual": ubicacion.longitud,
-            "ultima_actualizacion_gps": datetime.now(timezone.utc).isoformat()
+            "ultima_actualizacion_gps": datetime.now(ZONA_HORARIA_BOLIVIA).isoformat()
         }
         resultado = supabase.table("repartidores").update(datos_gps).eq("id", str(repartidor_id)).execute()
         if not resultado.data:
@@ -522,6 +526,26 @@ class DeliveryService:
     # -------------------------------------------------------------------------
     # OPERACIONES DE CONFIGURACIÓN DEL SISTEMA
     # -------------------------------------------------------------------------
+
+    # Claves de configuración expuestas sin autenticación JWT (lista blanca)
+    CLAVES_CONFIGURACION_PUBLICAS = frozenset({"logo_url", "kiosco_nombre"})
+
+    @staticmethod
+    def obtener_configuracion_publica(clave: str) -> dict:
+        """
+        Obtiene el valor de una clave pública de configuración del sistema.
+        Si la clave no existe aún en la BD, retorna valor None sin lanzar 404
+        para no interrumpir el flujo del cliente (login, sidebar, etc.).
+        """
+        if clave not in DeliveryService.CLAVES_CONFIGURACION_PUBLICAS:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"La clave '{clave}' no está autorizada para consulta pública."
+            )
+        resultado = supabase.table("configuracion_sistema").select("*").eq("clave", clave).execute()
+        if not resultado.data:
+            return {"clave": clave, "valor": None}
+        return resultado.data[0]
 
     @staticmethod
     def obtener_configuracion(clave: str) -> dict:

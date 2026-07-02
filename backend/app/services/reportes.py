@@ -9,6 +9,7 @@
 import io
 from typing import List, Optional
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 from uuid import UUID
 from decimal import Decimal
 from fastapi import HTTPException, status
@@ -22,6 +23,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
 from reportlab.graphics.shapes import Drawing, Rect, String
+
+# Zona horaria oficial de Bolivia para marcas temporales en reportes PDF
+ZONA_HORARIA_BOLIVIA = ZoneInfo("America/La_Paz")
 
 
 class NumberedCanvas(canvas.Canvas):
@@ -209,7 +213,7 @@ class ReporteService:
 
         # Encabezado
         story.append(Paragraph("CIERRE DE CAJA DIARIO", style_titulo))
-        story.append(Paragraph(f"Fecha del Reporte: {fecha_cierre.strftime('%d/%m/%Y')} | Generado: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", style_subtitulo))
+        story.append(Paragraph(f"Fecha del Reporte: {fecha_cierre.strftime('%d/%m/%Y')} | Generado: {datetime.now(ZONA_HORARIA_BOLIVIA).strftime('%d/%m/%Y %H:%M:%S')}", style_subtitulo))
 
         # Sección 1: Resumen de Ventas por Método de Pago
         story.append(Paragraph("1. Resumen de Ingresos por Tipo de Pago", style_seccion))

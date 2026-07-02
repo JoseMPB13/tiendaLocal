@@ -104,6 +104,28 @@ export const deliveryService = {
     });
     return respuesta.data;
   },
+
+  /**
+   * Consulta pública de una clave de configuración (sin JWT).
+   * Claves permitidas: logo_url, kiosco_nombre.
+   */
+  obtenerConfiguracionPublica: async (clave) => {
+    const respuesta = await clienteApi.get(`/delivery/configuracion/publica/${clave}`);
+    return respuesta.data;
+  },
+
+  /**
+   * Sube el logotipo de la tienda en formato PNG (solo Administrador).
+   * @param {File} archivo - Archivo PNG seleccionado por el usuario.
+   */
+  subirLogo: async (archivo) => {
+    const formData = new FormData();
+    formData.append('file', archivo);
+    const respuesta = await clienteApi.post('/delivery/configuracion/upload-logo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return respuesta.data;
+  },
 };
 
 export default deliveryService;

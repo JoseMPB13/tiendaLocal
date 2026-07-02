@@ -1,4 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import clienteApi from './services/api';
+import useAuthStore from './store/authStore';
 import RutaProtegida from './components/RutaProtegida';
 import LayoutEscritorio from './components/LayoutEscritorio';
 import LayoutDelivery from './components/LayoutDelivery';
@@ -17,6 +20,24 @@ import DeliveryHistorial from './views/DeliveryHistorial';
 
 
 export const RutasApp = () => {
+  const setLogoUrl = useAuthStore((state) => state.setLogoUrl);
+
+  // Cargar logotipo público de la tienda al iniciar la aplicación (sin JWT)
+  useEffect(() => {
+    const cargarLogoPublico = async () => {
+      try {
+        const respuesta = await clienteApi.get('/delivery/configuracion/publica/logo_url');
+        if (respuesta.data?.ok) {
+          const valor = respuesta.data.data?.valor;
+          setLogoUrl(valor || null);
+        }
+      } catch (err) {
+        console.warn('No se pudo cargar el logotipo público de la tienda:', err);
+      }
+    };
+    cargarLogoPublico();
+  }, [setLogoUrl]);
+
   return (
     <BrowserRouter>
       <Routes>

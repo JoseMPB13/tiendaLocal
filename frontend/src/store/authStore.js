@@ -48,6 +48,12 @@ export const useAuthStore = create((set, get) => ({
   token: tokenValido ? tokenInicial : null,
   rol: tokenValido ? localStorage.getItem('tienda_rol') : null,
   autenticado: tokenValido,
+  logoUrl: null,
+
+  /**
+   * Actualiza la URL del logotipo de la tienda en el store global.
+   */
+  setLogoUrl: (url) => set({ logoUrl: url }),
 
   /**
    * Registra la sesión activa en el store y localStorage.

@@ -22,7 +22,9 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 2. **Layout Móvil (Tab Bar inferior fijo):** Diseñado y adaptado para dispositivos celulares táctiles. Optimizado para el rol `Repartidor` para consulta rápida de rutas activas y marcas de entrega bajo luz del día en exteriores.
 
 ## 4. Estado Global de Sesión (`authStore.js`)
-- Gestiona las propiedades de sesión: `usuario`, `token`, `rol` y `autenticado`.
+- Gestiona las propiedades de sesión: `usuario`, `token`, `rol`, `autenticado` y `logoUrl`.
+- Expone la acción `setLogoUrl(url)` para sincronizar el logotipo de la tienda en Login, sidebar y panel de Configuración.
+- El logotipo se precarga al montar `routes.jsx` mediante `GET /delivery/configuracion/publica/logo_url` (endpoint público, sin JWT).
 - Registra el rol del operador activo para inyectar dinámicamente la cabecera `X-User-Rol` en todas las peticiones salientes al backend de FastAPI.
 - Persiste los datos de sesión de manera local mediante `localStorage` de forma transparente.
 

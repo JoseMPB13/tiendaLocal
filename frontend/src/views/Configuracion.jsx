@@ -5,17 +5,31 @@
 //              con mapa interactivo y captura de GPS del dispositivo actual.
 //            - Sección 2: Imagen QR de cobro (se almacena como URL en Supabase
 //              Storage o como base64 en configuracion_sistema).
+//            - Sección 3: Logotipo de la tienda (PNG subido al servidor).
 // Acceso: Solo Administrador
 // Idioma: Español
 // =============================================================================
 
 import { useState, useEffect, useRef } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import { MapPin, QrCode, Save, LocateFixed, Upload, X, CheckCircle, Settings } from 'lucide-react';
+import { MapPin, QrCode, Save, LocateFixed, Upload, X, CheckCircle, Settings, Image } from 'lucide-react';
 import MapaInteractivo from '../components/MapaInteractivo';
 import deliveryService from '../services/deliveryService';
+import clienteApi from '../services/api';
+import useAuthStore from '../store/authStore';
+
+/** Resuelve la URL completa de una imagen almacenada en el servidor backend. */
+const obtenerUrlImagenCompleta = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const baseURL = clienteApi.defaults.baseURL || 'http://localhost:8000';
+  return `${baseURL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 const Configuracion = () => {
+  const setLogoUrl = useAuthStore((state) => state.setLogoUrl);
+  const logoUrlGlobal = useAuthStore((state) => state.logoUrl);
+
   // ──────────────────────────────────────────────────────────────────────────
   // ESTADO: Ubicación del Kiosco
   // ──────────────────────────────────────────────────────────────────────────
@@ -34,6 +48,14 @@ const Configuracion = () => {
   const [qrNuevoBase64, setQrNuevoBase64] = useState(null); // base64 del archivo nuevo
   const [guardandoQr, setGuardandoQr] = useState(false);
   const inputArchivoRef = useRef(null);
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // ESTADO: Logotipo de la tienda (PNG)
+  // ──────────────────────────────────────────────────────────────────────────
+  const [logoPreview, setLogoPreview] = useState(null);
+  const [archivoLogo, setArchivoLogo] = useState(null);
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
+  const inputLogoRef = useRef(null);
 
   // ──────────────────────────────────────────────────────────────────────────
   // CARGA INICIAL: Leer la configuración actual desde la BD
@@ -61,6 +83,11 @@ const Configuracion = () => {
         if (resQr.status === 'fulfilled' && resQr.value.ok) {
           setQrImagen(resQr.value.data.valor);
         }
+
+        const resLogo = await deliveryService.obtenerConfiguracionPublica('logo_url');
+        if (resLogo?.ok && resLogo.data?.valor) {
+          setLogoUrl(resLogo.data.valor);
+        }
       } catch (err) {
         console.error('Error al cargar configuración:', err);
         toast.error('No se pudo cargar la configuración actual.');
@@ -69,7 +96,7 @@ const Configuracion = () => {
       }
     };
     cargarConfiguracion();
-  }, []);
+  }, [setLogoUrl]);
 
   // ──────────────────────────────────────────────────────────────────────────
   // HANDLER: Capturar ubicación GPS actual del dispositivo para el kiosco
@@ -191,6 +218,76 @@ const Configuracion = () => {
       toast.error('No se pudo eliminar el QR.');
     }
   };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // HANDLER: Selección de archivo de logotipo (solo PNG)
+  // ──────────────────────────────────────────────────────────────────────────
+  const handleSeleccionarLogo = (e) => {
+    const archivo = e.target.files[0];
+    if (!archivo) return;
+
+    if (archivo.type !== 'image/png' || !archivo.name.toLowerCase().endsWith('.png')) {
+      toast.error('Solo se permiten archivos PNG (image/png).');
+      if (inputLogoRef.current) inputLogoRef.current.value = '';
+      return;
+    }
+
+    if (archivo.size > 2 * 1024 * 1024) {
+      toast.error('El logotipo no puede superar los 2 MB.');
+      if (inputLogoRef.current) inputLogoRef.current.value = '';
+      return;
+    }
+
+    setArchivoLogo(archivo);
+    setLogoPreview(URL.createObjectURL(archivo));
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // HANDLER: Subir logotipo PNG al servidor
+  // ──────────────────────────────────────────────────────────────────────────
+  const subirLogo = async () => {
+    if (!archivoLogo) {
+      toast.error('Primero seleccioná un archivo PNG.');
+      return;
+    }
+    setSubiendoLogo(true);
+    try {
+      const respuesta = await deliveryService.subirLogo(archivoLogo);
+      if (respuesta?.ok && respuesta.logo_url) {
+        setLogoUrl(respuesta.logo_url);
+        setLogoPreview(null);
+        setArchivoLogo(null);
+        if (inputLogoRef.current) inputLogoRef.current.value = '';
+        toast.success('✅ Logotipo subido correctamente.');
+      }
+    } catch (err) {
+      console.error('Error al subir logotipo:', err);
+      const detalle = err.response?.data?.detail || 'No se pudo subir el logotipo.';
+      toast.error(detalle);
+    } finally {
+      setSubiendoLogo(false);
+    }
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // HANDLER: Eliminar logotipo del sistema
+  // ──────────────────────────────────────────────────────────────────────────
+  const eliminarLogo = async () => {
+    if (!window.confirm('¿Confirmar eliminación del logotipo de la tienda?')) return;
+    try {
+      await deliveryService.guardarConfiguracion('logo_url', '');
+      setLogoUrl(null);
+      setLogoPreview(null);
+      setArchivoLogo(null);
+      if (inputLogoRef.current) inputLogoRef.current.value = '';
+      toast.success('Logotipo eliminado.');
+    } catch (err) {
+      toast.error('No se pudo eliminar el logotipo.');
+    }
+  };
+
+  const logoActivo = logoUrlGlobal;
+  const logoMostrar = logoPreview || (logoActivo ? obtenerUrlImagenCompleta(logoActivo) : null);
 
   // ──────────────────────────────────────────────────────────────────────────
   // RENDER
@@ -426,6 +523,110 @@ const Configuracion = () => {
                 className="flex items-center gap-1.5 py-2 px-4 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl font-bold text-xs transition-all cursor-pointer"
               >
                 <X size={13} /> Eliminar QR actual
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          SECCIÓN 3: LOGOTIPO DE LA TIENDA (PNG)
+          ══════════════════════════════════════════════════════════════════════ */}
+      <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+          <div className="bg-violet-50 rounded-lg p-2">
+            <Image size={18} className="text-violet-600" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-slate-800">Logotipo de la Tienda (PNG)</h2>
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+              Se muestra en la pantalla de inicio de sesión y en la barra lateral del sistema.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {logoMostrar ? (
+            <div className="flex flex-col items-center gap-3">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider self-start">
+                {logoPreview ? 'Vista previa (sin guardar)' : 'Logotipo actual activo'}
+              </p>
+              <div className="relative">
+                <img
+                  src={logoMostrar}
+                  alt="Logotipo de la tienda"
+                  className="w-40 h-40 object-contain rounded-xl border-2 border-dashed border-violet-300 bg-white p-3 shadow-sm"
+                />
+                {logoPreview && (
+                  <div className="absolute -top-2 -right-2 bg-amber-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow">
+                    Sin guardar
+                  </div>
+                )}
+                {logoActivo && !logoPreview && (
+                  <div className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow flex items-center gap-1">
+                    <CheckCircle size={10} /> Activo
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-3 py-8 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
+              <div className="w-16 h-16 bg-gradient-to-br from-violet-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-md">
+                <span className="text-white text-2xl font-extrabold">M</span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium text-center">
+                No hay logotipo configurado.<br />
+                Subí un archivo PNG para personalizar la marca.
+              </p>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              Seleccionar logotipo <span className="font-normal text-slate-400">(solo PNG — máx. 2 MB)</span>
+            </label>
+            <input
+              ref={inputLogoRef}
+              type="file"
+              accept="image/png,.png"
+              onChange={handleSeleccionarLogo}
+              className="block w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:font-bold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 cursor-pointer border border-slate-200 rounded-xl py-1.5"
+            />
+          </div>
+
+          <div className="flex gap-3 flex-wrap">
+            {archivoLogo && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLogoPreview(null);
+                    setArchivoLogo(null);
+                    if (inputLogoRef.current) inputLogoRef.current.value = '';
+                  }}
+                  className="flex items-center gap-1.5 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm transition-all cursor-pointer"
+                >
+                  <X size={14} /> Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={subirLogo}
+                  disabled={subiendoLogo}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-sm transition-all disabled:opacity-60 cursor-pointer shadow-sm"
+                >
+                  <Upload size={16} />
+                  {subiendoLogo ? 'Subiendo...' : 'Subir Logotipo'}
+                </button>
+              </>
+            )}
+
+            {logoActivo && !archivoLogo && (
+              <button
+                type="button"
+                onClick={eliminarLogo}
+                className="flex items-center gap-1.5 py-2 px-4 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl font-bold text-xs transition-all cursor-pointer"
+              >
+                <X size={13} /> Eliminar logotipo
               </button>
             )}
           </div>

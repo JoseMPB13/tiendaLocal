@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, UploadFile, File, HTTPException
 from typing import List
 from uuid import UUID
+import os
+import shutil
+import uuid as py_uuid
 from pydantic import BaseModel
 from app.schemas.modelos import (
     RepartidorCrear, RepartidorActualizar, RepartidorRespuesta,
@@ -293,3 +296,58 @@ async def guardar_configuracion(
     """
     resultado = DeliveryService.guardar_configuracion(datos)
     return {"ok": True, "data": resultado}
+
+
+@router.get("/configuracion/publica/{clave}", response_model=dict)
+async def obtener_configuracion_publica(clave: str):
+    """
+    Consulta pública (sin JWT) de claves de configuración en lista blanca.
+    Claves permitidas: logo_url, kiosco_nombre.
+    Si la clave no está registrada, retorna valor None sin error 404.
+    """
+    resultado = DeliveryService.obtener_configuracion_publica(clave)
+    return {"ok": True, "data": resultado}
+
+
+@router.post("/configuracion/upload-logo", response_model=dict)
+@router.post("/configuracion/upload-logo/", response_model=dict, include_in_schema=False)
+async def subir_logo_tienda(
+    file: UploadFile = File(...),
+    usuario_actual: dict = Depends(verificar_roles(["Administrador"]))
+):
+    """
+    Sube el logotipo de la tienda en formato PNG y persiste la ruta en configuracion_sistema.
+    Solo accesible por el rol Administrador.
+    """
+    extension = os.path.splitext(file.filename or "")[1].lower()
+    if extension != ".png" or file.content_type != "image/png":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tipo de archivo no permitido. Solo se aceptan imágenes PNG (image/png)."
+        )
+
+    nombre_archivo = f"logo_{py_uuid.uuid4()}.png"
+
+    router_dir = os.path.dirname(os.path.abspath(__file__))
+    app_dir = os.path.dirname(router_dir)
+    backend_dir = os.path.dirname(app_dir)
+    uploads_dir = os.path.join(backend_dir, "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+
+    ruta_destino = os.path.join(uploads_dir, nombre_archivo)
+
+    try:
+        with open(ruta_destino, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as ex:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error inesperado al guardar el logotipo en el servidor: {str(ex)}"
+        )
+
+    logo_url = f"/uploads/{nombre_archivo}"
+    DeliveryService.guardar_configuracion(
+        ConfiguracionSistemaCrear(clave="logo_url", valor=logo_url)
+    )
+
+    return {"ok": True, "logo_url": logo_url}

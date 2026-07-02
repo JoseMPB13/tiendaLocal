@@ -7,15 +7,24 @@
 import { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
+import clienteApi from '../services/api';
 import {
   LayoutDashboard, Package, Users, Tag,
   ShoppingCart, Truck, LogOut, ChevronLeft, Database,
   UserCog, ChevronRight, Settings,
 } from 'lucide-react';
 
+/** Resuelve la URL completa del logotipo almacenado en el servidor backend. */
+const obtenerUrlImagenCompleta = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const baseURL = clienteApi.defaults.baseURL || 'http://localhost:8000';
+  return `${baseURL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
 export const LayoutEscritorio = () => {
   const [colapsado, setColapsado] = useState(false);
-  const { usuario, cerrarSesion } = useAuthStore();
+  const { usuario, cerrarSesion, logoUrl } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -87,15 +96,30 @@ export const LayoutEscritorio = () => {
           }}>
             {!colapsado && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
-                <div style={{
-                  width: '30px', height: '30px', flexShrink: 0,
-                  background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-                  borderRadius: '8px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(109,40,217,.5)',
-                }}>
-                  <span style={{ color: 'white', fontFamily: 'Outfit', fontWeight: 900, fontSize: '14px' }}>M</span>
-                </div>
+                {logoUrl ? (
+                  <img
+                    src={obtenerUrlImagenCompleta(logoUrl)}
+                    alt="Logotipo"
+                    style={{
+                      width: '30px',
+                      height: '30px',
+                      flexShrink: 0,
+                      objectFit: 'contain',
+                      background: 'transparent',
+                      borderRadius: '6px',
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    width: '30px', height: '30px', flexShrink: 0,
+                    background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                    borderRadius: '8px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 4px 12px rgba(109,40,217,.5)',
+                  }}>
+                    <span style={{ color: 'white', fontFamily: 'Outfit', fontWeight: 900, fontSize: '14px' }}>M</span>
+                  </div>
+                )}
                 <span style={{
                   fontFamily: 'Outfit, sans-serif',
                   fontWeight: 800,

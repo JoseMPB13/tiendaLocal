@@ -733,10 +733,43 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
   }
   ```
 
+### Consultar Configuración Pública (Sin JWT)
+* **Ruta:** `GET /delivery/configuracion/publica/{clave}`
+* **Permisos:** Público (no requiere autenticación)
+* **Claves permitidas (lista blanca):** `logo_url`, `kiosco_nombre`
+* **Descripción:** Permite al frontend cargar datos de marca antes del login. Si la clave no existe en la BD, retorna `valor: null` sin error 404.
+* **Respuesta (200 OK — clave inexistente):**
+  ```json
+  {
+    "ok": true,
+    "data": {
+      "clave": "logo_url",
+      "valor": null
+    }
+  }
+  ```
+
+### Subir Logotipo de la Tienda (PNG)
+* **Ruta:** `POST /delivery/configuracion/upload-logo`
+* **Permisos:** Solo `Administrador`
+* **Cuerpo:** `multipart/form-data` con campo `file` (solo PNG, MIME `image/png`)
+* **Respuesta (200 OK):**
+  ```json
+  {
+    "ok": true,
+    "logo_url": "/uploads/logo_a1b2c3d4-e5f6-7890-abcd-ef1234567890.png"
+  }
+  ```
+* **Respuesta (400 Bad Request):** Si el archivo no es PNG o el MIME no es `image/png`.
+
+### Guardar Configuración del Sistema (UPSERT)
+* **Ruta:** `PUT /delivery/configuracion`
+* **Permisos:** Solo `Administrador`
+* **Descripción:** Crea o actualiza claves en `configuracion_sistema` (ej. `logo_url`, `kiosco_latitud`, `qr_pago_imagen`).
 
 ---
 
-## 8. Módulo de Reportes & Cierre de Caja
+
 
 ### Obtener Métricas de Dashboard
 * **Ruta:** `GET /reportes/dashboard`

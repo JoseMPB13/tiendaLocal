@@ -3,12 +3,16 @@ from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from uuid import UUID
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from app.schemas.modelos import DashboardMetricas, MovimientoKardex
 from app.services.reportes import ReporteService
 from app.services.dependencias import verificar_roles
 from postgrest.exceptions import APIError
 
 router = APIRouter(prefix="/reportes", tags=["Reportes"])
+
+# Zona horaria oficial de Bolivia para nombres de archivo de reportes PDF
+ZONA_HORARIA_BOLIVIA = ZoneInfo("America/La_Paz")
 
 @router.get("/dashboard", response_model=dict)
 @router.get("/dashboard/", include_in_schema=False)
@@ -80,7 +84,7 @@ async def descargar_pdf_ventas(
     """
     try:
         pdf_buffer = ReporteService.generar_pdf_ventas(fecha_inicio, fecha_fin)
-        nombre = f"reporte_ventas_{datetime.now().strftime('%Y%m%d')}.pdf"
+        nombre = f"reporte_ventas_{datetime.now(ZONA_HORARIA_BOLIVIA).strftime('%Y%m%d')}.pdf"
         return StreamingResponse(
             pdf_buffer,
             media_type="application/pdf",
@@ -107,7 +111,7 @@ async def descargar_pdf_productos(
     """
     try:
         pdf_buffer = ReporteService.generar_pdf_productos()
-        nombre = f"reporte_inventario_{datetime.now().strftime('%Y%m%d')}.pdf"
+        nombre = f"reporte_inventario_{datetime.now(ZONA_HORARIA_BOLIVIA).strftime('%Y%m%d')}.pdf"
         return StreamingResponse(
             pdf_buffer,
             media_type="application/pdf",
@@ -134,7 +138,7 @@ async def descargar_pdf_categorias(
     """
     try:
         pdf_buffer = ReporteService.generar_pdf_categorias()
-        nombre = f"reporte_categorias_{datetime.now().strftime('%Y%m%d')}.pdf"
+        nombre = f"reporte_categorias_{datetime.now(ZONA_HORARIA_BOLIVIA).strftime('%Y%m%d')}.pdf"
         return StreamingResponse(
             pdf_buffer,
             media_type="application/pdf",
@@ -161,7 +165,7 @@ async def descargar_pdf_clientes(
     """
     try:
         pdf_buffer = ReporteService.generar_pdf_clientes()
-        nombre = f"reporte_clientes_{datetime.now().strftime('%Y%m%d')}.pdf"
+        nombre = f"reporte_clientes_{datetime.now(ZONA_HORARIA_BOLIVIA).strftime('%Y%m%d')}.pdf"
         return StreamingResponse(
             pdf_buffer,
             media_type="application/pdf",
@@ -190,7 +194,7 @@ async def descargar_pdf_envios(
     """
     try:
         pdf_buffer = ReporteService.generar_pdf_envios(fecha_inicio, fecha_fin)
-        nombre = f"reporte_envios_{datetime.now().strftime('%Y%m%d')}.pdf"
+        nombre = f"reporte_envios_{datetime.now(ZONA_HORARIA_BOLIVIA).strftime('%Y%m%d')}.pdf"
         return StreamingResponse(
             pdf_buffer,
             media_type="application/pdf",
