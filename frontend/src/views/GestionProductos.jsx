@@ -342,10 +342,10 @@ export const GestionProductos = () => {
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <button
               onClick={handleDescargarReporteProductos}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white bg-gradient-to-r from-indigo-950 to-indigo-900 border border-indigo-950/20 shadow-md hover:shadow-lg transition duration-150 cursor-pointer w-full sm:w-auto"
+              className="btn-primary"
             >
               <FileText size={15} />
-              Generar Reporte PDF
+              Reporte Inventario PDF
             </button>
             <button onClick={abrirCrear} className="btn-primary">
               <Plus size={15} />

@@ -1348,10 +1348,10 @@ export const PuntoVenta = () => {
               </h3>
               <button
                 onClick={handleDescargarReporteVentas}
-                className="flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl text-white bg-gradient-to-r from-indigo-950 to-indigo-900 shadow-md hover:shadow-lg transition duration-150 cursor-pointer w-full sm:w-auto self-start"
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition duration-150 flex items-center gap-1.5 shadow-md cursor-pointer w-full sm:w-auto self-start"
               >
                 <FileText size={14} />
-                Generar Reporte PDF
+                Reporte Ventas PDF
               </button>
             </div>
             

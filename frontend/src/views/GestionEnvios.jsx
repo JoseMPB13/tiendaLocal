@@ -519,16 +519,16 @@ export const GestionEnvios = () => {
         <div className="flex items-center gap-2.5 w-full sm:w-auto">
           <button
             onClick={handleDescargarReporteEnvios}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white bg-gradient-to-r from-indigo-950 to-indigo-900 border border-indigo-950/20 shadow-md hover:shadow-lg transition duration-150 cursor-pointer w-full sm:w-auto"
+            className="btn-primary"
           >
             <FileText size={15} />
-            Generar Reporte PDF
+            Reporte Envíos PDF
           </button>
           <button
             onClick={abrirNuevoDespacho}
-            className="flex items-center justify-center py-2 px-4 bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm shrink-0 select-none cursor-pointer w-full sm:w-auto self-stretch sm:self-auto"
+            className="btn-primary"
           >
-            <Plus size={14} className="mr-1" />
+            <Plus size={15} />
             Nuevo Despacho
           </button>
         </div>
