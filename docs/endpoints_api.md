@@ -802,7 +802,7 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
   - `producto_id` (UUID, Opcional)
   - `fecha_inicio` (Fecha YYYY-MM-DD, Opcional)
   - `fecha_fin` (Fecha YYYY-MM-DD, Opcional)
-  - `tipo_movimiento` (String: Venta, Compra, Ajuste, Opcional)
+  - `tipo_movimiento` (String: `Venta`, `Ajuste`, `Cancelacion Venta`, Opcional)
 * **Permisos:** Solo `Administrador`
 * **Respuesta (200 OK):**
   ```json
@@ -824,16 +824,61 @@ Este documento define el catálogo de endpoints expuestos por el Backend (FastAP
 
 ### Descargar Cierre de Caja Diario (PDF)
 * **Ruta:** `GET /reportes/cierre-pdf`
-* **Parámetros de Consulta (Query):**
-  - `fecha` (Fecha YYYY-MM-DD, Obligatorio)
+* **Parámetros:** `fecha` (YYYY-MM-DD, obligatorio) o rango según implementación activa
 * **Permisos:** Solo `Administrador`
-* **Respuesta (200 OK):**
-  - Retorna un flujo binario directo de tipo `application/pdf` con la cabecera `Content-Disposition: attachment; filename=cierre_caja_YYYY-MM-DD.pdf` para descarga automática.
+* **Respuesta:** `application/pdf` con `Content-Disposition: attachment`
 
+### Reportes PDF por sección (streaming backend)
+Generados con **ReportLab** en el servidor. Todos requieren JWT y rol `Administrador`. Aceptan filtros de fecha en hora Bolivia (`fecha_inicio`, `fecha_fin`).
+
+| Ruta | Contenido |
+|------|-----------|
+| `GET /reportes/pdf/ventas` | Listado de ventas del período |
+| `GET /reportes/pdf/productos` | Catálogo y stock |
+| `GET /reportes/pdf/categorias` | Métricas por categoría |
+| `GET /reportes/pdf/clientes` | Cartera y saldos deudores |
+| `GET /reportes/pdf/envios` | Estado logístico de delivery |
+
+**Respuesta:** binario `application/pdf` listo para descarga o visualización en navegador.
 
 ---
 
-## 9. Módulo de Compras (Reabastecimiento) [DESMANTELADO EN ROUTER / SERVICIO ACTIVO]
+## 8b. Módulo de Bitácora
+
+| Ruta | Descripción | Permisos |
+|------|-------------|----------|
+| `GET /bitacora/productos?periodo=dia\|semana\|mes` | Movimientos de inventario agrupados (RPC Bolivia) | Administrador |
+| `GET /bitacora/usuarios` | Auditoría de acciones con filtros (`fecha_inicio`, `fecha_fin`, `tabla_afectada`, `operacion`, `accion`) | Administrador |
+
+La auditoría de acciones se registra en `bitacora_usuarios` vía FastAPI tras cada mutación crítica (productos, ventas, clientes, envíos).
+
+---
+
+## 9. Módulo Delivery — Geolocalización y Configuración
+
+### Actualizar posición GPS del repartidor autenticado
+* **Ruta:** `PUT /delivery/mi-ubicacion`
+* **Permisos:** `Repartidor`
+* **Cuerpo:** `{ "latitud": number, "longitud": number }`
+* **Efecto:** Actualiza `repartidores.latitud_actual`, `longitud_actual`, `ultima_actualizacion_gps`
+
+### Consultar ubicación de un repartidor
+* **Ruta:** `GET /delivery/repartidores/{repartidor_id}/ubicacion`
+* **Permisos:** `Administrador`, `Cajero`
+
+### Configuración del kiosco (clave-valor)
+| Ruta | Descripción | Permisos |
+|------|-------------|----------|
+| `GET /delivery/configuracion/{clave}` | Lee `configuracion_sistema` | Autenticado |
+| `PUT /delivery/configuracion` | Guarda pares clave-valor | Administrador |
+| `GET /delivery/configuracion/publica/{clave}` | `logo_url`, `kiosco_nombre` sin JWT | Público |
+| `POST /delivery/configuracion/upload-logo` | Sube PNG del logotipo | Administrador |
+
+Claves habituales: `kiosco_latitud`, `kiosco_longitud`, `kiosco_nombre`, `qr_pago_imagen`, `logo_url`.
+
+---
+
+## 10. Módulo de Compras [DESMANTELADO]
 
 > [!NOTE]
 > Aunque los endpoints del controlador `/compras` se encuentran deshabilitados en el router de producción retornando de forma predeterminada `HTTP 410 Gone`, el servicio de negocio `compras.py` e integración transaccional con Supabase/PostgreSQL han sido optimizados y se documentan para propósitos de consistencia técnica del core.

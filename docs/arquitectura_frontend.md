@@ -3,8 +3,10 @@
 Este documento describe la arquitectura, diseño visual y organización de la interfaz de usuario para el proyecto **TiendaLocal**.
 
 ## 1. Stack Tecnológico
-- **Core:** **React (v18+)** con empaquetador **Vite** para desarrollo ultra veloz.
+- **Core:** **React 19** con empaquetador **Vite** para desarrollo ultra veloz.
 - **Estilos:** **Tailwind CSS** puro para interfaces responsivas, optimizadas y ligeras.
+- **Mapas:** **Leaflet** + **React-Leaflet** con rutas vía **OSRM**; control imperativo con `useEffect`/`useRef` (compatible React 19).
+- **Fechas:** Helpers centralizados en `utils/fechaBolivia.js` — zona `America/La_Paz` para visualización y filtros; sin depender de la hora local del dispositivo.
 - **Gestión de Estado Global:** **Zustand**, implementando almacenamiento atómico y persistencia en localStorage para sesiones activas.
 - **Enrutamiento:** **React Router Dom (v6+)** para controlar la navegación y la protección de vistas basadas en roles.
 - **Iconografía:** **Lucide React**.
@@ -14,7 +16,8 @@ La aplicación se organiza bajo una arquitectura modular limpia:
 - `/components/`: Componentes comunes reutilizables (ej. `RutaProtegida.jsx`, `LayoutEscritorio.jsx`, `LayoutDelivery.jsx`).
 - `/store/`: Manejadores de estado atómico de Zustand (ej. `authStore.js`).
 - `/routes.jsx`: Archivo centralizador de la configuración de enrutadores.
-- `/views/`: Pantallas principales de la aplicación (Login, POS, Dashboard, Productos, Clientes, Delivery).
+- `/views/`: Pantallas principales (Login, POS, Dashboard, Productos, Clientes, Delivery, **Configuracion**, **BitacoraSistema**).
+- `/utils/fechaBolivia.js`: Parseo UTC de API y formateo en hora boliviana.
 
 ## 3. Layouts Responsivos
 El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el rol de usuario:
@@ -78,14 +81,13 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **Acciones Seguras (Gesto Swipe):** Para impedir marcas de entrega o tránsito accidentales durante el trayecto, se integra el componente `DeslizadorInteractivo.jsx`, requiriendo un arrastre continuo del control deslizante hasta el 92% para consolidar la actualización de estado.
 - **Enlaces Geográficos Dinámicos:** Cuenta con redirección nativa al mapa del dispositivo móvil mediante protocolo `geo:0,0?q=` con fallback integrado a Google Maps vía web, permitiendo abrir la ruta de destino de forma fluida.
 
-## 10. Dashboard de Administración y Auditorías (`DashboardAdmin.jsx`, `BitacoraSistema.jsx`)
-- **Visualización de Estadísticas Interactivas:** Utiliza **Recharts** para graficar de forma dinámica la distribución y participación de ventas del negocio por categoría de producto mediante gráficos de barras y pastel.
-- **Bitácora del Sistema (Pestañas Duales):** Sustituye el antiguo kárdex plano por una interfaz integrada y unificada:
-  - **Pestaña 1: Movimientos de Inventario:** Permite auditar el flujo de stock de productos mediante filtros de intervalo temporal dinámicos (**Día, Semana, Mes**) con conmutadores premium. Las métricas (total transacciones, ingresos, salidas y balance neto) se calculan y actualizan de forma reactiva en base al período. Es completamente adaptativa en celulares (las filas de la tabla colapsan en tarjetas de datos compactas).
-  - **Pestaña 2: Auditoría de Usuarios:** Muestra un listado cronológico de las acciones del personal (creaciones, modificaciones, bajas lógicas, anulaciones) detallando operador, módulo afectado y justificación. En celulares se presenta como una línea de tiempo (Timeline) vertical interactiva con avatares de usuario.
-- **Descarga Directa de Reporte PDF (Fase 2):** El botón de cierre de caja utiliza ahora las bibliotecas `jspdf` y `html2canvas` para estructurar, renderizar y descargar directamente desde el cliente el reporte de cierre en formato PDF. Esto evita dependencias de impresión nativas del navegador y permite:
-  - **Títulos Dinámicos:** Si la consulta corresponde a un día único (Fecha Inicio = Fecha Fin), el reporte y el documento PDF se titulan `"REPORTE DE CIERRE DIARIO - [FECHA]"`. Si se realiza sobre un intervalo de fechas, se titula `"REPORTE DE CIERRE GENERAL - PERIODO [FECHA_INICIO] AL [FECHA_FIN]"`.
-  - **Contenido del Documento:** Consolida un reporte formal en escala de grises y diseño corporativo con métricas financieras completas (Ventas, Deudas, Reparto de Delivery y Productos vendidos), una tabla de participación de mercado por categoría de producto y bloques de firmas físicas para la validación del administrador y del auditor de caja.
+## 10. Dashboard, Reportes PDF y Bitácora (`DashboardAdmin.jsx`, `BitacoraSistema.jsx`)
+- **Dashboard:** Filtros de fecha con `obtenerFechaBoliviaHoy()` y rangos en `America/La_Paz`. Consume `GET /reportes/dashboard`.
+- **Reportes PDF por sección:** Panel de reportes con descarga directa desde el backend (`GET /reportes/pdf/ventas`, `/productos`, `/categorias`, `/clientes`, `/envios`) en streaming `application/pdf` (ReportLab).
+- **Cierre de caja:** `GET /reportes/cierre-pdf` con fecha en hora Bolivia.
+- **Bitácora dual:**
+  - *Inventario:* `GET /bitacora/productos` — períodos día/semana/mes con RPC en zona Bolivia.
+  - *Auditoría:* `GET /bitacora/usuarios` — acciones registradas por FastAPI en `bitacora_usuarios`; campos `fecha_bolivia` preformateados desde el backend; diffs JSON expandibles.
 
 
 ## 11. Gestión de Catálogos y CRUDs Administrativos (`GestionCategorias.jsx`, `GestionProductos.jsx`, `GestionClientes.jsx`, `GestionUsuarios.jsx`)
@@ -100,18 +102,8 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 - **AbortController en Peticiones Asíncronas:** El efecto de carga de inventario inicial (`useEffect`) integra la API nativa de `AbortController`. Si el componente se desmonta porque el cajero navega hacia otra sección antes de que resuelvan las promesas de la API, las llamadas Axios HTTP pendientes son canceladas de forma segura (`controller.abort()`), evitando fugas de memoria y actualizaciones de estado sobre componentes desmontados.
 - **Resiliencia ante Datos Obsoletos:** El sistema confía en la validación atómica del Backend. Si al presionar "Confirmar Venta" la API de ventas retorna una falla de stock o precio obsoleto (HTTP 400), el frontend captura el error de forma controlado en un bloque `try/catch`, muestra el detalle descriptivo con un toast y recarga inmediatamente el catálogo local para refrescar los stocks en pantalla.
 
-## 13. Integración de Reabastecimiento e Historial de Compras en Productos (`GestionProductos.jsx`)
-- **Interfaz de Pestañas Duales:** Se integró el submódulo de compras en la vista de Productos mediante pestañas conmutables ("Catálogo de Productos" e "Historial de Reabastecimientos"). Esto unifica la experiencia visual y mantiene la coherencia de estilos de la aplicación.
-- **Acceso Directo y Modal de Reabastecimiento Rápido:**
-  - El botón con el ícono `Plus` en el catálogo de productos funciona como atajo rápido para reabastecer stock de un producto específico.
-  - Abre un modal diseñado exactamente como los formularios del CRUD de productos. Permite ingresar: Nombre del Proveedor, Cantidad a ingresar, Costo de compra unitario y un Código de Referencia / Nota opcional (asociando de forma segura el `producto_id` de la fila seleccionada).
-  - *Validación Temprana de Costo:* Compara en tiempo real el costo unitario ingresado con el precio de venta del catálogo, alertando si el costo es superior para prevenir un fallo de base de datos.
-- **Historial de Compras Adaptable (Responsive):**
-  - Consume el servicio `compraService.obtenerCompras()` y despliega los reabastecimientos realizados.
-  - *Diseño de Escritorio:* Tabla tradicional que indica fecha, proveedor, código de referencia, importe total y estado ('Completada' o 'Cancelada').
-  - *Diseño Móvil:* Transforma de manera responsiva las filas de la tabla en tarjetas de datos organizadas.
-- **Modal de Detalle del Reabastecimiento:** Muestra el desglose de productos adquiridos con sus nombres enriquecidos, cantidades, costos y subtotales.
-- **Anulación Lógica de Compras:** Admite la cancelación mediante el procedimiento `cancelarCompra(id)` en la base de datos (restringido a administradores), revirtiendo el stock de productos de forma segura y controlando que no resulte en inventario negativo.
+## 13. Reabastecimiento [DESMANTELADO — usar Ajuste de Stock]
+El módulo de compras (`/compras`) está deshabilitado en el router (HTTP 410). El reabastecimiento se realiza con **Ajuste de Stock** en `GestionProductos.jsx` → `POST /productos/{id}/ajustar-stock` → RPC `fn_ajustar_stock`.
 
 ## 13b. Panel de Filtros, Alineación de Tabla y Mini-Dashboard de Inventario (`GestionProductos.jsx`)
 - **Panel de Filtros Modular (`PanelFiltroBusqueda.jsx`):** Se integró un componente modular en la parte superior del catálogo de productos que permite filtrar reactivamente la lista por nombre del producto o por su código de barras, así como por la categoría asociada. La tabla y el paginador se ajustan dinámicamente y reinician el contador a la página 1 al interactuar con el filtro.
@@ -210,7 +202,7 @@ El sistema discrimina y adapta su interfaz gráfica según el dispositivo y el r
 ## 17. Módulo de Personal e Indicadores de Rendimiento (GestionUsuarios.jsx)
 
 ### 17a. Backend & DB: Agregación Analítica (RPC)
-- **Función RPC Analítica:** Se implementó `obtener_rendimiento_personal()` en la base de datos (con script incremental en `scratch/migracion_rendimiento_personal.sql` e incorporado en `programmability.sql`). Esta función ejecuta agrupaciones con cláusulas SQL de tipo `COUNT` y `SUM` condicionadas por el estado de las transacciones para recolectar:
+- **Función RPC:** `obtener_rendimiento_personal()` en `programmability.sql` (consolidada en despliegue maestro).
   - **Para Cajeros:** Suma total facturada en dinero de ventas completadas y número de ventas procesadas desde la tabla `ventas`.
   - **Para Repartidores:** Cantidad de envíos entregados con éxito, envíos cancelados, total de envíos asignados y efectividad logístico-operativa calculada como `(entregados / total) * 100` desde la tabla `envios` con JOIN a `repartidores`.
 - **Nuevo Endpoint Analítico (`GET /usuarios/rendimiento`):** Implementado en `backend/app/routers/usuarios.py` antes de los selectores dinámicos por ID para evitar colisiones de enrutamiento en FastAPI. Consume la lógica encapsulada en `UsuarioService.obtener_rendimiento()`.

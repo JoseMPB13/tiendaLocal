@@ -14,7 +14,7 @@ import {
   Search, ArrowUpRight, ArrowDownRight, RefreshCw,
   Database, AlertTriangle, Activity, Users
 } from 'lucide-react';
-import { formatearFechaBolivia, formatearFechaHoraBolivia } from '../utils/fechaBolivia';
+import { formatearFechaBolivia, formatearFechaHoraBolivia, parsearFechaApi } from '../utils/fechaBolivia';
 
 export const BitacoraSistema = () => {
   const [activeTab, setActiveTab] = useState('inventario'); // 'inventario' o 'auditoria'
@@ -320,7 +320,8 @@ export const BitacoraSistema = () => {
   };
 
   const formatFechaPeriodo = (fechaStr, per) => {
-    const f = new Date(fechaStr);
+    const f = parsearFechaApi(fechaStr);
+    if (!f) return '';
     if (per === 'mes') {
       return new Intl.DateTimeFormat('es-BO', {
         timeZone: 'America/La_Paz',
@@ -329,10 +330,8 @@ export const BitacoraSistema = () => {
       }).format(f);
     }
     if (per === 'semana') {
-      const inicioSemana = new Date(f);
-      const finSemana = new Date(f);
-      finSemana.setDate(finSemana.getDate() + 6);
-      return `Semana del ${formatearFechaBolivia(inicioSemana)} al ${formatearFechaBolivia(finSemana)}`;
+      const finSemana = new Date(f.getTime() + 6 * 24 * 60 * 60 * 1000);
+      return `Semana del ${formatearFechaBolivia(f)} al ${formatearFechaBolivia(finSemana)}`;
     }
     return formatearFechaBolivia(f);
   };
@@ -529,7 +528,7 @@ export const BitacoraSistema = () => {
                       {movimientosPaginados.map((item, index) => (
                         <tr key={index} className="hover:bg-zinc-50/50 transition-colors">
                           <td className="py-4 px-6 font-semibold text-zinc-800 text-xs">
-                            {formatFechaPeriodo(item.periodo_fecha, periodo)}
+                            {item.periodo_fecha_bolivia || formatFechaPeriodo(item.periodo_fecha, periodo)}
                           </td>
                           <td className="py-4 px-6 font-bold text-zinc-950">
                             {item.producto_nombre}
@@ -562,7 +561,7 @@ export const BitacoraSistema = () => {
                       <div className="flex justify-between items-start">
                         <div>
                           <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                            {formatFechaPeriodo(item.periodo_fecha, periodo)}
+                            {item.periodo_fecha_bolivia || formatFechaPeriodo(item.periodo_fecha, periodo)}
                           </p>
                           <h4 className="text-base font-bold text-zinc-950 mt-0.5">{item.producto_nombre}</h4>
                         </div>
@@ -751,7 +750,7 @@ export const BitacoraSistema = () => {
                         <Fragment key={item.id}>
                           <tr className="hover:bg-zinc-50/50 transition-colors">
                             <td className="py-4 px-6 font-mono text-zinc-500 text-xs">
-                              {formatearFechaHoraBolivia(item.fecha)}
+                              {item.fecha_bolivia || formatearFechaHoraBolivia(item.fecha)}
                             </td>
                             <td className="py-4 px-6">
                               <div className="flex items-center">
@@ -855,7 +854,7 @@ export const BitacoraSistema = () => {
                         <div className="space-y-2 bg-zinc-50 p-4 rounded-2xl border border-zinc-200/50 shadow-sm">
                           <div className="flex justify-between items-start">
                             <span className="font-mono text-[10px] text-zinc-400 font-semibold">
-                              {formatearFechaHoraBolivia(item.fecha)}
+                              {item.fecha_bolivia || formatearFechaHoraBolivia(item.fecha)}
                             </span>
                             {renderBadgeAccion(item.accion)}
                           </div>

@@ -23,8 +23,18 @@ export const parsearFechaApi = (valor) => {
   if (!valor) return null;
   if (valor instanceof Date) return valor;
 
-  const texto = String(valor).trim();
+  let texto = String(valor).trim();
   if (!texto) return null;
+
+  // PostgreSQL/Supabase a veces usa espacio en lugar de "T"
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(texto)) {
+    texto = texto.replace(' ', 'T');
+  }
+
+  // Offset corto (+00) sin minutos → normalizar a +00:00
+  if (/[+-]\d{2}$/.test(texto) && !/[+-]\d{2}:\d{2}$/.test(texto)) {
+    texto = `${texto}:00`;
+  }
 
   // Ya incluye zona horaria explícita (Z o ±HH:MM)
   if (/[zZ]$/.test(texto) || /[+-]\d{2}:\d{2}$/.test(texto)) {
@@ -38,8 +48,8 @@ export const parsearFechaApi = (valor) => {
     return Number.isNaN(fecha.getTime()) ? null : fecha;
   }
 
-  // Timestamp sin zona desde PostgreSQL → interpretar como UTC
-  if (/^\d{4}-\d{2}-\d{2}T/.test(texto)) {
+  // Timestamp sin zona desde PostgreSQL/FastAPI → interpretar como UTC
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(texto)) {
     const fecha = new Date(`${texto}Z`);
     return Number.isNaN(fecha.getTime()) ? null : fecha;
   }

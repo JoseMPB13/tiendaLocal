@@ -1,135 +1,100 @@
-# Esquema de Base de Datos - TiendaLocal
+# Esquema de Base de Datos — TiendaLocal
 
-Este documento describe el diccionario de datos, la estructura de las tablas, relaciones, índices, triggers y funciones SQL del sistema.
+Documentación del diccionario de datos, relaciones, índices, políticas RLS y programabilidad SQL del sistema.
 
-## 1. Reglas Generales de la Base de Datos
-- **Bajas Lógicas:** Queda terminantemente prohibido el borrado físico (`DELETE`) en las tablas principales. Se utiliza un campo `estado` (ej. 'Activo', 'Inactivo', 'Cancelado').
-- **Cómputos e Integridad:** Los cálculos críticos como el stock disponible y los saldos deudores se ejecutan en la propia base de datos mediante triggers y procedimientos almacenados en **PL/pgSQL**.
+## 1. Despliegue desde cero
 
-# Esquema de Base de Datos - TiendaLocal
+Ejecutar en el **SQL Editor de Supabase** en este orden:
 
-Este documento describe el diccionario de datos, la estructura de las tablas, relaciones, índices, triggers y funciones SQL del sistema.
+| Orden | Archivo | Contenido |
+|------|---------|-----------|
+| 1 | `schema.sql` | Tablas core, RLS, triggers estructurales |
+| 2 | `delivery_schema.sql` | Delivery, configuración del kiosco, GPS repartidores |
+| 3 | `programmability.sql` | RPC, triggers de stock/facturación, dashboard, bitácora inventario |
+| 4 | `scratch/setup_timezone.sql` | Zona horaria `America/La_Paz` (recomendado) |
+| 5 | `scratch/seed_data.sql` | Datos de demostración (opcional) |
 
-## 1. Reglas Generales de la Base de Datos
-- **Bajas Lógicas:** Queda terminantemente prohibido el borrado físico (`DELETE`) en las tablas principales. Se utiliza un campo `estado` (ej. 'Activo', 'Inactivo', 'Cancelado').
-- **Cómputos e Integridad:** Los cálculos críticos como el stock disponible y los saldos deudores se ejecutan en la propia base de datos mediante triggers y procedimientos almacenados en **PL/pgSQL**.
+**Migración de datos históricos** (solo BDs ya existentes con fechas corruptas): `scratch/migracion_paso3_corregir_fechas_historicas.sql` — ejecutar una sola vez si aplica.
 
-## 2. Estructura de Tablas (schema.sql)
-Se definen las siguientes 10 tablas maestras y relacionales en Supabase:
-1. `categorias`: Agrupación lógica de productos.
-2. `productos`: Catálogo general de artículos, precios y stock.
-3. `usuarios`: Cuentas de acceso del personal (Administrador, Cajero, Repartidor).
-4. `clientes`: Información de contacto, saldo deudor, límites de crédito asignados y coordenadas geográficas (`latitud`, `longitud`, `enlace_mapa`) para envíos.
-5. `ventas`: Cabecera de transacciones comerciales.
-6. `detalles_ventas`: Ítems asociados a cada comprobante de venta.
-7. `compras`: [DESMANTELADO] Cabecera de reabastecimiento de inventario (Migrado a compras_auditoria_historica para auditoría).
-8. `detalles_compras`: [DESMANTELADO] Ítems asociados a cada compra (Migrado a detalles_compras_auditoria_historica para auditoría).
-9. `historial_stock`: Kárdex histórico de movimientos de inventario. Admite únicamente movimientos de tipo 'Venta', 'Ajuste' o 'Cancelacion Venta' mediante una restricción CHECK en `tipo_movimiento`.
-10. `facturas`: Documentos de facturación asociados automáticamente a ventas completadas.
+## 2. Reglas generales
 
-Además, se cuenta con la tabla auxiliar `bitacora` para auditorías.
+- **Bajas lógicas:** No se usa `DELETE` en tablas de negocio. El campo `estado` pasa a `Inactivo` o `Cancelado`.
+- **DB-First:** Stock, crédito, facturación, dashboard y kardex se resuelven en PL/pgSQL.
+- **Zona horaria:** Almacenar con `now()` en columnas `timestamptz`; filtrar y mostrar con `America/La_Paz`.
+- **Auditoría de acciones:** FastAPI registra en `bitacora_usuarios` (no hay triggers duplicados en tablas de negocio).
+- **Módulo compras:** Desmantelado; el reabastecimiento se hace con `fn_ajustar_stock`.
 
-## 3. Índices Optimizados
-Para agilizar las búsquedas en el sistema y optimizar tiempos de respuesta, se han creado los siguientes índices no agrupados sobre campos críticos:
-- `idx_categorias_nombre` en `categorias(nombre)`
-- `idx_productos_codigo_barras` en `productos(codigo_barras)`
-- `idx_productos_nombre` en `productos(nombre)`
-- `idx_usuarios_email` en `usuarios(email)`
-- `idx_clientes_dni_ruc` en `clientes(dni_ruc)`
-- `idx_clientes_nombre` en `clientes(nombre)`
-- `idx_clientes_coordenadas` en `clientes(latitud, longitud)`
-- `idx_ventas_codigo_factura` en `ventas(codigo_factura)`
-- `idx_ventas_fecha` en `ventas(fecha_venta)`
-- idx_compras_fecha [OBSOLETO]
-- `idx_historial_producto` en `historial_stock(producto_id)`
-- `idx_bitacora_tabla` en `bitacora(tabla_afectada)`
-- `idx_bitacora_fecha` en `bitacora(fecha_registro)`
-- `idx_facturas_venta_id` en `facturas(venta_id)`
-- `idx_facturas_codigo` en `facturas(codigo_factura)`
+## 3. Tablas (`schema.sql`)
 
-## 4. Programabilidad y Funciones (programmability.sql)
+| Tabla | Descripción |
+|-------|-------------|
+| `categorias` | Agrupación de productos |
+| `productos` | Catálogo, precios, stock, `imagen_url`, código KIO- autogenerado |
+| `usuarios` | Administrador, Cajero, Repartidor |
+| `clientes` | Contacto, crédito, `enlace_ubicacion`, `latitud`, `longitud`, `enlace_mapa` |
+| `ventas` | Cabecera; `tipo_pago` incluye **QR**; código factura **FAC-YYYYMMDD-XXXXX** |
+| `detalles_ventas` | Ítems de venta |
+| `historial_stock` | Kardex: `Venta`, `Ajuste`, `Cancelacion Venta` + columna `motivo` |
+| `facturas` | Emitida/Anulada automáticamente al completar/cancelar venta |
+| `bitacora_usuarios` | Auditoría de acciones (`operacion`, `datos_anteriores`, `datos_nuevos` JSONB) |
 
-### A. Trigger: Control de Stock en Ventas (`trg_detalles_ventas_before_insert`)
-- **Evento:** `BEFORE INSERT ON detalles_ventas`
-- **Función:** `fn_controlar_stock_venta()`
-- **Comportamiento:** Realiza un bloqueo exclusivo `FOR UPDATE` sobre el registro del producto solicitado. Si el stock actual es menor a la cantidad requerida, lanza una excepción de error con código `P0001` y revierte la transacción. Si hay disponibilidad, descuenta la cantidad solicitada y registra el movimiento de salida en `historial_stock`.
+## 4. Tablas delivery y configuración (`delivery_schema.sql`)
 
-### B. Procedimiento Almacenado: Registro de Ventas a Crédito (`registrar_venta_credito`)
-- **Tipo:** Función PL/pgSQL
-- **Parámetros:**
-  - `p_cliente_id` (UUID)
-  - `p_usuario_id` (UUID)
-  - `p_codigo_factura` (Varchar)
-  - `p_total` (Numeric)
-  - `p_items` (JSONB) - Listado de productos a vender.
-- **Validación:** Compara el `saldo_deudor` actual sumando el `p_total` contra el `limite_credito` del cliente. Si lo excede, genera una excepción con código `P0002` cancelando toda la transacción. En caso de cumplir con los requisitos, genera el registro de venta, itera para insertar los detalles correspondientes (desencadenando el trigger de stock) e incrementa el saldo deudor del cliente.
+| Tabla | Descripción |
+|-------|-------------|
+| `repartidores` | Perfil 1:1 con usuario; `latitud_actual`, `longitud_actual`, `ultima_actualizacion_gps` |
+| `envios` | Por venta; estados `Por Despachar`, `Pendiente`, `En Camino`, `Entregado`, `Cancelado`; coordenadas y `motivo_cancelacion` |
+| `configuracion_sistema` | Pares clave-valor: `kiosco_latitud`, `kiosco_longitud`, `kiosco_nombre`, `qr_pago_imagen`, `logo_url` |
 
-### C. Trigger: Auditoría de Datos (`trg_auditar_*`)
-- **Eventos:** `AFTER INSERT OR UPDATE OR DELETE` sobre las tablas `productos`, `ventas` y `clientes`.
-- **Función:** `fn_auditar_cambios()`
-- **Comportamiento:** Guarda en la tabla `bitacora` el nombre de la tabla afectada, la operación realizada y almacena de forma estructurada en formato JSONB el estado anterior (`old`) y el nuevo estado (`new`) del registro.
+## 5. Tabla legado (`programmability.sql`)
 
-### D. Trigger: Facturación Automática (`trg_ventas_facturacion_automatica`)
-- **Evento:** `AFTER INSERT OR UPDATE ON ventas`
-- **Función:** `fn_facturar_venta()`
-- **Comportamiento:** Si la venta se crea como `'Completada'` o transiciona a dicho estado, se inserta de forma automática la factura correspondiente en la tabla `facturas`.
+| Tabla | Descripción |
+|-------|-------------|
+| `bitacora` | Auditoría automática histórica (función `fn_auditar_cambios` sin triggers activos en tablas de negocio) |
 
-### E. Función Almacenada: Cancelación de Ventas (`cancelar_venta`)
-- **Tipo:** Función PL/pgSQL
-- **Parámetros:** `p_venta_id` (UUID)
-- **Comportamiento:** Valida la existencia de la venta, cambia su estado a `'Cancelada'` y marca su factura relacionada como `'Anulada'`. Esto a su vez dispara `tg_revertir_venta_cancelada` para devolver el stock e historial (Kardex).
-- **Restricción de Negocio (Fase 2):** Valida que la venta se haya realizado el mismo día del servidor (`fecha_venta::date = current_date`). Si corresponde a un día anterior, aborta la transacción y lanza el código de error **`P0008`**.
+## 6. Índices principales
 
-### F. Función Almacenada: Obtener Próximo Código de Factura (`obtener_proximo_codigo_factura`)
-- **Tipo:** Función PL/pgSQL
-- **Comportamiento:** Lee el estado de la secuencia `seq_codigo_factura` para calcular el siguiente correlativo asignable, sin consumirlo.
+- Productos: `codigo_barras`, `nombre`
+- Clientes: `dni_ruc`, `nombre`, `(latitud, longitud)`
+- Ventas: `codigo_factura`, `fecha_venta`, `cliente_id`, `usuario_id`
+- Envíos: `estado_envio`, `repartidor_id`, coordenadas, pendientes libres
+- Repartidores: `idx_repartidores_ubicacion_gps` (posición en tiempo real)
+- Bitácora: `tabla_afectada`, `fecha`, `operacion`
+- Configuración: `clave`
 
-### G. Función Almacenada: fn_ajustar_stock (SECURITY DEFINER)
-- **Tipo:** Función PL/pgSQL
-- **Parámetros:**
-  - `p_producto_id` (UUID)
-  - `p_cantidad_cambio` (Integer)
-  - `p_motivo` (Text)
-  - `p_usuario_id` (UUID)
-- **Comportamiento:** Realiza un ajuste de stock manual sobre un producto atómicamente. Valida que el producto exista y que el stock resultante no sea menor a cero (código de error `P0007`). Registra la transacción en `historial_stock` con tipo de movimiento 'Ajuste' y retorna el producto actualizado en formato JSONB.
+## 7. Funciones y triggers críticos (`programmability.sql`)
 
-### H. Función Almacenada: obtener_metricas_categorias
-- **Tipo:** Función PL/pgSQL
-- **Parámetros:** Ninguno
-- **Comportamiento:** Consolida métricas de inventario para las categorías del negocio. Retorna un objeto JSONB que incluye el conteo total de categorías activas, los datos de la categoría dominante (aquella con el stock acumulado de productos más alto) y la valorización económica total en base a la suma de `precio_venta * stock_actual` de productos y categorías activas.
+| Componente | Rol |
+|--------------|-----|
+| `fn_controlar_stock_venta` + `trg_detalles_ventas_before_insert` | Descuenta stock y registra kardex al vender |
+| `fn_revertir_venta_cancelada` + `tg_revertir_venta_cancelada` | Devuelve stock y saldo deudor al cancelar |
+| `generar_codigo_factura` / `fn_autogenerar_codigo_factura` | Correlativo diario **FAC-** en hora Bolivia |
+| `fn_facturar_venta` + `trg_ventas_facturacion_automatica` | Crea fila en `facturas` |
+| `cancelar_venta` | Anulación mismo día calendario Bolivia (`P0008`) |
+| `actualizar_venta` | Edición atómica mismo día con delivery y coordenadas |
+| `registrar_venta_credito` / `registrar_venta_contado` | RPC POS con envío `Por Despachar` y lat/long |
+| `fn_ajustar_stock` | Ajustes manuales de inventario (`P0007` si stock negativo) |
+| `obtener_metricas_dashboard` | KPIs con filtros de fecha en `America/La_Paz` |
+| `obtener_metricas_categorias` | Valorización y categoría dominante |
+| `obtener_movimientos_stock_agrupados` | Bitácora inventario por día/semana/mes (Bolivia) |
+| `obtener_rendimiento_personal` | Métricas cajeros y repartidores |
+| `obtener_proximo_codigo_factura` | Vista previa del siguiente FAC- del día |
 
-### I. Función Almacenada: actualizar_venta (SECURITY DEFINER)
-- **Tipo:** Función PL/pgSQL
-- **Parámetros:**
-  - `p_venta_id` (UUID)
-  - `p_cliente_id` (UUID)
-  - `p_tipo_pago` (Varchar)
-  - `p_items` (JSONB)
-  - `p_para_delivery` (Boolean)
-  - `p_direccion_despacho` (Text)
-  - `p_costo_envio` (Numeric)
-- **Comportamiento:** Permite actualizar de forma atómica y transaccional los detalles de una venta, revirtiendo primero el stock y deudas previas, recalculando y aplicando las nuevas cantidades y montos, y actualizando la facturación y el estado de entrega. Se ejecuta con privilegios de `SECURITY DEFINER` para evitar violaciones de RLS al escribir en `historial_stock`.
-- **Restricción de Negocio (Fase 2):** Valida que la venta original se haya realizado el mismo día actual del servidor. Si es de una fecha previa, aborta la transacción lanzando la excepción con código **`P0007`**.
+## 8. Seguridad (RLS)
 
-### J. Función Almacenada: obtener_metricas_dashboard
-- **Tipo:** Función PL/pgSQL
-- **Parámetros:** `p_fecha_inicio` (Date, Opcional), `p_fecha_fin` (Date, Opcional)
-- **Comportamiento:** Consolida las métricas financieras, conteo de transacciones, saldos deudores, efectividad de entregas, distribución de ventas por categoría y KPIs clave del negocio. Si se especifican las fechas de inicio y fin, filtra el análisis para ese rango inclusivo y calcula la tendencia de ventas comparándola contra el período espejo anterior de igual duración exacta.
-- **Métricas Clave Agregadas (Fase 2):**
-  - `pedidos_delivery` (Integer): Recuento absoluto de envíos/repartos solicitados en la tabla `envios` dentro del período auditado.
-  - `productos_vendidos` (Integer): Suma acumulada de las cantidades físicas (`cantidad` en `detalles_ventas`) asociadas a transacciones con estado de venta 'Completada' dentro del período.
+- `historial_stock`: SELECT + INSERT para `anon` y `authenticated` (triggers de stock).
+- `bitacora_usuarios`: SELECT + INSERT para auditoría vía backend.
+- `configuracion_sistema`: lectura pública; escritura controlada en endpoints FastAPI.
+- `facturas`: RLS deshabilitado.
 
-### K. Función Almacenada: registrar_reabastecimiento (SECURITY DEFINER)
-- **Tipo:** Función PL/pgSQL
-- **Parámetros:**
-  - `p_usuario_id` (UUID)
-  - `p_proveedor_nombre` (Varchar)
-  - `p_codigo_referencia` (Varchar)
-  - `p_total` (Numeric)
-  - `p_items` (JSONB)
-- **Comportamiento:** Registra la cabecera y el detalle de una compra o reabastecimiento en lote, previniendo deadlocks al ordenar los productos por ID antes del procesamiento. Actualiza el stock de los productos ingresados y reajusta automáticamente el precio de compra en el catálogo.
-- **Validaciones de Integridad (Fase 2):**
-  * Comprueba si el producto se encuentra en estado `'Activo'`.
-  * **Código de error `P0009`**: Lanzado por el motor SQL si se intenta reabastecer o ingresar stock de un producto cuyo estado es `'Inactivo'`.
+## 9. Códigos de error personalizados (SQLSTATE)
 
-
+| Código | Significado |
+|--------|-------------|
+| `P0001` | Stock insuficiente |
+| `P0002` | Límite de crédito excedido |
+| `P0003` | Dirección de delivery obligatoria |
+| `P0005` | Registro no encontrado |
+| `P0007` | Stock resultante negativo en ajuste |
+| `P0008` | Anulación/edición fuera del mismo día (Bolivia) |
+| `P0009` | Producto inactivo |

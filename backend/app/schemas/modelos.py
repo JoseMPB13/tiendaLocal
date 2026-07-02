@@ -395,6 +395,7 @@ class CompraConDetallesRespuesta(CompraRespuesta):
 
 class MovimientoStockAgrupadoRespuesta(BaseModel):
     periodo_fecha: datetime
+    periodo_fecha_bolivia: Optional[str] = None
     producto_id: UUID
     producto_nombre: str
     tipo_movimiento: str
@@ -419,6 +420,7 @@ class BitacoraUsuarioRespuesta(BaseModel):
     registro_id: UUID
     detalles: Optional[str] = None
     fecha: datetime
+    fecha_bolivia: Optional[str] = None
     # Campos de captura diferencial agregados en la migración de normalización
     operacion: Optional[str] = None        # Tipo DML: INSERT, UPDATE, DELETE
     datos_anteriores: Optional[dict] = None  # Snapshot JSONB del estado previo

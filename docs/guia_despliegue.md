@@ -7,7 +7,17 @@ Este documento detalla los pasos, configuraciones de producción, variables de e
 ## 1. Requisitos Previos
 * Cuenta activa en [Render](https://render.com).
 * Repositorio de código sincronizado en GitHub: `https://github.com/JoseMPB13/tiendaLocal.git`.
-* Acceso a una base de datos activa en **Supabase** con el esquema (`schema.sql`, `delivery_schema.sql`, `programmability.sql`) ya importado y configurado.
+* Acceso a una base de datos activa en **Supabase** con el esquema maestro ya importado:
+
+```
+1. schema.sql
+2. delivery_schema.sql
+3. programmability.sql
+4. scratch/setup_timezone.sql   (recomendado)
+5. scratch/seed_data.sql        (opcional)
+```
+
+Ver `scratch/README.md` para detalles.
 
 ---
 
@@ -64,18 +74,9 @@ Vite compilará estáticamente este valor en el paquete final durante el proceso
 
 FastAPI expone el endpoint `GET /health` que realiza una consulta ultra liviana de verificación a Supabase para cerciorarse de que el canal de datos esté operando correctamente.
 
-### Script de Auditoría Rápida:
-Puedes auditar la salud del servidor ejecutando el script bash ubicado en `/scratch/auditar_salud.sh` desde una terminal con conectividad al servidor:
+### Verificación de salud
 
-```bash
-# Otorgar permisos de ejecución
-chmod +x scratch/auditar_salud.sh
-
-# Ejecutar auditoría apuntando a producción
-./scratch/auditar_salud.sh https://tiendalocal-api.onrender.com
-```
-
-El script imprimirá en pantalla si el estado de la API es **saludable** y retornará un código de salida `0` si la verificación fue exitosa.
+FastAPI expone `GET /health` y `GET /` para comprobar conectividad con Supabase.
 
 ---
 

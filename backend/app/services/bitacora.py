@@ -11,13 +11,39 @@
 # Idioma: Español
 # =============================================================================
 
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Union
 from uuid import UUID
-from datetime import date
-from app.utils.zona_horaria import inicio_dia_bolivia_iso, fin_dia_bolivia_iso
+from decimal import Decimal
+from datetime import date, datetime, timezone
+import logging
+from app.utils.zona_horaria import (
+    inicio_dia_bolivia_iso,
+    fin_dia_bolivia_iso,
+    iso_utc_desde_valor,
+    formatear_fecha_hora_bolivia,
+)
 from fastapi import HTTPException, status
 from postgrest.exceptions import APIError
 from app.database import supabase
+
+logger = logging.getLogger(__name__)
+
+
+def _sanitizar_para_jsonb(valor: Any) -> Any:
+    """Convierte UUID, Decimal y datetime a tipos serializables en JSONB."""
+    if valor is None:
+        return None
+    if isinstance(valor, dict):
+        return {str(k): _sanitizar_para_jsonb(v) for k, v in valor.items()}
+    if isinstance(valor, (list, tuple)):
+        return [_sanitizar_para_jsonb(v) for v in valor]
+    if isinstance(valor, UUID):
+        return str(valor)
+    if isinstance(valor, Decimal):
+        return float(valor)
+    if isinstance(valor, datetime):
+        return valor.isoformat()
+    return valor
 
 
 class BitacoraService:
@@ -27,10 +53,10 @@ class BitacoraService:
     # -------------------------------------------------------------------------
     @staticmethod
     def registrar_accion(
-        usuario_id: UUID,
+        usuario_id: Union[UUID, str],
         accion: str,
         tabla_afectada: str,
-        registro_id: UUID,
+        registro_id: Union[UUID, str],
         operacion: Optional[str] = None,
         detalles: Optional[str] = None,
         datos_anteriores: Optional[Any] = None,
@@ -53,23 +79,45 @@ class BitacoraService:
             datos_nuevos     (Any): Snapshot JSON del estado nuevo (INSERT/UPDATE).
         """
         try:
-            payload = {
+            payload_base = {
                 "usuario_id": str(usuario_id),
                 "accion": accion,
                 "tabla_afectada": tabla_afectada,
                 "registro_id": str(registro_id),
-                "operacion": operacion,
                 "detalles": detalles,
-                # Supabase acepta dicts directamente para columnas JSONB
-                "datos_anteriores": datos_anteriores,
-                "datos_nuevos": datos_nuevos,
+                "fecha": datetime.now(timezone.utc).isoformat(),
             }
-            supabase.table("bitacora_usuarios").insert(payload).execute()
+            payload_completo = {
+                **payload_base,
+                "operacion": operacion,
+                "datos_anteriores": _sanitizar_para_jsonb(datos_anteriores),
+                "datos_nuevos": _sanitizar_para_jsonb(datos_nuevos),
+            }
+
+            try:
+                resultado = supabase.table("bitacora_usuarios").insert(payload_completo).execute()
+            except Exception as ex_completo:
+                # Compatibilidad: BD sin columnas operacion/datos_* o error puntual en JSONB
+                logger.warning(
+                    "[BITÁCORA] Inserción completa falló (%s). Reintentando payload mínimo.",
+                    ex_completo,
+                )
+                resultado = supabase.table("bitacora_usuarios").insert(payload_base).execute()
+
+            if not resultado.data:
+                logger.error(
+                    "[BITÁCORA] Insert sin error explícito pero sin datos devueltos: %s/%s",
+                    tabla_afectada,
+                    registro_id,
+                )
         except Exception as ex:
-            # La bitácora es observabilidad: no interrumpe el flujo principal.
-            print(
-                f"[BITÁCORA] Advertencia: no se pudo registrar la acción '{accion}' "
-                f"sobre {tabla_afectada}/{registro_id}: {str(ex)}"
+            logger.error(
+                "[BITÁCORA] No se pudo registrar la acción '%s' sobre %s/%s: %s",
+                accion,
+                tabla_afectada,
+                registro_id,
+                ex,
+                exc_info=True,
             )
 
     # -------------------------------------------------------------------------
@@ -98,7 +146,14 @@ class BitacoraService:
                 "p_periodo": periodo
             }).execute()
 
-            return resultado.data or []
+            filas = resultado.data or []
+            for fila in filas:
+                if fila.get("periodo_fecha"):
+                    fila["periodo_fecha"] = iso_utc_desde_valor(fila["periodo_fecha"])
+                    fila["periodo_fecha_bolivia"] = formatear_fecha_hora_bolivia(
+                        fila["periodo_fecha"], "%d/%m/%Y"
+                    )
+            return filas
         except APIError as ex:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -168,6 +223,19 @@ class BitacoraService:
             effective_limit = limit if not nombre_usuario else min(limit * 10, 500)
             resultado = query.range(skip, skip + effective_limit - 1).execute()
             datos = resultado.data or []
+
+            for registro in datos:
+                if registro.get("fecha"):
+                    try:
+                        iso_utc = iso_utc_desde_valor(registro["fecha"])
+                        registro["fecha"] = iso_utc
+                        registro["fecha_bolivia"] = formatear_fecha_hora_bolivia(iso_utc)
+                    except Exception as ex_fecha:
+                        logger.warning(
+                            "[BITÁCORA] No se pudo formatear fecha del registro %s: %s",
+                            registro.get("id"),
+                            ex_fecha,
+                        )
 
             # Filtro post-query en memoria por nombre de operador (no soportado en PostgREST join)
             if nombre_usuario and nombre_usuario.strip():

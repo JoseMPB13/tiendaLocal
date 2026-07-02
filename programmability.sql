@@ -1,5 +1,6 @@
 -- =============================================================================
--- SCRIPT DE PROGRAMABILIDAD: TIENDALOCAL (programmability.sql)
+-- SCRIPT MAESTRO DE PROGRAMABILIDAD: TIENDALOCAL (programmability.sql)
+-- Requiere: schema.sql y delivery_schema.sql ejecutados previamente.
 -- Idioma: Español
 -- =============================================================================
 
@@ -68,158 +69,8 @@ before insert on detalles_ventas
 for each row execute function fn_controlar_stock_venta();
 
 -- -----------------------------------------------------------------------------
--- 3. PROCEDIMIENTO ALMACENADO: registrar_venta_credito
---    Registra la cabecera y el detalle de una venta a crédito validando el límite.
--- -----------------------------------------------------------------------------
-create or replace function registrar_venta_credito(
-    p_cliente_id uuid,
-    p_usuario_id uuid,
-    p_total numeric(12, 2),
-    p_items jsonb,
-    p_para_delivery boolean DEFAULT false,
-    p_direccion_despacho text DEFAULT NULL,
-    p_costo_envio numeric DEFAULT 0.00
-)
-returns uuid as $$
-declare
-    v_venta_id uuid;
-    v_codigo_factura varchar(50);
-    v_saldo_deudor numeric(12, 2);
-    v_limite_credito numeric(12, 2);
-    v_nombre_cliente varchar(150);
-    v_item record;
-    v_subtotal numeric(12, 2);
-begin
-    -- Generar el código de factura de forma segura y transaccional
-    v_codigo_factura := generar_codigo_factura();
-
-    -- 1. Validar límite de crédito del cliente
-    select saldo_deudor, limite_credito, nombre
-    into v_saldo_deudor, v_limite_credito, v_nombre_cliente
-    from clientes
-    where id = p_cliente_id
-    for update;
-
-    if (v_saldo_deudor + p_total) > v_limite_credito then
-        raise exception 'Límite de crédito excedido para el cliente %. Saldo actual: %, Venta solicitada: %, Límite máximo: %',
-            v_nombre_cliente, v_saldo_deudor, p_total, v_limite_credito
-            using errcode = 'P0002'; -- Código de error personalizado para límite de crédito
-    end if;
-
-    -- 2. Insertar cabecera de la venta con tipo de pago 'Credito'
-    insert into ventas (cliente_id, usuario_id, codigo_factura, total, tipo_pago, estado_venta)
-    values (p_cliente_id, p_usuario_id, v_codigo_factura, p_total, 'Credito', 'Completada')
-    returning id into v_venta_id;
-
-    -- 3. Iterar sobre los productos ordenados por producto_id para prevenir deadlocks
-    for v_item in 
-        select (x.value->>'producto_id')::uuid as prod_id,
-               (x.value->>'cantidad')::integer as cant,
-               (x.value->>'precio_unitario')::numeric(12, 2) as precio
-        from jsonb_array_elements(p_items) as x(value)
-        order by prod_id asc
-    loop
-        v_subtotal := v_item.cant * v_item.precio;
-        
-        insert into detalles_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal)
-        values (
-            v_venta_id, 
-            v_item.prod_id, 
-            v_item.cant, 
-            v_item.precio,
-            v_subtotal
-        );
-    end loop;
-
-    -- 4. Actualizar el saldo deudor del cliente
-    update clientes
-    set saldo_deudor = saldo_deudor + p_total
-    where id = p_cliente_id;
-
-    -- 5. Registrar envío de delivery si se requiere
-    if p_para_delivery then
-        if p_direccion_despacho is null or p_direccion_despacho = '' then
-            raise exception 'La dirección de despacho es obligatoria para pedidos con delivery.'
-                using errcode = 'P0003';
-        end if;
-
-        insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio)
-        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Por Despachar');
-    end if;
-
-    return v_venta_id;
-end;
-$$ language plpgsql;
-
--- -----------------------------------------------------------------------------
--- 3.5 PROCEDIMIENTO ALMACENADO: registrar_venta_contado
---     Registra la cabecera y el detalle de una venta al contado de forma atómica.
--- -----------------------------------------------------------------------------
-create or replace function registrar_venta_contado(
-    p_cliente_id uuid,
-    p_usuario_id uuid,
-    p_total numeric(12, 2),
-    p_tipo_pago varchar(30),
-    p_items jsonb,
-    p_para_delivery boolean DEFAULT false,
-    p_direccion_despacho text DEFAULT NULL,
-    p_costo_envio numeric DEFAULT 0.00
-)
-returns uuid as $$
-declare
-    v_venta_id uuid;
-    v_codigo_factura varchar(50);
-    v_item record;
-    v_subtotal numeric(12, 2);
-begin
-    -- Generar el código de factura de forma segura y transaccional
-    v_codigo_factura := generar_codigo_factura();
-
-    -- 1. Insertar cabecera de la venta al contado
-    insert into ventas (cliente_id, usuario_id, codigo_factura, total, tipo_pago, estado_venta)
-    values (p_cliente_id, p_usuario_id, v_codigo_factura, p_total, p_tipo_pago, 'Completada')
-    returning id into v_venta_id;
-
-    -- 2. Iterar sobre los productos e insertarlos en el detalle
-    -- Esto disparará automáticamente el trigger trg_detalles_ventas_before_insert que verifica stock con FOR UPDATE
-    -- Iterar sobre los productos ordenados por producto_id para prevenir deadlocks
-    for v_item in 
-        select (x.value->>'producto_id')::uuid as prod_id,
-               (x.value->>'cantidad')::integer as cant,
-               (x.value->>'precio_unitario')::numeric(12, 2) as precio
-        from jsonb_array_elements(p_items) as x(value)
-        order by prod_id asc
-    loop
-        v_subtotal := v_item.cant * v_item.precio;
-        
-        insert into detalles_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal)
-        values (
-            v_venta_id, 
-            v_item.prod_id, 
-            v_item.cant, 
-            v_item.precio,
-            v_subtotal
-        );
-    end loop;
-
-    -- 3. Registrar envío de delivery si se requiere
-    if p_para_delivery then
-        if p_direccion_despacho is null or p_direccion_despacho = '' then
-            raise exception 'La dirección de despacho es obligatoria para pedidos con delivery.'
-                using errcode = 'P0003';
-        end if;
-
-        insert into envios (venta_id, direccion_despacho, costo_envio, estado_envio)
-        values (v_venta_id, p_direccion_despacho, p_costo_envio, 'Por Despachar');
-    end if;
-
-    return v_venta_id;
-end;
-$$ language plpgsql;
-
-
--- -----------------------------------------------------------------------------
--- 4. TRIGGER DE AUDITORÍA AUTOMÁTICA (Bitácora)
+-- 3. TRIGGER DE AUDITORÍA AUTOMÁTICA (tabla bitacora — legado)
+-- La auditoría de acciones de usuario se registra vía FastAPI en bitacora_usuarios.
 -- -----------------------------------------------------------------------------
 create or replace function fn_auditar_cambios()
 returns trigger as $$
@@ -263,18 +114,13 @@ begin
 end;
 $$ language plpgsql;
 
--- Asignación de triggers de auditoría a las tablas principales
-create trigger trg_auditar_productos
-after insert or update or delete on productos
-for each row execute function fn_auditar_cambios();
-
-create trigger trg_auditar_ventas
-after insert or update or delete on ventas
-for each row execute function fn_auditar_cambios();
-
-create trigger trg_auditar_clientes
-after insert or update or delete on clientes
-for each row execute function fn_auditar_cambios();
+-- Auditoría de acciones: FastAPI → bitacora_usuarios (sin triggers duplicados en tablas de negocio)
+drop trigger if exists trg_auditar_productos on productos;
+drop trigger if exists trg_auditar_ventas on ventas;
+drop trigger if exists trg_auditar_clientes on clientes;
+drop trigger if exists trg_auditar_compras on compras;
+drop trigger if exists trg_auditar_repartidores on repartidores;
+drop trigger if exists trg_auditar_envios on envios;
 
 -- -----------------------------------------------------------------------------
 -- 5. TRIGGERS Y FUNCIONES ADICIONALES PARA INVENTARIO Y REVERSIONES
@@ -646,19 +492,24 @@ end;
 $$ language plpgsql security definer;
 
 -- -----------------------------------------------------------------------------
--- 7. SECUENCIA Y FUNCIÓN PARA GENERACIÓN DE CÓDIGO DE FACTURA (F-YYYYMMDD-XXXXX)
+-- 7. GENERACIÓN DE CÓDIGO DE FACTURA (FAC-YYYYMMDD-XXXXX, correlativo diario Bolivia)
 -- -----------------------------------------------------------------------------
-create sequence if not exists seq_codigo_factura_f;
-
 create or replace function generar_codigo_factura()
 returns varchar as $$
 declare
-    v_fecha varchar(8);
-    v_next_val bigint;
+    v_fecha text;
+    v_ultimo int;
+    v_codigo varchar(50);
 begin
     v_fecha := to_char(now() at time zone 'America/La_Paz', 'YYYYMMDD');
-    v_next_val := nextval('seq_codigo_factura_f');
-    return 'F-' || v_fecha || '-' || lpad(v_next_val::text, 5, '0');
+    select coalesce(max(
+        cast(substring(codigo_factura from 'FAC-' || v_fecha || '-(\d+)') as int)
+    ), 0)
+    into v_ultimo
+    from ventas
+    where codigo_factura like 'FAC-' || v_fecha || '-%';
+    v_codigo := 'FAC-' || v_fecha || '-' || lpad((v_ultimo + 1)::text, 5, '0');
+    return v_codigo;
 end;
 $$ language plpgsql;
 
@@ -683,18 +534,19 @@ execute function fn_autogenerar_codigo_factura();
 create or replace function obtener_proximo_codigo_factura()
 returns varchar as $$
 declare
-    v_fecha varchar(8);
-    v_next_val bigint;
+    v_fecha text;
+    v_ultimo int;
 begin
-    -- Obtenemos el próximo valor de la secuencia global sin consumirlo
-    select coalesce(last_value, 1) + case when is_called then 1 else 0 end
-    into v_next_val
-    from seq_codigo_factura_f;
-    
     v_fecha := to_char(now() at time zone 'America/La_Paz', 'YYYYMMDD');
-    return 'F-' || v_fecha || '-' || lpad(v_next_val::text, 5, '0');
+    select coalesce(max(
+        cast(substring(codigo_factura from 'FAC-' || v_fecha || '-(\d+)') as int)
+    ), 0)
+    into v_ultimo
+    from ventas
+    where codigo_factura like 'FAC-' || v_fecha || '-%';
+    return 'FAC-' || v_fecha || '-' || lpad((v_ultimo + 1)::text, 5, '0');
 exception when others then
-    return 'F-' || to_char(now() at time zone 'America/La_Paz', 'YYYYMMDD') || '-00001';
+    return 'FAC-' || to_char(now() at time zone 'America/La_Paz', 'YYYYMMDD') || '-00001';
 end;
 $$ language plpgsql;
 
@@ -1024,7 +876,8 @@ begin
 
     return query
     select
-        date_trunc(v_trunc_period, hs.fecha_movimiento)::timestamp with time zone as periodo_fecha,
+        (date_trunc(v_trunc_period, hs.fecha_movimiento at time zone 'America/La_Paz')
+            at time zone 'America/La_Paz') as periodo_fecha,
         hs.producto_id,
         p.nombre as producto_nombre,
         hs.tipo_movimiento,
@@ -1103,82 +956,7 @@ comment on function obtener_rendimiento_personal() is 'Calcula y unifica métric
 
 
 -- -----------------------------------------------------------------------------
--- FUNCIÓN: registrar_reabastecimiento
--- -----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION registrar_reabastecimiento(
-    p_usuario_id uuid,
-    p_proveedor_nombre varchar(150),
-    p_codigo_referencia varchar(100),
-    p_total numeric(12, 2),
-    p_items jsonb
-)
-RETURNS uuid
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    v_compra_id uuid;
-    v_item record;
-    v_precio_venta numeric(12, 2);
-    v_estado varchar(30);
-    v_nombre_producto varchar(150);
-BEGIN
-    -- 1. Insertar cabecera de la compra
-    INSERT INTO compras (usuario_id, proveedor_nombre, codigo_referencia, total, estado_compra)
-    VALUES (p_usuario_id, p_proveedor_nombre, p_codigo_referencia, p_total, 'Completada')
-    RETURNING id INTO v_compra_id;
-
-    -- 2. Iterar sobre los productos ordenados por producto_id para prevenir deadlocks
-    FOR v_item IN 
-        SELECT (x.value->>'producto_id')::uuid AS prod_id,
-               (x.value->>'cantidad')::integer AS cant,
-               (x.value->>'costo_unitario')::numeric(12, 2) AS costo
-        FROM jsonb_array_elements(p_items) AS x(value)
-        ORDER BY prod_id ASC
-    LOOP
-        -- Bloquear y verificar el producto en caliente
-        SELECT precio_venta, estado, nombre INTO v_precio_venta, v_estado, v_nombre_producto
-        FROM productos
-        WHERE id = v_item.prod_id
-        FOR UPDATE;
-
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'El producto con ID % no existe en el catálogo.', v_item.prod_id
-                USING ERRCODE = 'P0005';
-        END IF;
-
-        -- Validar que el producto esté activo para reabastecimiento
-        IF v_estado <> 'Activo' THEN
-            RAISE EXCEPTION 'El producto "%" no está activo para reabastecimiento.', v_nombre_producto
-                USING ERRCODE = 'P0009';
-        END IF;
-
-        -- Validar que el costo de compra no sea mayor al precio de venta actual
-        IF v_item.costo > v_precio_venta THEN
-            RAISE EXCEPTION 'El costo de compra (%) no puede ser mayor al precio de venta actual (%) para el producto "%". Ajuste el precio de venta primero.',
-                v_item.costo, v_precio_venta, v_nombre_producto
-                USING ERRCODE = 'P0004';
-        END IF;
-
-        -- Insertar detalle de la compra (esto disparará el trigger tg_controlar_stock_compra)
-        INSERT INTO detalles_compras (compra_id, producto_id, cantidad, costo_unitario, subtotal)
-        VALUES (v_compra_id, v_item.prod_id, v_item.cant, v_item.costo, v_item.cant * v_item.costo);
-
-        -- Actualizar el costo del producto en el catálogo
-        UPDATE productos
-        SET precio_compra = v_item.costo
-        WHERE id = v_item.prod_id;
-    END LOOP;
-
-    RETURN v_compra_id;
-END;
-$$;
-
-COMMENT ON FUNCTION registrar_reabastecimiento IS 'Registra una compra y actualiza el costo de los productos correspondientes con validaciones de negocio en la BD.';
-
-
--- -----------------------------------------------------------------------------
--- PROCEDIMIENTOS ALMACENADOS DE VENTAS
+-- PROCEDIMIENTOS ALMACENADOS DE VENTAS (con geolocalización de delivery)
 -- -----------------------------------------------------------------------------
 create or replace function registrar_venta_credito(
     p_cliente_id uuid,
