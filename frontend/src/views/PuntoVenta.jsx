@@ -129,23 +129,6 @@ export const PuntoVenta = () => {
   // Pestaña activa ('pos' o 'historial')
   const [activeTab, setActiveTab] = useState('pos');
 
-  /**
-   * Obtiene el cliente configurado como predeterminado por el sistema,
-   * evaluando nombres específicos y el DNI base.
-   * Idioma: Español
-   * @param {Array} listaClientes - Lista de clientes obtenida.
-   * @returns {Object|null} El cliente predeterminado.
-   */
-  const obtenerClientePredeterminado = (listaClientes) => {
-    if (!listaClientes || listaClientes.length === 0) return null;
-    return (
-      listaClientes.find(c => c.nombre === 'Cliente General') ||
-      listaClientes.find(c => c.nombre === 'Venta Mostrador') ||
-      listaClientes.find(c => c.dni_ruc === '00000000') ||
-      listaClientes[0]
-    );
-  };
-
   // Catálogo de Productos y Clientes
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -741,8 +724,7 @@ export const PuntoVenta = () => {
     }
   };
 
-  /** Carga los datos de una venta existente en el carrito del POS para editarla */
-  const handleCargarEdicion = async (ventaId, fallbackClientes = null, fallbackProductos = null) => {
+  async function handleCargarEdicion(ventaId, fallbackClientes = null, fallbackProductos = null) {
     try {
       toast.loading("Cargando datos para edición...", { id: "carga-edicion" });
       const res = await ventaService.obtenerVentaDetalle(ventaId);
@@ -792,7 +774,7 @@ export const PuntoVenta = () => {
       toast.dismiss("carga-edicion");
       toast.error("Error al cargar la venta para edición.");
     }
-  };
+  }
 
   /** Cancela el proceso de edición activo limpiando el POS */
   const handleCancelarEdicion = () => {

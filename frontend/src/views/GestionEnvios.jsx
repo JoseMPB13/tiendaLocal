@@ -17,8 +17,8 @@ import PaginadorTablas from '../components/PaginadorTablas';
 import PanelFiltroBusqueda from '../components/PanelFiltroBusqueda';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
-  Truck, Plus, Search, Filter, MapPin, 
-  CheckCircle2, Clock, X, ShieldAlert, Ban, Eye, Edit3, Play, Check,
+  Truck, Plus, MapPin, 
+  CheckCircle2, Clock, X, Ban, Eye, Edit3, Play, Check,
   ShoppingCart, FileText
 } from 'lucide-react';
 import MapaInteractivo from '../components/MapaInteractivo';
@@ -168,7 +168,6 @@ export const GestionEnvios = () => {
 
   // Modal para registrar envío manual
   const [mostrarForm, setMostrarForm] = useState(false);
-  const [ventaId, setVentaId] = useState('');
   const [envioSeleccionadoId, setEnvioSeleccionadoId] = useState('');
   const [repartidorId, setRepartidorId] = useState('');
   const [direccion, setDireccion] = useState('');
@@ -210,7 +209,7 @@ export const GestionEnvios = () => {
       actualizarUbicacion(); // Consulta inmediata inicial
       intervalId = setInterval(actualizarUbicacion, 6000); // Polling cada 6 segundos
     } else {
-      setPosicionRepartidor({ lat: null, lng: null }); // Limpiar posición al cerrar el modal
+      setPosicionRepartidor(prev => (prev.lat !== null || prev.lng !== null) ? { lat: null, lng: null } : prev);
     }
 
     return () => {
@@ -248,7 +247,6 @@ export const GestionEnvios = () => {
       ]);
       if (resVentas.ok) setVentas(resVentas.data || []);
       if (resClientes.ok) setClientes(resClientes.data || []);
-      setVentaId('');
       setEnvioSeleccionadoId('');
       setRepartidorId('');
       setDireccion('');
@@ -265,7 +263,6 @@ export const GestionEnvios = () => {
   const handleEnvioChange = (envId) => {
     setEnvioSeleccionadoId(envId);
     if (!envId) {
-      setVentaId('');
       setDireccion('');
       setFormLat(-17.7833);
       setFormLng(-63.1667);
@@ -274,7 +271,6 @@ export const GestionEnvios = () => {
     }
     const selectedEnvio = envios.find(e => e.id === envId);
     if (selectedEnvio) {
-      setVentaId(selectedEnvio.venta_id);
       setDireccion(selectedEnvio.direccion_despacho);
       setCostoEnvio(selectedEnvio.costo_envio.toString());
       setFormLat(selectedEnvio.latitud || -17.7833);
@@ -452,7 +448,6 @@ export const GestionEnvios = () => {
       if (res.ok) {
         toast.success("Despacho iniciado y asignado.");
         setMostrarForm(false);
-        setVentaId('');
         setEnvioSeleccionadoId('');
         setRepartidorId('');
         setDireccion('');
