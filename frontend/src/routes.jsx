@@ -14,6 +14,8 @@ import GestionClientes from './views/GestionClientes';
 import GestionUsuarios from './views/GestionUsuarios';
 import GestionEnvios from './views/GestionEnvios';
 import Configuracion from './views/Configuracion';
+import DeliveryHistorial from './views/DeliveryHistorial';
+
 
 export const RutasApp = () => {
   return (
@@ -47,9 +49,10 @@ export const RutasApp = () => {
         <Route element={<RutaProtegida rolesPermitidos={['Repartidor']} />}>
           <Route element={<LayoutDelivery />}>
             <Route path="/delivery" element={<DeliveryReparto />} />
-            <Route path="/delivery/historial" element={<PaginaPrueba modulo="Historial de Repartos" />} />
+            <Route path="/delivery/historial" element={<DeliveryHistorial />} />
           </Route>
         </Route>
+
 
         {/* Redirección por defecto */}
         <Route path="*" element={<Navigate to="/login" replace />} />
